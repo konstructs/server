@@ -1,4 +1,6 @@
-package craft
+package craft.protocol
+
+import craft.{ Player, WorldActor }
 
 import akka.actor.{ Actor, Props, ActorRef }
 import akka.io.{ Tcp, TcpPipelineHandler }
@@ -23,13 +25,13 @@ class Client(init: Init[WithinActorContext, String, String], world: ActorRef) ex
     if(command.startsWith("C,")) {
       val ints = readData(_.toInt, command.drop(2))
       val key = ints(2)
-      world ! Chunk(ints(0), ints(1), if(key == 0) None else Some(key))
+      player.actor ! Chunk(ints(0), ints(1), if(key == 0) None else Some(key))
     } else if(command.startsWith("B,")) {
       val ints = readData(_.toInt, command.drop(2))
       player.actor ! Block(ints(0), ints(1), ints(2), ints(3))
     } else if(command.startsWith("P,")) {
       val floats = readData(_.toFloat, command.drop(2))
-      world ! Position(floats(0), floats(1), floats(2), floats(3), floats(4))
+      player.actor ! Position(floats(0), floats(1), floats(2), floats(3), floats(4))
     }
   }
 
@@ -52,12 +54,17 @@ class Client(init: Init[WithinActorContext, String, String], world: ActorRef) ex
   def ready(pipe: ActorRef, player: Player): Receive = {
     case init.Event(command) =>
       handle(player, command)
+    case b: SendBlock =>
+      sendBlock(pipe, b)
     case _: Tcp.ConnectionClosed =>
       context.stop(self)
   }
 
+  def sendBlock(pipe: ActorRef, block: SendBlock) {
+    send(pipe, s"B,${block.p},${block.q},${block.x},${block.y},${block.z},${block.w}")
+  }
+
   def send(pipe: ActorRef, msg: String) {
-    println(s"SEND: $msg")
     pipe ! init.Command(s"$msg\n")
   }
 }
