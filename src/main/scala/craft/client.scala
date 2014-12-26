@@ -7,7 +7,8 @@ import akka.io.{ Tcp, TcpPipelineHandler }
 import TcpPipelineHandler.{ Init, WithinActorContext }
 
 class Client(init: Init[WithinActorContext, String, String], world: ActorRef) extends Actor {
-
+  import WorldActor.{ BlockList, CreatePlayer }
+  private val sb = new StringBuilder(32 * WorldActor.ChunkSize * WorldActor.ChunkSize * WorldActor.ChunkSize)
   private def readData[T](conv: String => T, data: String): List[T] = {
     val comma = data.indexOf(',')
     if(comma > 0) {
@@ -38,7 +39,7 @@ class Client(init: Init[WithinActorContext, String, String], world: ActorRef) ex
   def receive = {
     case init.Event(command) =>
       if (command == "V,1\n") {
-        world ! WorldActor.CreatePlayer
+        world ! CreatePlayer
         context.become(waitForPlayer(sender))
       }
     case _: Tcp.ConnectionClosed =>
@@ -47,25 +48,41 @@ class Client(init: Init[WithinActorContext, String, String], world: ActorRef) ex
 
   def waitForPlayer(pipe: ActorRef): Receive = {
     case p: Player =>
-      send(pipe, s"U,${p.pid},0,0,0,0,0")
+      send(pipe, s"U,${p.pid},0,0,0,0,0\n")
       context.become(ready(pipe, p))
   }
 
   def ready(pipe: ActorRef, player: Player): Receive = {
     case init.Event(command) =>
       handle(player, command)
-    case b: SendBlock =>
-      sendBlock(pipe, b)
+    case BlockList(blocks) =>
+      sendBlocks(pipe, blocks)
     case _: Tcp.ConnectionClosed =>
       context.stop(self)
   }
 
-  def sendBlock(pipe: ActorRef, block: SendBlock) {
-    send(pipe, s"B,${block.p},${block.q},${block.x},${block.y},${block.z},${block.w}")
+  def sendBlocks(pipe: ActorRef, blocks: Seq[SendBlock]) {
+    sb.setLength(0)
+    blocks.foreach { b =>
+      sb.append("B,")
+        .append(b.p)
+        .append(',')
+        .append(b.q)
+        .append(',')
+        .append(b.x)
+        .append(',')
+        .append(b.y)
+        .append(',')
+        .append(b.z)
+        .append(',')
+        .append(b.w)
+        .append('\n')
+    }
+    send(pipe, sb.toString)
   }
 
   def send(pipe: ActorRef, msg: String) {
-    pipe ! init.Command(s"$msg\n")
+    pipe ! init.Command(msg)
   }
 }
 

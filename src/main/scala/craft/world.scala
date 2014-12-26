@@ -12,7 +12,7 @@ class WorldActor extends Actor {
   private var nextPid = 0
 
   def playerActorId(pid: Int) = s"player-$nextPid"
-  def chunkActorId(chunk: Chunk) = s"chunk-${chunk.p}-${chunk.q}-${chunk.k}"
+  def chunkActorId(chunk: Chunk) = s"chunk_${chunk.p}_${chunk.q}_${chunk.k}"
 
   def player() {
     val player = context.actorOf(PlayerActor.props(sender, self, protocol.Position(0,0,0,0,0)), playerActorId(nextPid))
@@ -45,6 +45,6 @@ object WorldActor {
   case object CreatePlayer
   case class Chunk(p: Int, q: Int, k: Int)
   case class SendBlocks(to: ActorRef, chunk: Chunk, version: Option[Int])
-
+  case class BlockList(blocks: Seq[protocol.SendBlock])
   def props() = Props(classOf[WorldActor])
 }
