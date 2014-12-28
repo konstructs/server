@@ -22,11 +22,9 @@ class Server(world: ActorRef) extends Actor with ActorLogging {
   }
 
   def bound(listener: ActorRef): Receive = {
-    case Connected(remote, _) ⇒
+    case Connected(remote, _) =>
       val init = TcpPipelineHandler.withLogger(log,
-        new StringByteStringAdapter("ascii") >>
-          new DelimiterFraming(maxSize = 1024, delimiter = ByteString('\n'),
-            includeDelimiter = true) >>
+        new LengthFieldFrame(maxSize = 256*256*256, headerSize = 4, lengthIncludesHeader = false) >>
           new TcpReadWriteAdapter >>
           new BackpressureBuffer(lowBytes = 1000, highBytes = 1000000, maxBytes = 256*1024*1024))
 

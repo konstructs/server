@@ -4,25 +4,29 @@ import craft.{ Player, WorldActor }
 
 import akka.actor.{ Actor, Props, ActorRef }
 import akka.io.{ Tcp, TcpPipelineHandler }
+import akka.util.ByteString
 import TcpPipelineHandler.{ Init, WithinActorContext }
 
-class Client(init: Init[WithinActorContext, String, String], world: ActorRef) extends Actor {
+class Client(init: Init[WithinActorContext, ByteString, ByteString], world: ActorRef) extends Actor {
   import WorldActor.{ BlockList, CreatePlayer }
-  private val sb = new StringBuilder(32 * WorldActor.ChunkSize * WorldActor.ChunkSize * WorldActor.ChunkSize)
+  import Client._
+  implicit val bo = java.nio.ByteOrder.BIG_ENDIAN
+
+
   private def readData[T](conv: String => T, data: String): List[T] = {
     val comma = data.indexOf(',')
     if(comma > 0) {
       val i = conv(data.take(comma))
       i :: readData(conv, data.drop(comma + 1))
     } else {
-      val newline = data.indexOf('\n')
-      val i = conv(data.take(newline))
+      val i = conv(data)
       i :: Nil
     }
   }
 
-  def handle(player: Player, command: String) = {
-    print(s"RECV: $command")
+  def handle(player: Player, data: ByteString) = {
+    val command = data.decodeString("ascii")
+    println(s"RECV: |$command|")
     if(command.startsWith("C,")) {
       val ints = readData(_.toInt, command.drop(2))
       val key = ints(2)
@@ -37,10 +41,13 @@ class Client(init: Init[WithinActorContext, String, String], world: ActorRef) ex
   }
 
   def receive = {
-    case init.Event(command) =>
-      if (command == "V,1\n") {
+    case init.Event(data) =>
+      val command = data.decodeString("ascii")
+      if (command == "V,2") {
         world ! CreatePlayer
         context.become(waitForPlayer(sender))
+      } else {
+        context.stop(self)
       }
     case _: Tcp.ConnectionClosed =>
       context.stop(self)
@@ -48,45 +55,46 @@ class Client(init: Init[WithinActorContext, String, String], world: ActorRef) ex
 
   def waitForPlayer(pipe: ActorRef): Receive = {
     case p: Player =>
-      send(pipe, s"U,${p.pid},0,0,0,0,0\n")
+      send(pipe, s"U,${p.pid},0,0,0,0,0")
       context.become(ready(pipe, p))
   }
 
   def ready(pipe: ActorRef, player: Player): Receive = {
     case init.Event(command) =>
       handle(player, command)
-    case BlockList(blocks) =>
-      sendBlocks(pipe, blocks)
+    case BlockList(chunk, blocks) =>
+      sendBlocks(pipe, chunk, blocks)
     case _: Tcp.ConnectionClosed =>
       context.stop(self)
   }
 
-  def sendBlocks(pipe: ActorRef, blocks: Seq[SendBlock]) {
-    sb.setLength(0)
-    blocks.foreach { b =>
-      sb.append("B,")
-        .append(b.p)
-        .append(',')
-        .append(b.q)
-        .append(',')
-        .append(b.x)
-        .append(',')
-        .append(b.y)
-        .append(',')
-        .append(b.z)
-        .append(',')
-        .append(b.w)
-        .append('\n')
-    }
-    send(pipe, sb.toString)
+  def sendBlocks(pipe: ActorRef, chunk: WorldActor.Chunk, blocks: Array[Byte]) {
+    val data = ByteString
+      .newBuilder
+      .putByte(B)
+      .putInt(chunk.p)
+      .putInt(chunk.q)
+      .putInt(chunk.k)
+      .putBytes(blocks)
+      .result
+    send(pipe, data)
+  }
+
+  def send(pipe: ActorRef, msg: ByteString) {
+    pipe ! init.Command(msg)
   }
 
   def send(pipe: ActorRef, msg: String) {
-    pipe ! init.Command(msg)
+    send(pipe,ByteString(msg, "ascii"))
   }
 }
 
 object Client {
+  val C = 'C'.toByte
+  val B = 'B'.toByte
+  val V = 'V'.toByte
+  val P = 'P'.toByte
+
   case object Setup
-  def props(init: Init[WithinActorContext, String, String], world: ActorRef) = Props(classOf[Client], init, world)
+  def props(init: Init[WithinActorContext, ByteString, ByteString], world: ActorRef) = Props(classOf[Client], init, world)
 }

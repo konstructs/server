@@ -24,15 +24,7 @@ class ChunkActor(chunk: Chunk) extends Actor {
   def receive = {
     case SendBlocks(to) =>
       if(!blocks.isEmpty) {
-        val builder = Seq.newBuilder[protocol.SendBlock]
-        for(x <- 0 until ChunkSize; y <- 0 until ChunkSize; z <- 0 until ChunkSize) {
-          val i = x + y * ChunkSize + z * ChunkSize * ChunkSize
-          val b = blocks(i)
-          if(b != null) {
-            builder += protocol.SendBlock(chunk.p, chunk.q, chunk.p * ChunkSize + x, chunk.k * ChunkSize + y, chunk.q * ChunkSize + z, b.toInt)
-          }
-        }
-        to ! BlockList(builder.result())
+        to ! BlockList(chunk, blocks)
       }
   }
 
