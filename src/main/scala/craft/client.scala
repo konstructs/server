@@ -71,7 +71,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
   def sendBlocks(pipe: ActorRef, chunk: WorldActor.Chunk, blocks: Array[Byte]) {
     val data = ByteString
       .newBuilder
-      .putByte(B)
+      .putByte(C)
       .putInt(chunk.p)
       .putInt(chunk.q)
       .putInt(chunk.k)
