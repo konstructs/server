@@ -45,6 +45,6 @@ object WorldActor {
   case object CreatePlayer
   case class Chunk(p: Int, q: Int, k: Int)
   case class SendBlocks(to: ActorRef, chunk: Chunk, version: Option[Int])
-  case class BlockList(blocks: Seq[protocol.SendBlock])
+  case class BlockList(chunk: Chunk, blocks: Array[Byte])
   def props() = Props(classOf[WorldActor])
 }

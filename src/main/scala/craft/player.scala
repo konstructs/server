@@ -27,7 +27,7 @@ class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.
     case protocol.Chunk(p, q, v) =>
       chunk(p, q, v)
     case p: protocol.Position =>
-      println(p)
+      position = p
   }
 }
 
