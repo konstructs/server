@@ -12,7 +12,7 @@ class Server(world: ActorRef) extends Actor with ActorLogging {
   import Tcp._
   import context.system
 
-  IO(Tcp) ! Bind(self, new InetSocketAddress("127.0.0.1", 4080))
+  IO(Tcp) ! Bind(self, new InetSocketAddress("0.0.0.0", 4080))
 
 
   def receive: Receive = {
