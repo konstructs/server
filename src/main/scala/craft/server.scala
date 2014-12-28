@@ -1,4 +1,4 @@
-package craft
+package craft.protocol
 
 import akka.actor.{ Actor,  ActorRef, Props, ActorLogging }
 import akka.io._
@@ -28,7 +28,7 @@ class Server(world: ActorRef) extends Actor with ActorLogging {
           new DelimiterFraming(maxSize = 1024, delimiter = ByteString('\n'),
             includeDelimiter = true) >>
           new TcpReadWriteAdapter >>
-          new BackpressureBuffer(lowBytes = 100, highBytes = 1000, maxBytes = 1000000))
+          new BackpressureBuffer(lowBytes = 1000, highBytes = 1000000, maxBytes = 256*1024*1024))
 
       val connection = sender
       val handler = context.actorOf(Client.props(init, world))
