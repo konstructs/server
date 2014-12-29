@@ -64,14 +64,21 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
       handle(player, command)
     case BlockList(chunk, blocks) =>
       sendBlocks(pipe, chunk, blocks)
+    case b: SendBlock =>
+      println(s"Send block: $b")
+      sendBlock(pipe, b)
     case _: Tcp.ConnectionClosed =>
       context.stop(self)
   }
 
-  def sendBlocks(pipe: ActorRef, chunk: WorldActor.Chunk, blocks: Array[Byte]) {
+  def sendBlock(pipe: ActorRef, b: SendBlock) {
+    send(pipe, s"B,${b.p},${b.q},${b.x},${b.y},${b.z},${b.w}")
+  }
+
+  def sendBlocks(pipe: ActorRef, chunk: craft.Chunk, blocks: Array[Byte]) {
     val data = ByteString
       .newBuilder
-      .putByte(B)
+      .putByte(C)
       .putInt(chunk.p)
       .putInt(chunk.q)
       .putInt(chunk.k)

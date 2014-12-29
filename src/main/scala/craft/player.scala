@@ -7,6 +7,7 @@ import akka.actor.{ Actor, Props, ActorRef }
 class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.Position) extends Actor {
   import PlayerActor._
   import WorldActor._
+  import World.ChunkSize
 
   var position = startingPosition
 
@@ -23,15 +24,18 @@ class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.
 
   def receive = {
     case b: protocol.Block =>
-      println(b)
+      println(s"Player: $b")
+      world ! b
     case protocol.Chunk(p, q, v) =>
       chunk(p, q, v)
     case p: protocol.Position =>
       position = p
+    case b: protocol.SendBlock =>
+      client ! b
   }
 }
 
 object PlayerActor {
-  val LoadYChunks = 10
+  val LoadYChunks = 5
   def props(client: ActorRef, world: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], client, world, startingPosition)
 }
