@@ -1,6 +1,6 @@
 package craft.protocol
 
-import craft.{ Player, WorldActor }
+import craft.{ Player, PlayerActor, WorldActor }
 
 import akka.actor.{ Actor, Props, ActorRef }
 import akka.io.{ Tcp, TcpPipelineHandler }
@@ -10,6 +10,7 @@ import TcpPipelineHandler.{ Init, WithinActorContext }
 class Client(init: Init[WithinActorContext, ByteString, ByteString], world: ActorRef) extends Actor {
   import WorldActor.{ BlockList, CreatePlayer }
   import Client._
+  import PlayerActor._
   implicit val bo = java.nio.ByteOrder.BIG_ENDIAN
 
 
@@ -37,6 +38,8 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
     } else if(command.startsWith("P,")) {
       val floats = readData(_.toFloat, command.drop(2))
       player.actor ! Position(floats(0), floats(1), floats(2), floats(3), floats(4))
+    } else if(command.startsWith("I")) {
+      player.actor ! SendInventory
     }
   }
 
@@ -65,10 +68,17 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
     case BlockList(chunk, blocks) =>
       sendBlocks(pipe, chunk, blocks)
     case b: SendBlock =>
-      println(s"Send block: $b")
       sendBlock(pipe, b)
+    case i: InventoryUpdate =>
+      sendInventory(pipe, i)
     case _: Tcp.ConnectionClosed =>
       context.stop(self)
+  }
+
+  def sendInventory(pipe: ActorRef, inventory: InventoryUpdate) {
+    for((p, i) <- inventory.items) {
+      send(pipe, s"I,${p},${i.amount},${i.w}")
+    }
   }
 
   def sendBlock(pipe: ActorRef, b: SendBlock) {
