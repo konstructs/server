@@ -1,6 +1,6 @@
 package craft.protocol
 
-import craft.{ Player, PlayerActor, WorldActor }
+import craft.{ Player, Item, PlayerActor, WorldActor }
 
 import akka.actor.{ Actor, Props, ActorRef }
 import akka.io.{ Tcp, TcpPipelineHandler }
@@ -40,6 +40,9 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
       player.actor ! Position(floats(0), floats(1), floats(2), floats(3), floats(4))
     } else if(command.startsWith("I")) {
       player.actor ! SendInventory
+    } else if(command.startsWith("A,")) {
+      val ints = readData(_.toInt, command.drop(2))
+      player.actor ! ActivateInventoryItem(ints(0))
     }
   }
 
@@ -69,16 +72,22 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
       sendBlocks(pipe, chunk, blocks)
     case b: SendBlock =>
       sendBlock(pipe, b)
-    case i: InventoryUpdate =>
-      sendInventory(pipe, i)
+    case InventoryUpdate(items) =>
+      sendInventory(pipe, items)
+    case InventoryActiveUpdate(active) =>
+      sendInventoryActive(pipe, active)
     case _: Tcp.ConnectionClosed =>
       context.stop(self)
   }
 
-  def sendInventory(pipe: ActorRef, inventory: InventoryUpdate) {
-    for((p, i) <- inventory.items) {
+  def sendInventory(pipe: ActorRef, items: Map[Int, Item]) {
+    for((p, i) <- items) {
       send(pipe, s"I,${p},${i.amount},${i.w}")
     }
+  }
+
+  def sendInventoryActive(pipe: ActorRef, active: Int) {
+    send(pipe, s"A,${active}")
   }
 
   def sendBlock(pipe: ActorRef, b: SendBlock) {
