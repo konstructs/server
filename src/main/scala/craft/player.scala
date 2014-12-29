@@ -8,6 +8,8 @@ case class Item(amount: Int, w: Int)
 
 case class Inventory(items: Map[Int, Item])
 
+case class PlayerInventory(active: Int, inventory: Inventory)
+
 class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.Position) extends Actor {
   import PlayerActor._
   import WorldActor._
@@ -15,12 +17,12 @@ class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.
 
   var position = startingPosition
 
-  val inventory = Inventory(Map[Int, Item](
+  var inventory = PlayerInventory(3, Inventory(Map[Int, Item](
     0 -> Item(64, 1),
     1 -> Item(64, 2),
     2 -> Item(64, 3),
     3 -> Item(64, 4),
-    4 -> Item(64, 5)))
+    4 -> Item(64, 5))))
 
   def chunk(p: Int, q: Int, v: Option[Int]) {
     val y = position.y.toInt
@@ -44,13 +46,19 @@ class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.
     case b: protocol.SendBlock =>
       client ! b
     case SendInventory =>
-      sender ! InventoryUpdate(inventory.items)
+      sender ! InventoryUpdate(inventory.inventory.items)
+      sender ! InventoryActiveUpdate(inventory.active)
+    case ActivateInventoryItem(active) if(active > 0 && active < 9) =>
+      inventory = inventory.copy(active = active)
+      sender ! InventoryActiveUpdate(inventory.active)
   }
 }
 
 object PlayerActor {
   case object SendInventory
+  case class ActivateInventoryItem(activate: Int)
   case class InventoryUpdate(items: Map[Int, Item])
-  val LoadYChunks = 5
+  case class InventoryActiveUpdate(active: Int)
+  val LoadYChunks = 1
   def props(client: ActorRef, world: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], client, world, startingPosition)
 }
