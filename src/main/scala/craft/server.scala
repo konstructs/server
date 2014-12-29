@@ -26,7 +26,7 @@ class Server(world: ActorRef) extends Actor with ActorLogging {
       val init = TcpPipelineHandler.withLogger(log,
         new LengthFieldFrame(maxSize = 256*256*256, headerSize = 4, lengthIncludesHeader = false) >>
           new TcpReadWriteAdapter >>
-          new BackpressureBuffer(lowBytes = 1000, highBytes = 1000000, maxBytes = 256*1024*1024))
+          new BackpressureBuffer(lowBytes = 100, highBytes = 10000, maxBytes = 1024*1024))
 
       val connection = sender
       val handler = context.actorOf(Client.props(init, world))
