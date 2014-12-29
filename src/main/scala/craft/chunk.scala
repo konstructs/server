@@ -1,5 +1,6 @@
 package craft
 
+import java.util.zip.{ Inflater, Deflater }
 import scala.concurrent.Future
 import scala.collection.mutable.HashMap
 import akka.actor.{ Actor, ActorRef, Props }
@@ -25,15 +26,15 @@ class ChunkActor(chunk: Chunk) extends Actor {
     }
 
   private var blocks: Array[Byte] = Array( blockSeq :_*)
+  private val buffer = new Array[Byte](256*256)
 
   def receive = {
     case SendBlocks(to) =>
-      if(!blocks.isEmpty) {
-        to ! BlockList(chunk, blocks)
-      }
+      val size = deflate(blocks, buffer)
+      to ! BlockList(chunk, buffer.slice(0, size))
     case UpdateBlock(p, w) =>
       val local = p.local
-      val copy = blocks.clone()
+      val copy = blocks.clone
       val i = local.index
       val oldW = copy(i)
       copy(i) = w.toByte
@@ -48,4 +49,20 @@ object ChunkActor {
   case class UpdateBlock(pos: Position, w: Int)
   case class BlockUpdate(pos: Position, oldW: Int, newW: Int)
   def props(chunk: Chunk) = Props(classOf[ChunkActor], chunk)
+
+  def deflate(data: Array[Byte], out: Array[Byte]): Int = {
+    val compresser = new Deflater()
+    compresser.setInput(data)
+    compresser.finish()
+    val size = compresser.deflate(out)
+    compresser.end()
+    size
+  }
+  def inflate(data: Array[Byte], out: Array[Byte]): Int = {
+    val decompresser = new Inflater()
+    decompresser.setInput(data, 0, data.size)
+    val size = decompresser.inflate(out)
+    decompresser.end()
+    size
+  }
 }
