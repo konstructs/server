@@ -68,10 +68,8 @@ class WorldActor extends Actor {
       player()
     case SendBlocks(to, chunk, version) =>
       sendBlocks(to, chunk, version)
-    case b: protocol.Block =>
-      println(s"World $b")
-      val bp = Position(b.x, b.y, b.z)
-      getChunkActor(bp.chunk) ! ChunkActor.UpdateBlock(bp, b.w)
+    case b: UpdateBlock =>
+      getChunkActor(b.pos.chunk) ! b
     case b: ChunkActor.BlockUpdate =>
       val chunk = b.pos.chunk
       context.children.filter(_.path.name.startsWith("player-")) foreach { p =>
@@ -84,5 +82,6 @@ object WorldActor {
   case object CreatePlayer
   case class SendBlocks(to: ActorRef, chunk: Chunk, version: Option[Int])
   case class BlockList(chunk: Chunk, blocks: Array[Byte])
+  case class UpdateBlock(from: ActorRef, pos: Position, w: Int)
   def props() = Props(classOf[WorldActor])
 }

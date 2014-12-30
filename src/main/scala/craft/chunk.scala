@@ -6,7 +6,7 @@ import scala.collection.mutable.HashMap
 import akka.actor.{ Actor, ActorRef, Props }
 import akka.util.Timeout
 import akka.pattern.{ ask, pipe }
-import WorldActor.{ BlockList }
+import WorldActor.{ BlockList, UpdateBlock }
 
 class ChunkActor(chunk: Chunk) extends Actor {
   import ChunkActor._
@@ -32,7 +32,7 @@ class ChunkActor(chunk: Chunk) extends Actor {
     case SendBlocks(to) =>
       val size = deflate(blocks, buffer)
       to ! BlockList(chunk, buffer.slice(0, size))
-    case UpdateBlock(p, w) =>
+    case UpdateBlock(from, p, w) =>
       val local = p.local
       val copy = blocks.clone
       val i = local.index
@@ -46,7 +46,6 @@ class ChunkActor(chunk: Chunk) extends Actor {
 
 object ChunkActor {
   case class SendBlocks(to: ActorRef)
-  case class UpdateBlock(pos: Position, w: Int)
   case class BlockUpdate(pos: Position, oldW: Int, newW: Int)
   def props(chunk: Chunk) = Props(classOf[ChunkActor], chunk)
 
