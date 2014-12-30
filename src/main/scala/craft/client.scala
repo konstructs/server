@@ -51,7 +51,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
       val command = data.decodeString("ascii")
       if (command == "V,2") {
         world ! CreatePlayer
-        context.become(waitForPlayer(sender))
+        context.become(waitForPlayer(sender, Seq()))
       } else {
         context.stop(self)
       }
@@ -59,10 +59,13 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
       context.stop(self)
   }
 
-  def waitForPlayer(pipe: ActorRef): Receive = {
+  def waitForPlayer(pipe: ActorRef, backlog: Seq[ByteString]): Receive = {
     case p: Player =>
       send(pipe, s"U,${p.pid},0,0,0,0,0")
+      backlog.map(handle(p, _))
       context.become(ready(pipe, p))
+    case init.Event(data) =>
+      context.become(waitForPlayer(sender, backlog :+ data))
   }
 
   def ready(pipe: ActorRef, player: Player): Receive = {
@@ -94,7 +97,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
     send(pipe, s"B,${b.p},${b.q},${b.x},${b.y},${b.z},${b.w}")
   }
 
-  def sendBlocks(pipe: ActorRef, chunk: craft.Chunk, blocks: Array[Byte]) {
+  def sendBlocks(pipe: ActorRef, chunk: craft.ChunkPosition, blocks: Array[Byte]) {
     val data = ByteString
       .newBuilder
       .putByte(C)

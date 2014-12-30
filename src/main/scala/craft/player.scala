@@ -31,7 +31,7 @@ class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.
 
     for(y <- yMin until yMax by ChunkSize) {
       val k = y / ChunkSize
-      world ! SendBlocks(sender, Chunk(p, q, k), v)
+      world ! SendBlocks(sender, ChunkPosition(p, q, k), v)
     }
   }
 
@@ -78,6 +78,6 @@ object PlayerActor {
   case class InventoryUpdate(items: Map[Int, Item])
   case class InventoryActiveUpdate(active: Int)
   case class Action(pos: Position, button: Int)
-  val LoadYChunks = 1
+  val LoadYChunks = 5
   def props(client: ActorRef, world: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], client, world, startingPosition)
 }
