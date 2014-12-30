@@ -7,10 +7,10 @@ import akka.actor.{ Actor, ActorRef, Props }
 import akka.util.Timeout
 import akka.pattern.{ ask, pipe }
 import WorldActor.{ BlockList, UpdateBlock }
+import World.ChunkSize
 
 class ChunkActor(chunk: Chunk) extends Actor {
   import ChunkActor._
-  import World.ChunkSize
 
   private def blockSeq: Seq[Byte] =
     for(
@@ -25,20 +25,17 @@ class ChunkActor(chunk: Chunk) extends Actor {
       }
     }
 
-  private var blocks: Array[Byte] = Array( blockSeq :_*)
-  private val buffer = new Array[Byte](256*256)
-
+  private var blocks: Array[Byte] =  deflate(Array( blockSeq :_*))
   def receive = {
     case SendBlocks(to) =>
-      val size = deflate(blocks, buffer)
-      to ! BlockList(chunk, buffer.slice(0, size))
+      to ! BlockList(chunk,blocks)
     case UpdateBlock(from, p, w) =>
       val local = p.local
-      val copy = blocks.clone
+      val unpacked =  inflate(blocks)
       val i = local.index
-      val oldW = copy(i)
-      copy(i) = w.toByte
-      blocks = copy
+      val oldW = unpacked(i)
+      unpacked(i) = w.toByte
+      blocks = deflate(unpacked)
       sender ! BlockUpdate(p, oldW.toInt, w)
   }
 
@@ -49,19 +46,22 @@ object ChunkActor {
   case class BlockUpdate(pos: Position, oldW: Int, newW: Int)
   def props(chunk: Chunk) = Props(classOf[ChunkActor], chunk)
 
-  def deflate(data: Array[Byte], out: Array[Byte]): Int = {
+  def deflate(data: Array[Byte]): Array[Byte] = {
+    val out = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
     val compresser = new Deflater()
     compresser.setInput(data)
     compresser.finish()
     val size = compresser.deflate(out)
     compresser.end()
-    size
+    out.slice(0, size)
   }
-  def inflate(data: Array[Byte], out: Array[Byte]): Int = {
+
+  def inflate(data: Array[Byte]): Array[Byte] = {
+    val out = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
     val decompresser = new Inflater()
     decompresser.setInput(data, 0, data.size)
     val size = decompresser.inflate(out)
     decompresser.end()
-    size
+    out
   }
 }
