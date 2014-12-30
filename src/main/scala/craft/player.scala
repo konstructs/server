@@ -8,8 +8,6 @@ case class Item(amount: Int, w: Int)
 
 case class Inventory(items: Map[Int, Item])
 
-case class PlayerInventory(active: Int, inventory: Inventory)
-
 class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.Position) extends Actor {
   import PlayerActor._
   import WorldActor._
@@ -17,12 +15,14 @@ class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.
 
   var position = startingPosition
 
-  var inventory = PlayerInventory(3, Inventory(Map[Int, Item](
+  var inventory = Inventory(Map[Int, Item](
     0 -> Item(64, 1),
     1 -> Item(64, 2),
     2 -> Item(64, 3),
     3 -> Item(64, 4),
-    4 -> Item(64, 5))))
+    4 -> Item(64, 5)))
+
+  var active = 3
 
   def chunk(p: Int, q: Int, v: Option[Int]) {
     val y = position.y.toInt
@@ -35,10 +35,26 @@ class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.
     }
   }
 
+  def action(pos: Position, button: Int) = {
+    button match {
+      case 1 =>
+        world ! UpdateBlock(self, pos, 0)
+      case 2 =>
+        inventory.items.get(active).map { item =>
+          val updatedItem = item.copy(amount = item.amount - 1)
+          if(updatedItem.amount > 0)
+            inventory = inventory.copy(items =
+              inventory.items + (active -> updatedItem))
+          else
+            inventory = inventory.copy(items =
+              inventory.items - active)
+          world ! UpdateBlock(self, pos, item.w)
+          sender ! InventoryUpdate(Map(active -> updatedItem))
+        }
+    }
+  }
+
   def receive = {
-    case b: protocol.Block =>
-      println(s"Player: $b")
-      world ! b
     case protocol.Chunk(p, q, v) =>
       chunk(p, q, v)
     case p: protocol.Position =>
@@ -46,11 +62,13 @@ class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.
     case b: protocol.SendBlock =>
       client ! b
     case SendInventory =>
-      sender ! InventoryUpdate(inventory.inventory.items)
-      sender ! InventoryActiveUpdate(inventory.active)
-    case ActivateInventoryItem(active) if(active > 0 && active < 9) =>
-      inventory = inventory.copy(active = active)
-      sender ! InventoryActiveUpdate(inventory.active)
+      sender ! InventoryUpdate(inventory.items)
+      sender ! InventoryActiveUpdate(active)
+    case ActivateInventoryItem(newActive) if(newActive >= 0 && newActive < 9) =>
+      active = newActive
+      sender ! InventoryActiveUpdate(active)
+    case Action(pos, button) =>
+      action(pos, button)
   }
 }
 
@@ -59,6 +77,7 @@ object PlayerActor {
   case class ActivateInventoryItem(activate: Int)
   case class InventoryUpdate(items: Map[Int, Item])
   case class InventoryActiveUpdate(active: Int)
+  case class Action(pos: Position, button: Int)
   val LoadYChunks = 1
   def props(client: ActorRef, world: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], client, world, startingPosition)
 }
