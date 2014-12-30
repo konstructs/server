@@ -97,7 +97,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
     send(pipe, s"B,${b.p},${b.q},${b.x},${b.y},${b.z},${b.w}")
   }
 
-  def sendBlocks(pipe: ActorRef, chunk: craft.Chunk, blocks: Array[Byte]) {
+  def sendBlocks(pipe: ActorRef, chunk: craft.ChunkPosition, blocks: Array[Byte]) {
     val data = ByteString
       .newBuilder
       .putByte(C)

@@ -31,7 +31,7 @@ class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.
 
     for(y <- yMin until yMax by ChunkSize) {
       val k = y / ChunkSize
-      world ! SendBlocks(sender, Chunk(p, q, k), v)
+      world ! SendBlocks(sender, ChunkPosition(p, q, k), v)
     }
   }
 
