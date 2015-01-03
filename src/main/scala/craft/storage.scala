@@ -8,7 +8,7 @@ import org.apache.commons.io.FileUtils
 class StorageActor(directory: File) extends Actor {
   import StorageActor._
 
-  private def chunkFile(c: ChunkPosition) = new File(directory, s"${c.p}x${c.q}x${c.k}.chunk")
+  private def chunkFile(c: ChunkPosition) = new File(directory, s"${c.p}/${c.q}/${c.k}.chunk")
 
   def receive = {
     case Load(chunk) =>
