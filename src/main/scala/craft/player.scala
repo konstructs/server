@@ -8,7 +8,7 @@ case class Item(amount: Int, w: Int)
 
 case class Inventory(items: Map[Int, Item])
 
-class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.Position) extends Actor {
+class PlayerActor(pid: Int, client: ActorRef, world: ActorRef, startingPosition: protocol.Position) extends Actor {
   import PlayerActor._
   import WorldActor._
   import World.ChunkSize
@@ -73,6 +73,7 @@ class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.
       chunk(p, q, v)
     case p: protocol.Position =>
       position = p
+      world ! PlayerMovement(pid, position)
     case b: protocol.SendBlock =>
       client ! b
     case SendInventory =>
@@ -85,16 +86,19 @@ class PlayerActor(client: ActorRef, world: ActorRef, startingPosition: protocol.
       action(pos, button)
     case ReceiveBlock(block) =>
       putInInventory(block)
+    case p: PlayerMovement =>
+      client ! p
   }
 }
 
 object PlayerActor {
   case object SendInventory
   case class ReceiveBlock(q: Byte)
+  case class PlayerMovement(pid: Int, pos: protocol.Position)
   case class ActivateInventoryItem(activate: Int)
   case class InventoryUpdate(items: Map[Int, Item])
   case class InventoryActiveUpdate(active: Int)
   case class Action(pos: Position, button: Int)
   val LoadYChunks = 5
-  def props(client: ActorRef, world: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], client, world, startingPosition)
+  def props(pid: Int, client: ActorRef, world: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, client, world, startingPosition)
 }

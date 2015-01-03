@@ -61,11 +61,11 @@ class WorldActor extends Actor {
   val chunkStore = context.actorOf(StorageActor.props(new java.io.File("world/")))
   val chunkGenerator = context.actorOf(GeneratorActor.props())
 
-  def playerActorId(pid: Int) = s"player-$nextPid"
+  def playerActorId(pid: Int) = s"player-$pid"
   def regionActorId(r: RegionPosition) = s"region-${r.m}-${r.n}-${r.o}"
 
   def player() {
-    val player = context.actorOf(PlayerActor.props(sender, self, protocol.Position(0,0,0,0,0)), playerActorId(nextPid))
+    val player = context.actorOf(PlayerActor.props(nextPid, sender, self, protocol.Position(0,0,0,0,0)), playerActorId(nextPid))
     val p = Player(nextPid, player)
     nextPid = nextPid + 1
     sender ! p
@@ -98,6 +98,12 @@ class WorldActor extends Actor {
       context.children.filter(_.path.name.startsWith("player-")) foreach { p =>
         p ! protocol.SendBlock(chunk.p, chunk.q, b.pos.x, b.pos.y, b.pos.z, b.newW)
       }
+    case m: PlayerActor.PlayerMovement =>
+      context.children.filter { c =>
+        val name = c.path.name
+        name.startsWith("player-") && name != playerActorId(m.pid)
+      } foreach(_ ! m)
+
  }
 }
 

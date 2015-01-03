@@ -79,8 +79,14 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
       sendInventory(pipe, items)
     case InventoryActiveUpdate(active) =>
       sendInventoryActive(pipe, active)
+    case p: PlayerMovement =>
+      sendPlayerMovement(pipe, p)
     case _: Tcp.ConnectionClosed =>
       context.stop(self)
+  }
+
+  def sendPlayerMovement(pipe: ActorRef, p: PlayerMovement) {
+    send(pipe, s"P,${p.pid},${p.pos.x},${p.pos.y},${p.pos.z},${p.pos.rx},${p.pos.ry}")
   }
 
   def sendInventory(pipe: ActorRef, items: Map[Int, Item]) {
