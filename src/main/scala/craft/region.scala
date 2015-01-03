@@ -1,12 +1,9 @@
 package craft
 
-import java.util.concurrent.TimeUnit
-import scala.concurrent.duration.Duration
-
 import akka.actor.{ Actor, Stash, ActorRef, Props }
 
 class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: ActorRef)
-    extends Actor with Stash {
+    extends Actor with Stash with utils.Scheduled{
   import RegionActor._
   import StorageActor._
   import GeneratorActor._
@@ -18,8 +15,7 @@ class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: 
   private val chunks = new Array[Option[Array[Byte]]](RegionSize * RegionSize * RegionSize)
   private var dirty: Set[ChunkPosition] = Set()
 
-  context.system.scheduler.schedule(
-    Duration(5, TimeUnit.SECONDS), Duration(5, TimeUnit.SECONDS), self, StoreChunks)(context.dispatcher)
+  schedule(5000, StoreChunks)
 
   def loadChunk(chunk: ChunkPosition): Option[Array[Byte]] = {
     val i = chunk.index
