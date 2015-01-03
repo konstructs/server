@@ -50,7 +50,7 @@ case class ChunkPosition(p: Int, q: Int, k: Int) {
 }
 
 case class RegionPosition(m: Int, n: Int, o: Int)
-case class Player(pid: Int, actor: ActorRef)
+case class Player(pid: Int, actor: ActorRef, nick: String)
 
 class WorldActor extends Actor {
   import WorldActor._
@@ -64,9 +64,20 @@ class WorldActor extends Actor {
   def playerActorId(pid: Int) = s"player-$pid"
   def regionActorId(r: RegionPosition) = s"region-${r.m}-${r.n}-${r.o}"
 
-  def player() {
-    val player = context.actorOf(PlayerActor.props(nextPid, sender, self, protocol.Position(0,0,0,0,0)), playerActorId(nextPid))
-    val p = Player(nextPid, player)
+  def allPlayers(except: Option[Int] = None) = {
+    val players = context.children.filter(_.path.name.startsWith("player-"))
+    except match {
+      case Some(pid) =>
+        players.filter(_.path.name != playerActorId(pid))
+      case None => players
+    }
+  }
+
+  def player(nick: String) {
+    val player = context.actorOf(PlayerActor.props(nextPid, nick, sender, self, protocol.Position(0,0,0,0,0)), playerActorId(nextPid))
+    val p = Player(nextPid, player, nick)
+    allPlayers(except = Some(nextPid)).foreach(_ ! PlayerActor.SendInfo(player))
+    allPlayers(except = Some(nextPid)).foreach(player ! PlayerActor.SendInfo(_))
     nextPid = nextPid + 1
     sender ! p
   }
@@ -85,8 +96,8 @@ class WorldActor extends Actor {
   }
 
   def receive = {
-    case CreatePlayer =>
-      player()
+    case CreatePlayer(nick: String) =>
+      player(nick)
     case SendBlocks(to, chunk, version) =>
       sendBlocks(to, chunk, version)
     case b: PutBlock =>
@@ -95,20 +106,17 @@ class WorldActor extends Actor {
       getRegionActor(b.pos.chunk.region) ! b
     case b: RegionActor.BlockUpdate =>
       val chunk = b.pos.chunk
-      context.children.filter(_.path.name.startsWith("player-")) foreach { p =>
+      allPlayers() foreach { p =>
         p ! protocol.SendBlock(chunk.p, chunk.q, b.pos.x, b.pos.y, b.pos.z, b.newW)
       }
     case m: PlayerActor.PlayerMovement =>
-      context.children.filter { c =>
-        val name = c.path.name
-        name.startsWith("player-") && name != playerActorId(m.pid)
-      } foreach(_ ! m)
+      allPlayers(except = Some(m.pid)).foreach(_ ! m)
 
  }
 }
 
 object WorldActor {
-  case object CreatePlayer
+  case class CreatePlayer(nick: String)
   case class SendBlocks(to: ActorRef, chunk: ChunkPosition, version: Option[Int])
   case class BlockList(chunk: ChunkPosition, blocks: Array[Byte])
   case class PutBlock(from: ActorRef, pos: Position, w: Int)
