@@ -11,6 +11,7 @@ class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: 
   import StorageActor._
   import GeneratorActor._
   import WorldActor._
+  import PlayerActor.ReceiveBlock
   import World._
   private val blocks = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
   private val compressionBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
@@ -35,7 +36,7 @@ class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: 
     }
   }
 
-  def updateChunk(pos: Position, block: Byte): Option[Byte] = {
+  def updateChunk(pos: Position)(update: Byte => Byte) {
     val chunk = pos.chunk
     loadChunk(chunk).map { compressedBlocks =>
       dirty = dirty + chunk
@@ -44,10 +45,10 @@ class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: 
       assert(size == blocks.size)
       val i = local.index
       val oldBlock = blocks(i)
+      val block = update(oldBlock)
       blocks(i) = block
       val compressed = compress.deflate(blocks, compressionBuffer)
       chunks(chunk.index) = Some(compressed)
-      oldBlock
     }
   }
 
@@ -56,9 +57,16 @@ class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: 
       loadChunk(chunk).map { blocks =>
         to ! BlockList(chunk, blocks)
       }
-    case UpdateBlock(by, p, w) =>
-      updateChunk(p, w.toByte).map { old =>
+    case PutBlock(by, p, w) =>
+      updateChunk(p) { old =>
         sender ! BlockUpdate(p, old.toInt, w)
+        w.toByte
+      }
+    case DestroyBlock(by, p) =>
+      updateChunk(p) { old =>
+        by ! ReceiveBlock(old)
+        sender ! BlockUpdate(p, old.toInt, 0)
+        0
       }
     case Loaded(chunk, blocksOption) =>
       blocksOption match {

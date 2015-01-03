@@ -89,7 +89,9 @@ class WorldActor extends Actor {
       player()
     case SendBlocks(to, chunk, version) =>
       sendBlocks(to, chunk, version)
-    case b: UpdateBlock =>
+    case b: PutBlock =>
+      getRegionActor(b.pos.chunk.region) ! b
+    case b: DestroyBlock =>
       getRegionActor(b.pos.chunk.region) ! b
     case b: RegionActor.BlockUpdate =>
       val chunk = b.pos.chunk
@@ -103,6 +105,7 @@ object WorldActor {
   case object CreatePlayer
   case class SendBlocks(to: ActorRef, chunk: ChunkPosition, version: Option[Int])
   case class BlockList(chunk: ChunkPosition, blocks: Array[Byte])
-  case class UpdateBlock(from: ActorRef, pos: Position, w: Int)
+  case class PutBlock(from: ActorRef, pos: Position, w: Int)
+  case class DestroyBlock(from: ActorRef, pos: Position)
   def props() = Props(classOf[WorldActor])
 }
