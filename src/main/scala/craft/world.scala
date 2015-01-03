@@ -110,7 +110,8 @@ class WorldActor extends Actor {
       }
     case m: PlayerActor.PlayerMovement =>
       allPlayers(except = Some(m.pid)).foreach(_ ! m)
-
+    case l: PlayerActor.PlayerLogout =>
+      allPlayers(except = Some(l.pid)).foreach(_ ! l)
  }
 }
 

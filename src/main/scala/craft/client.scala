@@ -86,6 +86,8 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
       sendPlayerMovement(pipe, p)
     case PlayerNick(pid, nick) =>
       sendPlayerNick(pipe, pid, nick)
+    case PlayerLogout(pid) =>
+      sendPlayerLogout(pipe, pid)
     case _: Tcp.ConnectionClosed =>
       player.actor ! PoisonPill
       context.stop(self)
@@ -93,6 +95,10 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
 
   def sendPlayerNick(pipe: ActorRef, pid: Int, nick: String) {
     send(pipe, s"N,$pid,$nick")
+  }
+
+  def sendPlayerLogout(pipe: ActorRef, pid: Int) {
+    send(pipe, s"D,$pid")
   }
 
   def sendPlayerMovement(pipe: ActorRef, p: PlayerMovement) {

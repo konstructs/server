@@ -108,8 +108,9 @@ class PlayerActor(pid: Int, nick: String, client: ActorRef, world: ActorRef, sto
     }
   }
 
-  def preStop {
+  override def postStop {
     store ! Store(nick, data.toJson.compactPrint.getBytes)
+    world ! PlayerLogout(pid)
   }
 
   def ready: Receive = {
@@ -139,6 +140,8 @@ class PlayerActor(pid: Int, nick: String, client: ActorRef, world: ActorRef, sto
       to ! PlayerNick(pid, data.nick)
     case StoreData =>
       store ! Store(nick, data.toJson.compactPrint.getBytes)
+    case l: PlayerLogout =>
+      client ! l
   }
 }
 
@@ -147,6 +150,7 @@ object PlayerActor {
   case object StoreData
   case class ReceiveBlock(q: Byte)
   case class PlayerMovement(pid: Int, pos: protocol.Position)
+  case class PlayerLogout(pid: Int)
   case class PlayerInfo(pid: Int, nick: String, actor: ActorRef, pos: protocol.Position)
   case class PlayerNick(pid: Int, nick: String)
   case class ActivateInventoryItem(activate: Int)
@@ -154,7 +158,7 @@ object PlayerActor {
   case class InventoryActiveUpdate(active: Int)
   case class Action(pos: Position, button: Int)
   case class SendInfo(to: ActorRef)
-  case object Logout
+
   val LoadYChunks = 5
   def props(pid: Int, nick: String, client: ActorRef, world: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, client, world, store, startingPosition)
 }
