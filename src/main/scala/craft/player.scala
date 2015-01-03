@@ -2,7 +2,7 @@ package craft
 
 import scala.math.max
 
-import akka.actor.{ Actor, Props, ActorRef, Stash }
+import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 
 import spray.json._
 
@@ -10,10 +10,10 @@ case class Item(amount: Int, w: Int)
 
 case class Inventory(items: Map[String, Item])
 
-case class Player(nick: String, position: protocol.Position,
+case class Player(nick: String, password: String, position: protocol.Position,
   active: Int, inventory: Inventory)
 
-class PlayerActor(pid: Int, nick: String, client: ActorRef, world: ActorRef, store: ActorRef, startingPosition: protocol.Position) extends Actor with Stash with utils.Scheduled {
+class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, world: ActorRef, store: ActorRef, startingPosition: protocol.Position) extends Actor with Stash with utils.Scheduled {
   import PlayerActor._
   import WorldActor._
   import World.ChunkSize
@@ -23,7 +23,7 @@ class PlayerActor(pid: Int, nick: String, client: ActorRef, world: ActorRef, sto
   implicit val itemFormat = jsonFormat2(Item)
   implicit val inventoryFormat = jsonFormat1(Inventory)
   implicit val protocolFormat = jsonFormat5(protocol.Position)
-  implicit val playerFormat = jsonFormat4(Player)
+  implicit val playerFormat = jsonFormat5(Player)
 
   var data: Player = null
 
@@ -33,12 +33,18 @@ class PlayerActor(pid: Int, nick: String, client: ActorRef, world: ActorRef, sto
 
   def receive = {
     case Loaded(_, Some(json)) =>
-      data = (new String(json)).parseJson.convertTo[Player]
-      context.become(ready)
-      client ! PlayerInfo(pid, nick, self, data.position)
-      unstashAll()
+      val newData = (new String(json)).parseJson.convertTo[Player]
+      if(newData.password == password) {
+        data = newData
+        context.become(ready)
+        client ! PlayerInfo(pid, nick, self, data.position)
+        unstashAll()
+      } else {
+        client ! PoisonPill
+        context.stop(self)
+      }
     case Loaded(_, None) =>
-      data = Player(nick, startingPosition, 0, Inventory(Map()))
+      data = Player(nick, password, startingPosition, 0, Inventory(Map()))
       context.become(ready)
       client ! PlayerInfo(pid, nick, self, data.position)
       unstashAll()
@@ -109,7 +115,8 @@ class PlayerActor(pid: Int, nick: String, client: ActorRef, world: ActorRef, sto
   }
 
   override def postStop {
-    store ! Store(nick, data.toJson.compactPrint.getBytes)
+    if(data != null)
+      store ! Store(nick, data.toJson.compactPrint.getBytes)
     world ! PlayerLogout(pid)
   }
 
@@ -160,5 +167,5 @@ object PlayerActor {
   case class SendInfo(to: ActorRef)
 
   val LoadYChunks = 5
-  def props(pid: Int, nick: String, client: ActorRef, world: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, client, world, store, startingPosition)
+  def props(pid: Int, nick: String, password: String, client: ActorRef, world: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, world, store, startingPosition)
 }
