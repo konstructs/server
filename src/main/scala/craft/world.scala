@@ -50,7 +50,6 @@ case class ChunkPosition(p: Int, q: Int, k: Int) {
 }
 
 case class RegionPosition(m: Int, n: Int, o: Int)
-case class Player(pid: Int, actor: ActorRef, nick: String)
 
 class WorldActor extends Actor {
   import WorldActor._
@@ -60,6 +59,8 @@ class WorldActor extends Actor {
 
   val chunkStore = context.actorOf(StorageActor.props(new java.io.File("world/")))
   val chunkGenerator = context.actorOf(GeneratorActor.props())
+
+  val playerStore = context.actorOf(PlayerStorageActor.props(new java.io.File("players/")))
 
   def playerActorId(pid: Int) = s"player-$pid"
   def regionActorId(r: RegionPosition) = s"region-${r.m}-${r.n}-${r.o}"
@@ -74,12 +75,10 @@ class WorldActor extends Actor {
   }
 
   def player(nick: String) {
-    val player = context.actorOf(PlayerActor.props(nextPid, nick, sender, self, protocol.Position(0,0,0,0,0)), playerActorId(nextPid))
-    val p = Player(nextPid, player, nick)
+    val player = context.actorOf(PlayerActor.props(nextPid, nick, sender, self, playerStore, protocol.Position(0,0,0,0,0)), playerActorId(nextPid))
     allPlayers(except = Some(nextPid)).foreach(_ ! PlayerActor.SendInfo(player))
     allPlayers(except = Some(nextPid)).foreach(player ! PlayerActor.SendInfo(_))
     nextPid = nextPid + 1
-    sender ! p
   }
 
   def getRegionActor(region: RegionPosition): ActorRef = {

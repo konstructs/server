@@ -34,3 +34,32 @@ object StorageActor {
   def props(directory: File) =
     Props(classOf[StorageActor], directory)
 }
+
+class PlayerStorageActor(directory: File) extends Actor {
+  import PlayerStorageActor._
+
+  private def playerFile(nick: String) = new File(directory, s"${nick}.player")
+
+  def receive = {
+    case Load(nick) =>
+      val f = playerFile(nick)
+      val data = if(f.exists) {
+        Some(FileUtils.readFileToByteArray(f))
+      } else {
+        None
+      }
+      sender ! Loaded(nick, data)
+    case Store(nick, data) =>
+      val f = playerFile(nick)
+      FileUtils.writeByteArrayToFile(f, data)
+  }
+}
+
+object PlayerStorageActor {
+  case class Load(nick: String)
+  case class Loaded(nick: String, data: Option[Array[Byte]])
+  case class Store(nick: String, data: Array[Byte])
+
+  def props(directory: File) =
+    Props(classOf[PlayerStorageActor], directory)
+}

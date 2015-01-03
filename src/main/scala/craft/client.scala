@@ -1,8 +1,8 @@
 package craft.protocol
 
-import craft.{ Player, Item, PlayerActor, WorldActor }
+import craft.{ Item, PlayerActor, WorldActor }
 
-import akka.actor.{ Actor, Props, ActorRef, Stash }
+import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 import akka.io.{ Tcp, TcpPipelineHandler }
 import akka.util.ByteString
 import TcpPipelineHandler.{ Init, WithinActorContext }
@@ -25,7 +25,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
     }
   }
 
-  def handle(player: Player, data: ByteString) = {
+  def handle(player: PlayerInfo, data: ByteString) = {
     val command = data.decodeString("ascii")
     println(s"RECV: |$command|")
     if(command.startsWith("C,")) {
@@ -62,8 +62,8 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
   }
 
   def waitForPlayer(pipe: ActorRef): Receive = {
-    case p: Player =>
-      send(pipe, s"U,${p.pid},0,0,0,0,0")
+    case p: PlayerInfo =>
+      send(pipe, s"U,${p.pid},${p.pos.x},${p.pos.y},${p.pos.z},${p.pos.rx},${p.pos.ry}")
       sendPlayerNick(pipe, p.pid, p.nick)
       unstashAll()
       context.become(ready(pipe, p))
@@ -71,7 +71,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
       stash()
   }
 
-  def ready(pipe: ActorRef, player: Player): Receive = {
+  def ready(pipe: ActorRef, player: PlayerInfo): Receive = {
     case init.Event(command) =>
       handle(player, command)
     case BlockList(chunk, blocks) =>
@@ -87,6 +87,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
     case PlayerNick(pid, nick) =>
       sendPlayerNick(pipe, pid, nick)
     case _: Tcp.ConnectionClosed =>
+      player.actor ! PoisonPill
       context.stop(self)
   }
 
@@ -98,7 +99,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
     send(pipe, s"P,${p.pid},${p.pos.x},${p.pos.y},${p.pos.z},${p.pos.rx},${p.pos.ry}")
   }
 
-  def sendInventory(pipe: ActorRef, items: Map[Int, Item]) {
+  def sendInventory(pipe: ActorRef, items: Map[String, Item]) {
     for((p, i) <- items) {
       send(pipe, s"I,${p},${i.amount},${i.w}")
     }
