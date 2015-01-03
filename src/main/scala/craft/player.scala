@@ -8,7 +8,7 @@ case class Item(amount: Int, w: Int)
 
 case class Inventory(items: Map[Int, Item])
 
-class PlayerActor(pid: Int, client: ActorRef, world: ActorRef, startingPosition: protocol.Position) extends Actor {
+class PlayerActor(pid: Int, nick: String, client: ActorRef, world: ActorRef, startingPosition: protocol.Position) extends Actor {
   import PlayerActor._
   import WorldActor._
   import World.ChunkSize
@@ -88,6 +88,11 @@ class PlayerActor(pid: Int, client: ActorRef, world: ActorRef, startingPosition:
       putInInventory(block)
     case p: PlayerMovement =>
       client ! p
+    case p: PlayerNick =>
+      client ! p
+    case SendInfo(to) =>
+      to ! PlayerMovement(pid, position)
+      to ! PlayerNick(pid, nick)
   }
 }
 
@@ -95,10 +100,12 @@ object PlayerActor {
   case object SendInventory
   case class ReceiveBlock(q: Byte)
   case class PlayerMovement(pid: Int, pos: protocol.Position)
+  case class PlayerNick(pid: Int, nick: String)
   case class ActivateInventoryItem(activate: Int)
   case class InventoryUpdate(items: Map[Int, Item])
   case class InventoryActiveUpdate(active: Int)
   case class Action(pos: Position, button: Int)
+  case class SendInfo(to: ActorRef)
   val LoadYChunks = 5
-  def props(pid: Int, client: ActorRef, world: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, client, world, startingPosition)
+  def props(pid: Int, nick: String, client: ActorRef, world: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, client, world, startingPosition)
 }

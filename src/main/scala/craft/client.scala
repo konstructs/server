@@ -49,8 +49,10 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
   def receive = {
     case init.Event(data) =>
       val command = data.decodeString("ascii")
-      if (command == "V,2") {
-        world ! CreatePlayer
+      if (command.startsWith("V,2,")) {
+        val strings = readData(s => s, command.drop(4))
+
+        world ! CreatePlayer(strings(0))
         context.become(waitForPlayer(sender))
       } else {
         context.stop(self)
@@ -62,6 +64,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
   def waitForPlayer(pipe: ActorRef): Receive = {
     case p: Player =>
       send(pipe, s"U,${p.pid},0,0,0,0,0")
+      sendPlayerNick(pipe, p.pid, p.nick)
       unstashAll()
       context.become(ready(pipe, p))
     case init.Event(data) =>
@@ -81,8 +84,14 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
       sendInventoryActive(pipe, active)
     case p: PlayerMovement =>
       sendPlayerMovement(pipe, p)
+    case PlayerNick(pid, nick) =>
+      sendPlayerNick(pipe, pid, nick)
     case _: Tcp.ConnectionClosed =>
       context.stop(self)
+  }
+
+  def sendPlayerNick(pipe: ActorRef, pid: Int, nick: String) {
+    send(pipe, s"N,$pid,$nick")
   }
 
   def sendPlayerMovement(pipe: ActorRef, p: PlayerMovement) {
