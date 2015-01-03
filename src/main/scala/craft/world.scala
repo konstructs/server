@@ -74,8 +74,8 @@ class WorldActor extends Actor {
     }
   }
 
-  def player(nick: String) {
-    val player = context.actorOf(PlayerActor.props(nextPid, nick, sender, self, playerStore, protocol.Position(0,0,0,0,0)), playerActorId(nextPid))
+  def player(nick: String, password: String) {
+    val player = context.actorOf(PlayerActor.props(nextPid, nick, password, sender, self, playerStore, protocol.Position(0,0,0,0,0)), playerActorId(nextPid))
     allPlayers(except = Some(nextPid)).foreach(_ ! PlayerActor.SendInfo(player))
     allPlayers(except = Some(nextPid)).foreach(player ! PlayerActor.SendInfo(_))
     nextPid = nextPid + 1
@@ -95,8 +95,8 @@ class WorldActor extends Actor {
   }
 
   def receive = {
-    case CreatePlayer(nick: String) =>
-      player(nick)
+    case CreatePlayer(nick, password) =>
+      player(nick, password)
     case SendBlocks(to, chunk, version) =>
       sendBlocks(to, chunk, version)
     case b: PutBlock =>
@@ -116,7 +116,7 @@ class WorldActor extends Actor {
 }
 
 object WorldActor {
-  case class CreatePlayer(nick: String)
+  case class CreatePlayer(nick: String, password: String)
   case class SendBlocks(to: ActorRef, chunk: ChunkPosition, version: Option[Int])
   case class BlockList(chunk: ChunkPosition, blocks: Array[Byte])
   case class PutBlock(from: ActorRef, pos: Position, w: Int)
