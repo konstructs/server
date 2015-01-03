@@ -2,12 +2,12 @@ package craft.protocol
 
 import craft.{ Player, Item, PlayerActor, WorldActor }
 
-import akka.actor.{ Actor, Props, ActorRef }
+import akka.actor.{ Actor, Props, ActorRef, Stash }
 import akka.io.{ Tcp, TcpPipelineHandler }
 import akka.util.ByteString
 import TcpPipelineHandler.{ Init, WithinActorContext }
 
-class Client(init: Init[WithinActorContext, ByteString, ByteString], world: ActorRef) extends Actor {
+class Client(init: Init[WithinActorContext, ByteString, ByteString], world: ActorRef) extends Actor with Stash {
   import WorldActor.{ BlockList, CreatePlayer }
   import Client._
   import PlayerActor._
@@ -51,7 +51,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
       val command = data.decodeString("ascii")
       if (command == "V,2") {
         world ! CreatePlayer
-        context.become(waitForPlayer(sender, Seq()))
+        context.become(waitForPlayer(sender))
       } else {
         context.stop(self)
       }
@@ -59,13 +59,13 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
       context.stop(self)
   }
 
-  def waitForPlayer(pipe: ActorRef, backlog: Seq[ByteString]): Receive = {
+  def waitForPlayer(pipe: ActorRef): Receive = {
     case p: Player =>
       send(pipe, s"U,${p.pid},0,0,0,0,0")
-      backlog.map(handle(p, _))
+      unstashAll()
       context.become(ready(pipe, p))
     case init.Event(data) =>
-      context.become(waitForPlayer(sender, backlog :+ data))
+      stash()
   }
 
   def ready(pipe: ActorRef, player: Player): Receive = {
