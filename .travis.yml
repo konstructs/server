@@ -1,0 +1,7 @@
+language: scala
+scala:
+  - 2.10.4
+
+after_success:
+  - sbt assembly
+  - ./bintray
