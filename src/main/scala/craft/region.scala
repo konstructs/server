@@ -55,8 +55,13 @@ class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: 
       }
     case PutBlock(by, p, w) =>
       updateChunk(p) { old =>
-        sender ! BlockUpdate(p, old.toInt, w)
-        w.toByte
+        if(old == 0) {
+          sender ! BlockUpdate(p, old.toInt, w)
+          w.toByte
+        } else {
+          by ! ReceiveBlock(w.toByte)
+          old
+        }
       }
     case DestroyBlock(by, p) =>
       updateChunk(p) { old =>
