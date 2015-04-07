@@ -25,6 +25,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
   implicit val protocolFormat = jsonFormat5(protocol.Position)
   implicit val playerFormat = jsonFormat5(Player)
 
+  var sentChunks = Set.empty[ChunkPosition]
   var data: Player = null
 
   schedule(5000, StoreData)
@@ -53,22 +54,17 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
   }
 
   def update(position: protocol.Position) {
+    val visible = visibleChunks(Position(position), 5)
+    val diff = visible &~ sentChunks
+    for(chunk <- diff) {
+      world ! SendBlocks(client, chunk, None)
+    }
     data = data.copy(position = position)
+    sentChunks = visible
   }
 
   def update(inventory: Inventory) {
     data = data.copy(inventory = inventory)
-  }
-
-  def chunk(p: Int, q: Int, v: Option[Int]) {
-    val y = data.position.y.toInt
-    val yMin = max(y - LoadYChunks * ChunkSize, 0)
-    val yMax = y + LoadYChunks * ChunkSize
-
-    for(y <- yMin until yMax by ChunkSize) {
-      val k = y / ChunkSize
-      world ! SendBlocks(sender, ChunkPosition(p, q, k), v)
-    }
   }
 
   def action(pos: Position, button: Int) = {
@@ -121,8 +117,6 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
   }
 
   def ready: Receive = {
-    case protocol.Chunk(p, q, v) =>
-      chunk(p, q, v)
     case p: protocol.Position =>
       update(p)
       world ! PlayerMovement(pid, data.position)
@@ -168,4 +162,13 @@ object PlayerActor {
 
   val LoadYChunks = 5
   def props(pid: Int, nick: String, password: String, client: ActorRef, world: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, world, store, startingPosition)
+
+
+  def visibleChunks(position: Position, visibility: Int): Set[ChunkPosition] = {
+    val range = -visibility to visibility
+    val chunk = position.chunk
+    (for(p <- range; q <- range; k <-range) yield {
+      chunk.translate(p, q, k)
+    }).filter(_.k >= 0).toSet
+  }
 }
