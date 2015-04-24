@@ -33,6 +33,11 @@ case class Position(x: Int, y: Int, z: Int) {
   }
 }
 
+object Position {
+  def apply(pos: protocol.Position): Position =
+    apply(math.round(pos.x), math.round(pos.y), math.round(pos.z))
+}
+
 case class ChunkPosition(p: Int, q: Int, k: Int) {
   def region = {
     // For negative values we need to "round down", i.e. -0.01 should be -1 and not 0
@@ -41,6 +46,8 @@ case class ChunkPosition(p: Int, q: Int, k: Int) {
     val o = (if(k < 0) (k - World.RegionSize + 1) else k) / World.RegionSize
     RegionPosition(m, n, o)
   }
+  def translate(pd: Int, qd: Int, kd: Int) =
+    copy(p = p + pd, q = q + qd, k = k + kd)
   def index = {
     val lp = math.abs(p % World.RegionSize)
     val lq = math.abs(q % World.RegionSize)
