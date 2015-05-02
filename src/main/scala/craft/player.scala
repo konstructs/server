@@ -78,7 +78,25 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
   def action(pos: Position, button: Int) = {
     button match {
       case 1 =>
-        world ! DestroyBlock(self, pos)
+        val l = LSystem(Seq(
+          DeterministicProductionRule("cc", "c[&[c][-c][--c][+c]]c[&[c][-c][--c][+c]]"),
+          DeterministicProductionRule("a","aa"),
+          ProbabilisticProductionRule("c",
+            Seq(
+              (20, "c[&[d]]"),
+              (20, "c[&[+d]]"),
+              (20, "c[&[-d]]"),
+              (20, "c[&[--d]]"),
+              (20, "cc")
+            )),
+          ProbabilisticProductionRule("aa", Seq((50, "a[&[c][-c][--c][+c]]"), (50, "bbba")))
+        ))
+        val m = BlockMachine(Map('a'-> 5, 'b' -> 5, 'c' -> 15, 'd' -> 15))
+        val tree = l.iterate("a[&[c][-c][--c][+c]]c", 5)
+        println(tree)
+        val blocks = m.interpret(tree, pos)
+        for(b <- blocks)
+          world ! PutBlock(self, b._1, b._2)
       case 2 =>
         val inventory = data.inventory
         val active = data.active.toString
