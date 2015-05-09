@@ -27,6 +27,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
 
   var sentChunks = Set.empty[ChunkPosition]
   var data: Player = null
+  var maxChunksToSend = 0
 
   schedule(5000, StoreData)
 
@@ -53,14 +54,21 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
       stash()
   }
 
-  def update(position: protocol.Position) {
-    val visible = visibleChunks(Position(position), 5)
+  def sendChunks() {
+    val visible = visibleChunks(Position(data.position), 7)
+    sentChunks = sentChunks & visible
     val diff = visible &~ sentChunks
-    for(chunk <- diff) {
+    val toSend = diff.take(maxChunksToSend)
+    for(chunk <- toSend) {
       world ! SendBlocks(client, chunk, None)
+      maxChunksToSend -= 1
     }
+    sentChunks ++= toSend
+  }
+
+  def update(position: protocol.Position) {
     data = data.copy(position = position)
-    sentChunks = visible
+    sendChunks()
   }
 
   def update(inventory: Inventory) {
@@ -143,6 +151,9 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
       store ! Store(nick, data.toJson.compactPrint.getBytes)
     case l: PlayerLogout =>
       client ! l
+    case IncreaseChunks(amount) =>
+      maxChunksToSend += amount
+      sendChunks()
   }
 }
 
@@ -159,6 +170,7 @@ object PlayerActor {
   case class InventoryActiveUpdate(active: Int)
   case class Action(pos: Position, button: Int)
   case class SendInfo(to: ActorRef)
+  case class IncreaseChunks(amount: Int)
 
   val LoadYChunks = 5
   def props(pid: Int, nick: String, password: String, client: ActorRef, world: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, world, store, startingPosition)
