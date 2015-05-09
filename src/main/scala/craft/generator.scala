@@ -59,15 +59,15 @@ class GeneratorActor extends Actor {
           if(global.y + random.nextInt(10) - 5 < 64)
             1.toByte
           else {
-            if(global.y < 128) {
+            if(global.y + random.nextInt(4) - 2 < 128) {
               9.toByte
             } else {
-              12.toByte
+              14.toByte
             }
           }
         } else if(global.y > height - 10) {
           if(global.y >= 128) {
-            12.toByte
+            14.toByte
           } else {
             7.toByte
           }

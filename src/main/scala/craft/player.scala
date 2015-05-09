@@ -75,23 +75,50 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
     data = data.copy(inventory = inventory)
   }
 
+  val random = new scala.util.Random
+
+  def generateTree(pos: Position) {
+    val l = LSystem(Seq(
+      DeterministicProductionRule("cc", "c[&[c][-c][--c][+c]]c[&[c][-c][--c][+c]]"),
+      DeterministicProductionRule("a","aa"),
+      ProbabilisticProductionRule("c",
+        Seq(
+          (20, "c[&[d]]"),
+          (20, "c[&[+d]]"),
+          (20, "c[&[-d]]"),
+          (20, "c[&[--d]]"),
+          (20, "cc")
+        )),
+      ProbabilisticProductionRule("aa", Seq((40, "a[&[c][-c][--c][+c]]"), (60, "bbba")))
+    ))
+    val m = BlockMachine(Map('a'-> 5, 'b' -> 5, 'c' -> 15, 'd' -> 15))
+    val tree = l.iterate("a[&[c][-c][--c][+c]]c", 4 + random.nextInt(5))
+    val blocks = m.interpret(tree, pos.copy(y = pos.y - 1))
+    for(b <- blocks)
+      world ! PutBlock(world, b._1, b._2)
+  }
+
   def action(pos: Position, button: Int) = {
     button match {
       case 1 =>
         world ! DestroyBlock(self, pos)
       case 2 =>
-        val inventory = data.inventory
-        val active = data.active.toString
-        inventory.items.get(active).map { item =>
-          val updatedItem = item.copy(amount = item.amount - 1)
-          if(updatedItem.amount > 0)
-            update(inventory.copy(items =
-              inventory.items + (active -> updatedItem)))
-          else
-            update(inventory.copy(items =
-              inventory.items - active))
-          world ! PutBlock(self, pos, item.w)
-          sender ! InventoryUpdate(Map(active -> updatedItem))
+        if(data.active == 8) {
+          generateTree(pos)
+        } else {
+          val inventory = data.inventory
+          val active = data.active.toString
+          inventory.items.get(active).map { item =>
+            val updatedItem = item.copy(amount = item.amount - 1)
+            if(updatedItem.amount > 0)
+              update(inventory.copy(items =
+                inventory.items + (active -> updatedItem)))
+            else
+              update(inventory.copy(items =
+                inventory.items - active))
+            world ! PutBlock(self, pos, item.w)
+            sender ! InventoryUpdate(Map(active -> updatedItem))
+          }
         }
     }
   }
