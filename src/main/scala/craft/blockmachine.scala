@@ -17,10 +17,16 @@ case class BlockMachine(alphabet: Map[Char, Int]) {
       i match {
         case '&' =>
           dir = dir * Down
+        case '^' =>
+          dir = dir * Up
         case '+' =>
           dir = dir * Left
         case '-' =>
           dir = dir * Right
+        case '\\' =>
+          dir = dir * RollLeft
+        case '/' =>
+          dir = dir * RollRight
         case '[' =>
           stack.push((pos, dir))
         case ']' =>
