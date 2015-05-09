@@ -31,6 +31,9 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
     if(command.startsWith("P,")) {
       val floats = readData(_.toFloat, command.drop(2))
       player.actor ! Position(floats(0), floats(1), floats(2), floats(3), floats(4))
+    } else if(command.startsWith("C,")) {
+      val ints = readData(_.toInt, command.drop(2))
+      player.actor ! IncreaseChunks(ints(0))
     } else if(command.startsWith("I")) {
       player.actor ! SendInventory
     } else if(command.startsWith("A,")) {
