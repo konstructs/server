@@ -51,15 +51,36 @@ class GeneratorActor extends Actor {
       val global = pos.global(chunk)
       val height = map(global) + 32
       if(global.y < height) {
-        if(global.y == height - 1) {
+        if(global.y < 10) {
+          16.toByte
+        } else if(global.y < 12 ) {
+          2.toByte
+        } else if(global.y == height - 1) {
           if(global.y + random.nextInt(10) - 5 < 64)
             1.toByte
-          else
-            9.toByte
+          else {
+            if(global.y < 128) {
+              9.toByte
+            } else {
+              12.toByte
+            }
+          }
         } else if(global.y > height - 10) {
-          7.toByte
+          if(global.y >= 128) {
+            12.toByte
+          } else {
+            7.toByte
+          }
         } else {
           6.toByte
+        }
+      } else if (global.y < 10) {
+        16.toByte
+      } else if(global.y < height + 1 && global.y < 40 && global.y > 12 && random.nextInt(25) == 1) {
+        if(random.nextInt(8) == 1) { // One in 8 grass is a random flower
+          (18 + random.nextInt(4)).toByte
+        } else {
+          17.toByte
         }
       } else {
         0.toByte
