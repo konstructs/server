@@ -75,6 +75,8 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
     data = data.copy(inventory = inventory)
   }
 
+  val random = new scala.util.Random
+
   def generateTree(pos: Position) {
     val l = LSystem(Seq(
       DeterministicProductionRule("cc", "c[&[c][-c][--c][+c]]c[&[c][-c][--c][+c]]"),
@@ -87,12 +89,11 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
           (20, "c[&[--d]]"),
           (20, "cc")
         )),
-      ProbabilisticProductionRule("aa", Seq((50, "a[&[c][-c][--c][+c]]"), (50, "bbba")))
+      ProbabilisticProductionRule("aa", Seq((50, "a[&[c][-c][--c][+c]]"), (50, "bbbba")))
     ))
     val m = BlockMachine(Map('a'-> 5, 'b' -> 5, 'c' -> 15, 'd' -> 15))
-    val tree = l.iterate("a[&[c][-c][--c][+c]]c", 5)
-    println(tree)
-    val blocks = m.interpret(tree, pos)
+    val tree = l.iterate("a[&[c][-c][--c][+c]]c", 4 + random.nextInt(5))
+    val blocks = m.interpret(tree, pos.copy(y = pos.y - 1))
     for(b <- blocks)
       world ! PutBlock(world, b._1, b._2)
   }
@@ -102,7 +103,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
       case 1 =>
         world ! DestroyBlock(self, pos)
       case 2 =>
-        if(data.active == 9) {
+        if(data.active == 8) {
           generateTree(pos)
         } else {
           val inventory = data.inventory
