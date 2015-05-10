@@ -98,6 +98,8 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
       world ! PutBlock(world, b._1, b._2)
   }
 
+  val material = Set(2,3,4,5,6,8,10,11,12,13).toVector
+
   def action(pos: Position, button: Int) = {
     button match {
       case 1 =>
@@ -110,14 +112,23 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
           val active = data.active.toString
           inventory.items.get(active).map { item =>
             val updatedItem = item.copy(amount = item.amount - 1)
-            if(updatedItem.amount > 0)
+            if(updatedItem.amount > 0) {
               update(inventory.copy(items =
                 inventory.items + (active -> updatedItem)))
-            else
-              update(inventory.copy(items =
-                inventory.items - active))
+              sender ! InventoryUpdate(Map(active -> updatedItem))
+            } else {
+              if(data.active < 6) {
+                val newItem = (active -> Item(64, material(random.nextInt(material.size))))
+                update(inventory.copy(items =
+                  inventory.items + newItem))
+                sender ! InventoryUpdate(Map(newItem))
+              } else {
+                update(inventory.copy(items =
+                  inventory.items - active))
+                sender ! InventoryUpdate(Map(active -> updatedItem))
+              }
+            }
             world ! PutBlock(self, pos, item.w)
-            sender ! InventoryUpdate(Map(active -> updatedItem))
           }
         }
     }
