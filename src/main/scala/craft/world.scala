@@ -71,6 +71,12 @@ case class ChunkPosition(p: Int, q: Int, k: Int) {
     val lk = math.abs(k % World.RegionSize)
     lp + lq * World.RegionSize + lk * World.RegionSize * World.RegionSize
   }
+  def distance(c: ChunkPosition): Double = {
+    val dp = p - c.p
+    val dq = q - c.q
+    val dk = k - c.k
+    math.pow(dp*dp + dq*dq + dk*dk, 1d/2d)
+  }
 }
 
 case class RegionPosition(m: Int, n: Int, o: Int)

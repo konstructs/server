@@ -1,6 +1,7 @@
 package craft
 
-import scala.math.max
+import scala.math.{ max, Ordering }
+import scala.util.Sorting
 
 import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 
@@ -26,6 +27,8 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
   implicit val playerFormat = jsonFormat5(Player)
 
   var sentChunks = Set.empty[ChunkPosition]
+  var chunksToSend = Seq.empty[ChunkPosition]
+  var currentChunk = Position(startingPosition).chunk
   var data: Player = null
   var maxChunksToSend = 0
 
@@ -54,20 +57,32 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
       stash()
   }
 
+  def updateChunk(position: Position) {
+    val chunk = position.chunk
+    if(chunk != currentChunk) {
+      val visible = visibleChunks(position, 8)
+      sentChunks = sentChunks & visible
+      val ordering = (visible &~ sentChunks).toArray
+      Sorting.quickSort(ordering)(Ordering.by[ChunkPosition, Double](_.distance(chunk)))
+      chunksToSend = ordering.toSeq
+      currentChunk = chunk
+    }
+  }
+
   def sendChunks() {
-    val visible = visibleChunks(Position(data.position), 7)
-    sentChunks = sentChunks & visible
-    val diff = visible &~ sentChunks
-    val toSend = diff.take(maxChunksToSend)
+    val toSend = chunksToSend.take(maxChunksToSend)
     for(chunk <- toSend) {
       world ! SendBlocks(client, chunk, None)
       maxChunksToSend -= 1
     }
     sentChunks ++= toSend
+    chunksToSend = chunksToSend diff toSend
   }
 
   def update(position: protocol.Position) {
+    val pos = Position(position)
     data = data.copy(position = position)
+    updateChunk(pos)
     sendChunks()
   }
 
