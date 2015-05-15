@@ -1,4 +1,4 @@
-package craft.protocol
+package konstructs.protocol
 
 import akka.actor.{ Actor,  ActorRef, Props, ActorLogging }
 import akka.io._

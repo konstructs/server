@@ -1,4 +1,4 @@
-name := "craft-server"
+name := "konstructs-server"
 
 version := "0.1"
 

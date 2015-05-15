@@ -1,6 +1,6 @@
-package craft.protocol
+package konstructs.protocol
 
-import craft.{ Item, PlayerActor, WorldActor }
+import konstructs.{ Item, PlayerActor, WorldActor }
 
 import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 import akka.io.{ Tcp, TcpPipelineHandler }
@@ -41,7 +41,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
       player.actor ! ActivateInventoryItem(ints(0))
     } else if(command.startsWith("M,")) {
       val ints = readData(_.toInt, command.drop(2))
-      player.actor ! Action(craft.Position(ints(0), ints(1), ints(2)), ints(3))
+      player.actor ! Action(konstructs.Position(ints(0), ints(1), ints(2)), ints(3))
     }
   }
 
@@ -118,7 +118,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
     send(pipe, s"B,${b.p},${b.q},${b.x},${b.y},${b.z},${b.w}")
   }
 
-  def sendBlocks(pipe: ActorRef, chunk: craft.ChunkPosition, blocks: Array[Byte]) {
+  def sendBlocks(pipe: ActorRef, chunk: konstructs.ChunkPosition, blocks: Array[Byte]) {
     val data = ByteString
       .newBuilder
       .putByte(C)

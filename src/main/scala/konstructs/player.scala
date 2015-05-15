@@ -1,4 +1,4 @@
-package craft
+package konstructs
 
 import scala.math.{ max, Ordering }
 import scala.util.Sorting
