@@ -14,7 +14,7 @@ The server is implemented using [Akka](http://akka.io/) actors and the new IO su
 
 ## Huge worlds - separated game logic and world
 
-At the core we try to have very simple block format that is shared with the client. We store all blocks compressed using [DEFALTE](http://en.wikipedia.org/wiki/DEFLATE), also when in memory or being sent to the client. This means that we can keep a huge amount of blocks in memory which helps fight IO latency as well as keeping disk IO to a minimum. Actually, one of the unimplemented features is block unloading. So far we never needed it!
+At the core we try to have very simple block format that is shared with the client. We store all blocks compressed using [DEFLATE](http://en.wikipedia.org/wiki/DEFLATE), also when in memory or being sent to the client. This means that we can keep a huge amount of blocks in memory which helps fight IO latency as well as keeping disk IO to a minimum. Actually, one of the unimplemented features is block unloading. So far we never needed it!
 
 Since we can manage a huge amount of blocks, it makes sense to not limit world interaction to where the player is. Therefore we have completely separated all world logic from the world itself. Therefore automatic world interaction is not dependent on the part of the world being loaded, but is always done for all of the world via plugins.
 

@@ -1,4 +1,4 @@
-package craft.utils
+package konstructs.utils
 
 import java.util.concurrent.TimeUnit
 import scala.util.Random

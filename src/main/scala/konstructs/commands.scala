@@ -1,4 +1,4 @@
-package craft.protocol
+package konstructs.protocol
 
 case class SendBlock(p: Int, q: Int, x: Int, y: Int, z: Int, w: Int)
 case class You(pid: Int, p: Int, q: Int, x: Int, y: Int, z: Int)

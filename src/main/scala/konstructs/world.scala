@@ -1,4 +1,4 @@
-package craft
+package konstructs
 
 import akka.actor.{ Actor, ActorRef, Props }
 

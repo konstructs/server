@@ -1,4 +1,4 @@
-package craft
+package konstructs
 
 import java.io.File
 import scala.util.Random

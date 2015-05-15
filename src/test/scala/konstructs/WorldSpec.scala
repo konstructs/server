@@ -1,4 +1,4 @@
-package craft
+package konstructs
 
 import org.scalatest.{ Matchers, WordSpec }
 

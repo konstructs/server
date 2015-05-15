@@ -1,4 +1,4 @@
-package craft
+package konstructs
 
 import scala.util.Try
 import com.sksamuel.scrimage.Image
