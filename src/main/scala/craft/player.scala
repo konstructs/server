@@ -26,6 +26,8 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
   implicit val playerFormat = jsonFormat5(Player)
 
   var sentChunks = Set.empty[ChunkPosition]
+  var chunksToSend = Set.empty[ChunkPosition]
+  var currentChunk = Position(startingPosition).chunk
   var data: Player = null
   var maxChunksToSend = 0
 
@@ -54,20 +56,30 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
       stash()
   }
 
+  def updateChunk(position: Position) {
+    val chunk = position.chunk
+    if(chunk != currentChunk) {
+      val visible = visibleChunks(position, 7)
+      sentChunks = sentChunks & visible
+      chunksToSend = visible &~ sentChunks
+      currentChunk = chunk
+    }
+  }
+
   def sendChunks() {
-    val visible = visibleChunks(Position(data.position), 7)
-    sentChunks = sentChunks & visible
-    val diff = visible &~ sentChunks
-    val toSend = diff.take(maxChunksToSend)
+    val toSend = chunksToSend.take(maxChunksToSend)
     for(chunk <- toSend) {
       world ! SendBlocks(client, chunk, None)
       maxChunksToSend -= 1
     }
     sentChunks ++= toSend
+    chunksToSend --= toSend
   }
 
   def update(position: protocol.Position) {
+    val pos = Position(position)
     data = data.copy(position = position)
+    updateChunk(pos)
     sendChunks()
   }
 
