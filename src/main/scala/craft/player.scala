@@ -1,6 +1,7 @@
 package craft
 
-import scala.math.max
+import scala.math.{ max, Ordering }
+import scala.util.Sorting
 
 import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 
@@ -26,7 +27,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
   implicit val playerFormat = jsonFormat5(Player)
 
   var sentChunks = Set.empty[ChunkPosition]
-  var chunksToSend = Set.empty[ChunkPosition]
+  var chunksToSend = Seq.empty[ChunkPosition]
   var currentChunk = Position(startingPosition).chunk
   var data: Player = null
   var maxChunksToSend = 0
@@ -59,9 +60,11 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
   def updateChunk(position: Position) {
     val chunk = position.chunk
     if(chunk != currentChunk) {
-      val visible = visibleChunks(position, 7)
+      val visible = visibleChunks(position, 8)
       sentChunks = sentChunks & visible
-      chunksToSend = visible &~ sentChunks
+      val ordering = (visible &~ sentChunks).toArray
+      Sorting.quickSort(ordering)(Ordering.by[ChunkPosition, Double](_.distance(chunk)))
+      chunksToSend = ordering.toSeq
       currentChunk = chunk
     }
   }
@@ -73,7 +76,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
       maxChunksToSend -= 1
     }
     sentChunks ++= toSend
-    chunksToSend --= toSend
+    chunksToSend = chunksToSend diff toSend
   }
 
   def update(position: protocol.Position) {
