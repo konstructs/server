@@ -8,6 +8,6 @@ import konstructs.protocol.Server
 object Main extends App {
   implicit val system = ActorSystem("main")
 
-  val db = system.actorOf(DbActor.props(), "db")
-  val server = system.actorOf(Server.props(db), "server")
+  val universe = system.actorOf(UniverseActor.props(), "universe")
+  val server = system.actorOf(Server.props(universe), "server")
 }

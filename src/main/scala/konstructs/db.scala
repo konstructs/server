@@ -2,8 +2,6 @@ package konstructs
 
 import akka.actor.{ Actor, ActorRef, Props }
 
-import scala.collection.mutable
-
 object Db {
   val ChunkSize = 32
   val ShardSize = 8
@@ -81,35 +79,14 @@ case class ChunkPosition(p: Int, q: Int, k: Int) {
 
 case class ShardPosition(m: Int, n: Int, o: Int)
 
-class DbActor extends Actor {
+class DbActor(universe: ActorRef) extends Actor {
   import DbActor._
   import Db.ChunkSize
-
-  private var nextPid = 0
 
   val chunkStore = context.actorOf(StorageActor.props(new java.io.File("db/")))
   val chunkGenerator = context.actorOf(GeneratorActor.props())
 
-  val jsonStore = context.actorOf(JsonStorageActor.props(new java.io.File("meta/")))
-
-  def playerActorId(pid: Int) = s"player-$pid"
   def shardActorId(r: ShardPosition) = s"shard-${r.m}-${r.n}-${r.o}"
-
-  def allPlayers(except: Option[Int] = None) = {
-    val players = context.children.filter(_.path.name.startsWith("player-"))
-    except match {
-      case Some(pid) =>
-        players.filter(_.path.name != playerActorId(pid))
-      case None => players
-    }
-  }
-
-  def player(nick: String, password: String) {
-    val player = context.actorOf(PlayerActor.props(nextPid, nick, password, sender, self, jsonStore, protocol.Position(0,0,0,0,0)), playerActorId(nextPid))
-    allPlayers(except = Some(nextPid)).foreach(_ ! PlayerActor.SendInfo(player))
-    allPlayers(except = Some(nextPid)).foreach(player ! PlayerActor.SendInfo(_))
-    nextPid = nextPid + 1
-  }
 
   def getShardActor(shard: ShardPosition): ActorRef = {
     val rid = shardActorId(shard)
@@ -125,8 +102,6 @@ class DbActor extends Actor {
   }
 
   def receive = {
-    case CreatePlayer(nick, password) =>
-      player(nick, password)
     case SendBlocks(to, chunk, version) =>
       sendBlocks(to, chunk, version)
     case b: PutBlock =>
@@ -134,22 +109,15 @@ class DbActor extends Actor {
     case b: DestroyBlock =>
       getShardActor(b.pos.chunk.shard) ! b
     case b: ShardActor.BlockUpdate =>
-      val chunk = b.pos.chunk
-      allPlayers() foreach { p =>
-        p ! protocol.SendBlock(chunk.p, chunk.q, b.pos.x, b.pos.y, b.pos.z, b.newW)
-      }
-    case m: PlayerActor.PlayerMovement =>
-      allPlayers(except = Some(m.pid)).foreach(_ ! m)
-    case l: PlayerActor.PlayerLogout =>
-      allPlayers(except = Some(l.pid)).foreach(_ ! l)
- }
+      universe ! b
+  }
 }
 
 object DbActor {
-  case class CreatePlayer(nick: String, password: String)
   case class SendBlocks(to: ActorRef, chunk: ChunkPosition, version: Option[Int])
   case class BlockList(chunk: ChunkPosition, blocks: Array[Byte])
   case class PutBlock(from: ActorRef, pos: Position, w: Int)
   case class DestroyBlock(from: ActorRef, pos: Position)
-  def props() = Props(classOf[DbActor])
+
+  def props(universe: ActorRef) = Props(classOf[DbActor], universe)
 }

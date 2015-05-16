@@ -8,7 +8,7 @@ import TcpPipelineHandler.{ Init }
 
 import java.net.InetSocketAddress
 
-class Server(db: ActorRef) extends Actor with ActorLogging {
+class Server(universe: ActorRef) extends Actor with ActorLogging {
   import Tcp._
   import context.system
 
@@ -29,7 +29,7 @@ class Server(db: ActorRef) extends Actor with ActorLogging {
           new BackpressureBuffer(lowBytes = 100, highBytes = 16*1024, maxBytes = 32*1024))
 
       val connection = sender
-      val handler = context.actorOf(Client.props(init, db))
+      val handler = context.actorOf(Client.props(init, universe))
       val pipeline = context.actorOf(TcpPipelineHandler.props(
       init, connection, handler))
     connection ! Tcp.Register(pipeline)
@@ -37,5 +37,5 @@ class Server(db: ActorRef) extends Actor with ActorLogging {
 }
 
 object Server {
-  def props(db: ActorRef) = Props(classOf[Server], db)
+  def props(universe: ActorRef) = Props(classOf[Server], universe)
 }
