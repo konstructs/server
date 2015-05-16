@@ -14,12 +14,14 @@ case class Inventory(items: Map[String, Item])
 case class Player(nick: String, password: String, position: protocol.Position,
   active: Int, inventory: Inventory)
 
-class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, world: ActorRef, store: ActorRef, startingPosition: protocol.Position) extends Actor with Stash with utils.Scheduled {
+class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, world: ActorRef, override val jsonStorage: ActorRef, startingPosition: protocol.Position) extends Actor with Stash with utils.Scheduled with JsonStorage {
   import PlayerActor._
   import WorldActor._
   import World.ChunkSize
   import DefaultJsonProtocol._
-  import PlayerStorageActor._
+  import JsonStorage._
+
+  val ns = "players"
 
   implicit val itemFormat = jsonFormat2(Item)
   implicit val inventoryFormat = jsonFormat1(Inventory)
@@ -34,11 +36,11 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
 
   schedule(5000, StoreData)
 
-  store ! Load(nick)
+  load(nick)
 
   def receive = {
-    case Loaded(_, Some(json)) =>
-      val newData = (new String(json)).parseJson.convertTo[Player]
+    case JsonLoaded(_, _, Some(json)) =>
+      val newData = json.convertTo[Player]
       if(newData.password == password) {
         data = newData
         context.become(ready)
@@ -48,7 +50,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
         client ! PoisonPill
         context.stop(self)
       }
-    case Loaded(_, None) =>
+    case JsonLoaded(_, _, None) =>
       data = Player(nick, password, startingPosition, 0, Inventory(Map()))
       context.become(ready)
       client ! PlayerInfo(pid, nick, self, data.position)
@@ -173,7 +175,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
 
   override def postStop {
     if(data != null)
-      store ! Store(nick, data.toJson.compactPrint.getBytes)
+      store(nick, data.toJson)
     world ! PlayerLogout(pid)
   }
 
@@ -201,7 +203,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
       to ! PlayerMovement(pid, data.position)
       to ! PlayerNick(pid, data.nick)
     case StoreData =>
-      store ! Store(nick, data.toJson.compactPrint.getBytes)
+      store(nick, data.toJson)
     case l: PlayerLogout =>
       client ! l
     case IncreaseChunks(amount) =>

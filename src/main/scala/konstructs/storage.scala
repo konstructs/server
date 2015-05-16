@@ -1,7 +1,9 @@
 package konstructs
 
 import java.io.File
-import akka.actor.{ Actor, Props }
+import scala.util.Try
+import akka.actor.{ Actor, ActorRef, Props }
+import spray.json._
 
 import org.apache.commons.io.FileUtils
 
@@ -35,31 +37,42 @@ object StorageActor {
     Props(classOf[StorageActor], directory)
 }
 
-class PlayerStorageActor(directory: File) extends Actor {
-  import PlayerStorageActor._
+class JsonStorageActor(directory: File) extends Actor {
+  import JsonStorage.{ StoreJson, LoadJson, JsonLoaded }
 
-  private def playerFile(nick: String) = new File(directory, s"${nick}.player")
+  private def file(id: String, ns: String) = new File(directory, s"$ns/$id.json")
 
   def receive = {
-    case Load(nick) =>
-      val f = playerFile(nick)
+    case StoreJson(id, ns, data) =>
+      FileUtils.writeByteArrayToFile(file(id, ns), data.compactPrint.getBytes)
+    case LoadJson(id, ns) =>
+      val f = file(id, ns)
       val data = if(f.exists) {
-        Some(FileUtils.readFileToByteArray(f))
+        val content = FileUtils.readFileToByteArray(f)
+        Try((new String(content)).parseJson).toOption
       } else {
         None
       }
-      sender ! Loaded(nick, data)
-    case Store(nick, data) =>
-      val f = playerFile(nick)
-      FileUtils.writeByteArrayToFile(f, data)
+      sender ! JsonLoaded(id, ns, data)
   }
 }
 
-object PlayerStorageActor {
-  case class Load(nick: String)
-  case class Loaded(nick: String, data: Option[Array[Byte]])
-  case class Store(nick: String, data: Array[Byte])
+object JsonStorageActor {
+  def props(directory: File) = Props(classOf[JsonStorageActor], directory)
+}
 
-  def props(directory: File) =
-    Props(classOf[PlayerStorageActor], directory)
+object JsonStorage {
+  case class StoreJson(id: String, ns: String, data: JsValue)
+  case class LoadJson(id: String, ns: String)
+  case class JsonLoaded(id: String, ns: String, data: Option[JsValue])
+}
+
+trait JsonStorage {
+  import JsonStorage.{ StoreJson, LoadJson}
+
+  def ns: String
+  def jsonStorage: ActorRef
+
+  def load(id: String)(implicit sender: ActorRef) = jsonStorage ! LoadJson(id, ns)
+  def store(id: String, data: JsValue)(implicit sender: ActorRef) = jsonStorage ! StoreJson(id, ns, data)
 }

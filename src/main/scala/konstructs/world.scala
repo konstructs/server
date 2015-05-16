@@ -90,7 +90,7 @@ class WorldActor extends Actor {
   val chunkStore = context.actorOf(StorageActor.props(new java.io.File("world/")))
   val chunkGenerator = context.actorOf(GeneratorActor.props())
 
-  val playerStore = context.actorOf(PlayerStorageActor.props(new java.io.File("players/")))
+  val jsonStore = context.actorOf(JsonStorageActor.props(new java.io.File("meta/")))
 
   def playerActorId(pid: Int) = s"player-$pid"
   def regionActorId(r: RegionPosition) = s"region-${r.m}-${r.n}-${r.o}"
@@ -105,7 +105,7 @@ class WorldActor extends Actor {
   }
 
   def player(nick: String, password: String) {
-    val player = context.actorOf(PlayerActor.props(nextPid, nick, password, sender, self, playerStore, protocol.Position(0,0,0,0,0)), playerActorId(nextPid))
+    val player = context.actorOf(PlayerActor.props(nextPid, nick, password, sender, self, jsonStore, protocol.Position(0,0,0,0,0)), playerActorId(nextPid))
     allPlayers(except = Some(nextPid)).foreach(_ ! PlayerActor.SendInfo(player))
     allPlayers(except = Some(nextPid)).foreach(player ! PlayerActor.SendInfo(_))
     nextPid = nextPid + 1
