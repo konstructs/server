@@ -33,10 +33,10 @@ class ShardActor(shard: ShardPosition, chunkStore: ActorRef, chunkGenerator: Act
   }
 
   def updateChunk(pos: Position)(update: Byte => Byte) {
-    val chunk = pos.chunk
+    val chunk = ChunkPosition(pos)
     loadChunk(chunk).map { compressedBlocks =>
       dirty = dirty + chunk
-      val local = pos.local
+      val local = LocalPosition(pos)
       val size = compress.inflate(compressedBlocks, blocks)
       assert(size == blocks.size)
       val i = local.index

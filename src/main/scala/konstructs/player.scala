@@ -30,7 +30,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   var sentChunks = Set.empty[ChunkPosition]
   var chunksToSend = Seq.empty[ChunkPosition]
-  var currentChunk = Position(startingPosition).chunk
+  var currentChunk = ChunkPosition(Position(startingPosition))
   var data: Player = null
   var maxChunksToSend = 0
 
@@ -60,7 +60,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   }
 
   def updateChunk(position: Position) {
-    val chunk = position.chunk
+    val chunk = ChunkPosition(position)
     if(chunk != currentChunk) {
       val visible = visibleChunks(position, 8)
       sentChunks = sentChunks & visible
@@ -233,7 +233,7 @@ object PlayerActor {
 
   def visibleChunks(position: Position, visibility: Int): Set[ChunkPosition] = {
     val range = -visibility to visibility
-    val chunk = position.chunk
+    val chunk = ChunkPosition(position)
     (for(p <- range; q <- range; k <-range) yield {
       chunk.translate(p, q, k)
     }).filter(_.k >= 0).toSet

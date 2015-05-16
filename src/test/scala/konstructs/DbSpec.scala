@@ -6,75 +6,75 @@ class DbSpec extends WordSpec with Matchers {
 
   "A Position" should {
     "return chunk 0, 0 for 0, 0, 0" in {
-      Position(0, 0, 0).chunk shouldEqual ChunkPosition(0, 0, 0)
+      ChunkPosition(Position(0, 0, 0)) shouldEqual ChunkPosition(0, 0, 0)
     }
 
     "return chunk 0, 1 for 0, 0, 32" in {
-      Position(0, 0, 32).chunk shouldEqual ChunkPosition(0, 1, 0)
+      ChunkPosition(Position(0, 0, 32)) shouldEqual ChunkPosition(0, 1, 0)
     }
 
     "return chunk 1, 0 for 32, 0, 0" in {
-      Position(32, 0, 0).chunk shouldEqual ChunkPosition(1, 0, 0)
+      ChunkPosition(Position(32, 0, 0)) shouldEqual ChunkPosition(1, 0, 0)
     }
 
     "return chunk 1, 1 for 32, 0, 32" in {
-      Position(32, 0, 32).chunk shouldEqual ChunkPosition(1, 1, 0)
+      ChunkPosition(Position(32, 0, 32)) shouldEqual ChunkPosition(1, 1, 0)
     }
 
     "return chunk 0, 0 for 31, 0, 31" in {
-      Position(31, 0, 31).chunk shouldEqual ChunkPosition(0, 0, 0)
+      ChunkPosition(Position(31, 0, 31)) shouldEqual ChunkPosition(0, 0, 0)
     }
 
     "return chunk 0, -1 for 0, 0, -1" in {
-      Position(0, 0, -1).chunk shouldEqual ChunkPosition(0, -1, 0)
+      ChunkPosition(Position(0, 0, -1)) shouldEqual ChunkPosition(0, -1, 0)
     }
 
     "return chunk -1, -1 for -1, 0, -1" in {
-      Position(-1, 0, -1).chunk shouldEqual ChunkPosition(-1, -1, 0)
+      ChunkPosition(Position(-1, 0, -1)) shouldEqual ChunkPosition(-1, -1, 0)
     }
 
     "return chunk -1, -1 for -32, 0, -32" in {
-      Position(-32, 0, -32).chunk shouldEqual ChunkPosition(-1, -1, 0)
+      ChunkPosition(Position(-32, 0, -32)) shouldEqual ChunkPosition(-1, -1, 0)
     }
 
     "return chunk -2, -2 for -33, 0, -33" in {
-      Position(-33, 0, -33).chunk shouldEqual ChunkPosition(-2, -2, 0)
+      ChunkPosition(Position(-33, 0, -33)) shouldEqual ChunkPosition(-2, -2, 0)
     }
 
     "return chunk -1, 0 for -1, 0, 0" in {
-      Position(-1, 0, 0).chunk shouldEqual ChunkPosition(-1, 0, 0)
+      ChunkPosition(Position(-1, 0, 0)) shouldEqual ChunkPosition(-1, 0, 0)
     }
 
     "return local position 0, 0, 0 for 0, 0, 0" in {
-      Position(0, 0, 0).local shouldEqual LocalPosition(0, 0, 0)
+      LocalPosition(Position(0, 0, 0)) shouldEqual LocalPosition(0, 0, 0)
     }
 
     "return local position 5, 0, 5 for 5, 0, 5" in {
-      Position(5, 0, 5).local shouldEqual LocalPosition(5, 0, 5)
+      LocalPosition(Position(5, 0, 5)) shouldEqual LocalPosition(5, 0, 5)
     }
 
     "return local position 5, 0, 5 for 37, 0, 37" in {
-      Position(5, 0, 5).local shouldEqual LocalPosition(5, 0, 5)
+      LocalPosition(Position(5, 0, 5)) shouldEqual LocalPosition(5, 0, 5)
     }
 
     "return local position 0, 0, 0 for 32, 0, 32" in {
-      Position(32, 0, 32).local shouldEqual LocalPosition(0, 0, 0)
+      LocalPosition(Position(32, 0, 32)) shouldEqual LocalPosition(0, 0, 0)
     }
 
     "return local position 0, 0, 0 for -32, 0, -32" in {
-      Position(-32, 0, -32).local shouldEqual LocalPosition(0, 0, 0)
+      LocalPosition(Position(-32, 0, -32)) shouldEqual LocalPosition(0, 0, 0)
     }
 
     "return local position 31, 0, 31 for -1, 0, -1" in {
-      Position(-32, 0, -32).local shouldEqual LocalPosition(0, 0, 0)
+      LocalPosition(Position(-32, 0, -32)) shouldEqual LocalPosition(0, 0, 0)
     }
 
     "return local position 31, 0, 31 for -33, 0, -33" in {
-      Position(-33, 0, -33).local shouldEqual LocalPosition(31, 0, 31)
+      LocalPosition(Position(-33, 0, -33)) shouldEqual LocalPosition(31, 0, 31)
     }
 
     "return local position 31, 0, 0 for -1, 0, -32" in {
-      Position(-1, 0, -32).local shouldEqual LocalPosition(31, 0, 0)
+      LocalPosition(Position(-1, 0, -32)) shouldEqual LocalPosition(31, 0, 0)
     }
 
   }

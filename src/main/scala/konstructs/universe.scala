@@ -36,7 +36,7 @@ class UniverseActor extends Actor {
     case l: PlayerActor.PlayerLogout =>
       allPlayers(except = Some(l.pid)).foreach(_ ! l)
     case b: ShardActor.BlockUpdate =>
-      val chunk = b.pos.chunk
+      val chunk = ChunkPosition(b.pos)
       allPlayers() foreach { p =>
         p ! protocol.SendBlock(chunk.p, chunk.q, b.pos.x, b.pos.y, b.pos.z, b.newW)
       }
