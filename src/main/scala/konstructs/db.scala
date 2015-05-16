@@ -7,58 +7,21 @@ object Db {
   val ShardSize = 8
 }
 
-case class LocalPosition(x: Int, y: Int, z: Int) {
-  def global(c: ChunkPosition) =
-    Position(
-      c.p * Db.ChunkSize + x,
-      c.k * Db.ChunkSize + y,
-      c.q * Db.ChunkSize + z
-    )
-  val index = x + y * Db.ChunkSize + z * Db.ChunkSize * Db.ChunkSize
-}
+case class ShardPosition(m: Int, n: Int, o: Int)
 
-object LocalPosition {
-  def apply(p: Position): LocalPosition = {
-    val c = ChunkPosition(p)
-    LocalPosition(p.x - c.p * Db.ChunkSize, p.y - c.k * Db.ChunkSize, p.z - c.q * Db.ChunkSize)
-  }
-}
-
-case class ChunkPosition(p: Int, q: Int, k: Int) {
-  def shard = {
+object ShardPosition {
+  def apply(c: ChunkPosition): ShardPosition = {
     // For negative values we need to "round down", i.e. -0.01 should be -1 and not 0
-    val m = (if(p < 0) (p - Db.ShardSize + 1) else p) / Db.ShardSize
-    val n = (if(q < 0) (q - Db.ShardSize + 1) else q) / Db.ShardSize
-    val o = (if(k < 0) (k - Db.ShardSize + 1) else k) / Db.ShardSize
+    val m = (if(c.p < 0) (c.p - Db.ShardSize + 1) else c.p) / Db.ShardSize
+    val n = (if(c.q < 0) (c.q - Db.ShardSize + 1) else c.q) / Db.ShardSize
+    val o = (if(c.k < 0) (c.k - Db.ShardSize + 1) else c.k) / Db.ShardSize
     ShardPosition(m, n, o)
   }
-  def translate(pd: Int, qd: Int, kd: Int) =
-    copy(p = p + pd, q = q + qd, k = k + kd)
-  def index = {
-    val lp = math.abs(p % Db.ShardSize)
-    val lq = math.abs(q % Db.ShardSize)
-    val lk = math.abs(k % Db.ShardSize)
-    lp + lq * Db.ShardSize + lk * Db.ShardSize * Db.ShardSize
-  }
-  def distance(c: ChunkPosition): Double = {
-    val dp = p - c.p
-    val dq = q - c.q
-    val dk = k - c.k
-    math.pow(dp*dp + dq*dq + dk*dk, 1d/2d)
-  }
-}
 
-object ChunkPosition {
-  def apply(pos: Position): ChunkPosition = {
-    // For negative values we need to "round down", i.e. -0.01 should be -1 and not 0
-    val p = (if(pos.x < 0) (pos.x - Db.ChunkSize + 1) else pos.x) / Db.ChunkSize
-    val q = (if(pos.z < 0) (pos.z - Db.ChunkSize + 1) else pos.z) / Db.ChunkSize
-    val k = (if(pos.y < 0) (pos.y - Db.ChunkSize + 1) else pos.y) / Db.ChunkSize
-    ChunkPosition(p, q, k)
-  }
-}
+  def apply(p: Position): ShardPosition =
+    ShardPosition(ChunkPosition(p))
 
-case class ShardPosition(m: Int, n: Int, o: Int)
+}
 
 class DbActor(universe: ActorRef, generator: ActorRef) extends Actor {
   import DbActor._
@@ -78,16 +41,16 @@ class DbActor(universe: ActorRef, generator: ActorRef) extends Actor {
   }
 
   def sendBlocks(to: ActorRef, chunk: ChunkPosition, version: Option[Int]) {
-    getShardActor(chunk.shard) ! SendBlocks(to, chunk, version)
+    getShardActor(ShardPosition(chunk)) ! SendBlocks(to, chunk, version)
   }
 
   def receive = {
     case SendBlocks(to, chunk, version) =>
       sendBlocks(to, chunk, version)
     case b: PutBlock =>
-      getShardActor(ChunkPosition(b.pos).shard) ! b
+      getShardActor(ShardPosition(b.pos)) ! b
     case b: DestroyBlock =>
-      getShardActor(ChunkPosition(b.pos).shard) ! b
+      getShardActor(ShardPosition(b.pos)) ! b
     case b: ShardActor.BlockUpdate =>
       universe ! b
   }

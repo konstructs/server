@@ -5,11 +5,6 @@ import scala.util.Random
 import akka.actor.{ Actor, Props }
 import com.sksamuel.scrimage.Image
 
-case class Bounds(pMin: Int, qMin: Int, kMin: Int, pMax: Int, qMax: Int, kMax: Int) {
-  def contains(chunk: ChunkPosition) =
-    chunk.p >= pMin && chunk.p <= pMax && chunk.q >= qMin && chunk.q <= qMax && chunk.k >= kMin && chunk.k <= kMax
-}
-
 class GeneratorActor extends Actor {
   import GeneratorActor._
   import Db.ChunkSize
@@ -47,8 +42,7 @@ class GeneratorActor extends Actor {
       y <- 0 until ChunkSize;
       x <- 0 until ChunkSize
     ) yield {
-      val pos = LocalPosition(x, y, z)
-      val global = pos.global(chunk)
+      val global = Position(chunk, x, y, z)
       val height = map(global) + 32
       if(global.y < height) {
         if(global.y < 10) {
