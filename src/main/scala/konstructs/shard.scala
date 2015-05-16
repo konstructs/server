@@ -2,9 +2,9 @@ package konstructs
 
 import akka.actor.{ Actor, Stash, ActorRef, Props }
 
-class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: ActorRef)
+class ShardActor(shard: ShardPosition, chunkStore: ActorRef, chunkGenerator: ActorRef)
     extends Actor with Stash with utils.Scheduled{
-  import RegionActor._
+  import ShardActor._
   import StorageActor._
   import GeneratorActor._
   import WorldActor._
@@ -12,7 +12,7 @@ class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: 
   import World._
   private val blocks = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
   private val compressionBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
-  private val chunks = new Array[Option[Array[Byte]]](RegionSize * RegionSize * RegionSize)
+  private val chunks = new Array[Option[Array[Byte]]](ShardSize * ShardSize * ShardSize)
   private var dirty: Set[ChunkPosition] = Set()
 
   schedule(5000, StoreChunks)
@@ -92,9 +92,9 @@ class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: 
 
 }
 
-object RegionActor {
+object ShardActor {
   case object StoreChunks
   case class BlockUpdate(pos: Position, oldW: Int, newW: Int)
-  def props(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: ActorRef) =
-    Props(classOf[RegionActor], region, chunkStore, chunkGenerator)
+  def props(shard: ShardPosition, chunkStore: ActorRef, chunkGenerator: ActorRef) =
+    Props(classOf[ShardActor], shard, chunkStore, chunkGenerator)
 }

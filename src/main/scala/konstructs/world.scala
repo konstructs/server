@@ -6,7 +6,7 @@ import scala.collection.mutable
 
 object World {
   val ChunkSize = 32
-  val RegionSize = 8
+  val ShardSize = 8
 }
 
 case class Matrix(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int, g: Int, h: Int, i: Int) {
@@ -56,20 +56,20 @@ object Position {
 }
 
 case class ChunkPosition(p: Int, q: Int, k: Int) {
-  def region = {
+  def shard = {
     // For negative values we need to "round down", i.e. -0.01 should be -1 and not 0
-    val m = (if(p < 0) (p - World.RegionSize + 1) else p) / World.RegionSize
-    val n = (if(q < 0) (q - World.RegionSize + 1) else q) / World.RegionSize
-    val o = (if(k < 0) (k - World.RegionSize + 1) else k) / World.RegionSize
-    RegionPosition(m, n, o)
+    val m = (if(p < 0) (p - World.ShardSize + 1) else p) / World.ShardSize
+    val n = (if(q < 0) (q - World.ShardSize + 1) else q) / World.ShardSize
+    val o = (if(k < 0) (k - World.ShardSize + 1) else k) / World.ShardSize
+    ShardPosition(m, n, o)
   }
   def translate(pd: Int, qd: Int, kd: Int) =
     copy(p = p + pd, q = q + qd, k = k + kd)
   def index = {
-    val lp = math.abs(p % World.RegionSize)
-    val lq = math.abs(q % World.RegionSize)
-    val lk = math.abs(k % World.RegionSize)
-    lp + lq * World.RegionSize + lk * World.RegionSize * World.RegionSize
+    val lp = math.abs(p % World.ShardSize)
+    val lq = math.abs(q % World.ShardSize)
+    val lk = math.abs(k % World.ShardSize)
+    lp + lq * World.ShardSize + lk * World.ShardSize * World.ShardSize
   }
   def distance(c: ChunkPosition): Double = {
     val dp = p - c.p
@@ -79,7 +79,7 @@ case class ChunkPosition(p: Int, q: Int, k: Int) {
   }
 }
 
-case class RegionPosition(m: Int, n: Int, o: Int)
+case class ShardPosition(m: Int, n: Int, o: Int)
 
 class WorldActor extends Actor {
   import WorldActor._
@@ -93,7 +93,7 @@ class WorldActor extends Actor {
   val jsonStore = context.actorOf(JsonStorageActor.props(new java.io.File("meta/")))
 
   def playerActorId(pid: Int) = s"player-$pid"
-  def regionActorId(r: RegionPosition) = s"region-${r.m}-${r.n}-${r.o}"
+  def shardActorId(r: ShardPosition) = s"shard-${r.m}-${r.n}-${r.o}"
 
   def allPlayers(except: Option[Int] = None) = {
     val players = context.children.filter(_.path.name.startsWith("player-"))
@@ -111,17 +111,17 @@ class WorldActor extends Actor {
     nextPid = nextPid + 1
   }
 
-  def getRegionActor(region: RegionPosition): ActorRef = {
-    val rid = regionActorId(region)
+  def getShardActor(shard: ShardPosition): ActorRef = {
+    val rid = shardActorId(shard)
     context.child(rid) match {
       case Some(a) => a
       case None =>
-        context.actorOf(RegionActor.props(region, chunkStore, chunkGenerator), rid)
+        context.actorOf(ShardActor.props(shard, chunkStore, chunkGenerator), rid)
     }
   }
 
   def sendBlocks(to: ActorRef, chunk: ChunkPosition, version: Option[Int]) {
-    getRegionActor(chunk.region) ! SendBlocks(to, chunk, version)
+    getShardActor(chunk.shard) ! SendBlocks(to, chunk, version)
   }
 
   def receive = {
@@ -130,10 +130,10 @@ class WorldActor extends Actor {
     case SendBlocks(to, chunk, version) =>
       sendBlocks(to, chunk, version)
     case b: PutBlock =>
-      getRegionActor(b.pos.chunk.region) ! b
+      getShardActor(b.pos.chunk.shard) ! b
     case b: DestroyBlock =>
-      getRegionActor(b.pos.chunk.region) ! b
-    case b: RegionActor.BlockUpdate =>
+      getShardActor(b.pos.chunk.shard) ! b
+    case b: ShardActor.BlockUpdate =>
       val chunk = b.pos.chunk
       allPlayers() foreach { p =>
         p ! protocol.SendBlock(chunk.p, chunk.q, b.pos.x, b.pos.y, b.pos.z, b.newW)
