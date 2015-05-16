@@ -5,7 +5,8 @@ import akka.actor.{ Actor, ActorRef, Props }
 class UniverseActor extends Actor {
   import UniverseActor._
 
-  val db = context.actorOf(DbActor.props(self))
+  val generator = context.actorOf(GeneratorActor.props())
+  val db = context.actorOf(DbActor.props(self, generator))
   val jsonStore = context.actorOf(JsonStorageActor.props(new java.io.File("meta/")))
 
   private var nextPid = 0
