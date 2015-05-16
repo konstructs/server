@@ -4,7 +4,7 @@ import akka.actor.{ Actor, ActorRef, Props }
 
 import scala.collection.mutable
 
-object World {
+object Db {
   val ChunkSize = 32
   val ShardSize = 8
 }
@@ -27,24 +27,24 @@ case class Matrix(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int, g: Int, h: Int
 case class LocalPosition(x: Int, y: Int, z: Int) {
   def global(c: ChunkPosition) =
     Position(
-      c.p * World.ChunkSize + x,
-      c.k * World.ChunkSize + y,
-      c.q * World.ChunkSize + z
+      c.p * Db.ChunkSize + x,
+      c.k * Db.ChunkSize + y,
+      c.q * Db.ChunkSize + z
     )
-  val index = x + y * World.ChunkSize + z * World.ChunkSize * World.ChunkSize
+  val index = x + y * Db.ChunkSize + z * Db.ChunkSize * Db.ChunkSize
 }
 
 case class Position(x: Int, y: Int, z: Int) {
   def chunk = {
     // For negative values we need to "round down", i.e. -0.01 should be -1 and not 0
-    val p = (if(x < 0) (x - World.ChunkSize + 1) else x) / World.ChunkSize
-    val q = (if(z < 0) (z - World.ChunkSize + 1) else z) / World.ChunkSize
-    val k = (if(y < 0) (y - World.ChunkSize + 1) else y) / World.ChunkSize
+    val p = (if(x < 0) (x - Db.ChunkSize + 1) else x) / Db.ChunkSize
+    val q = (if(z < 0) (z - Db.ChunkSize + 1) else z) / Db.ChunkSize
+    val k = (if(y < 0) (y - Db.ChunkSize + 1) else y) / Db.ChunkSize
     ChunkPosition(p, q, k)
   }
   def local = {
     val c = chunk
-    LocalPosition(x - c.p * World.ChunkSize, y - c.k * World.ChunkSize, z - c.q * World.ChunkSize)
+    LocalPosition(x - c.p * Db.ChunkSize, y - c.k * Db.ChunkSize, z - c.q * Db.ChunkSize)
   }
 
   def +(p: Position) = Position(x + p.x, y + p.y, z + p.z)
@@ -58,18 +58,18 @@ object Position {
 case class ChunkPosition(p: Int, q: Int, k: Int) {
   def shard = {
     // For negative values we need to "round down", i.e. -0.01 should be -1 and not 0
-    val m = (if(p < 0) (p - World.ShardSize + 1) else p) / World.ShardSize
-    val n = (if(q < 0) (q - World.ShardSize + 1) else q) / World.ShardSize
-    val o = (if(k < 0) (k - World.ShardSize + 1) else k) / World.ShardSize
+    val m = (if(p < 0) (p - Db.ShardSize + 1) else p) / Db.ShardSize
+    val n = (if(q < 0) (q - Db.ShardSize + 1) else q) / Db.ShardSize
+    val o = (if(k < 0) (k - Db.ShardSize + 1) else k) / Db.ShardSize
     ShardPosition(m, n, o)
   }
   def translate(pd: Int, qd: Int, kd: Int) =
     copy(p = p + pd, q = q + qd, k = k + kd)
   def index = {
-    val lp = math.abs(p % World.ShardSize)
-    val lq = math.abs(q % World.ShardSize)
-    val lk = math.abs(k % World.ShardSize)
-    lp + lq * World.ShardSize + lk * World.ShardSize * World.ShardSize
+    val lp = math.abs(p % Db.ShardSize)
+    val lq = math.abs(q % Db.ShardSize)
+    val lk = math.abs(k % Db.ShardSize)
+    lp + lq * Db.ShardSize + lk * Db.ShardSize * Db.ShardSize
   }
   def distance(c: ChunkPosition): Double = {
     val dp = p - c.p
@@ -81,13 +81,13 @@ case class ChunkPosition(p: Int, q: Int, k: Int) {
 
 case class ShardPosition(m: Int, n: Int, o: Int)
 
-class WorldActor extends Actor {
-  import WorldActor._
-  import World.ChunkSize
+class DbActor extends Actor {
+  import DbActor._
+  import Db.ChunkSize
 
   private var nextPid = 0
 
-  val chunkStore = context.actorOf(StorageActor.props(new java.io.File("world/")))
+  val chunkStore = context.actorOf(StorageActor.props(new java.io.File("db/")))
   val chunkGenerator = context.actorOf(GeneratorActor.props())
 
   val jsonStore = context.actorOf(JsonStorageActor.props(new java.io.File("meta/")))
@@ -145,11 +145,11 @@ class WorldActor extends Actor {
  }
 }
 
-object WorldActor {
+object DbActor {
   case class CreatePlayer(nick: String, password: String)
   case class SendBlocks(to: ActorRef, chunk: ChunkPosition, version: Option[Int])
   case class BlockList(chunk: ChunkPosition, blocks: Array[Byte])
   case class PutBlock(from: ActorRef, pos: Position, w: Int)
   case class DestroyBlock(from: ActorRef, pos: Position)
-  def props() = Props(classOf[WorldActor])
+  def props() = Props(classOf[DbActor])
 }

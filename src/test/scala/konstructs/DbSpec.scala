@@ -2,7 +2,7 @@ package konstructs
 
 import org.scalatest.{ Matchers, WordSpec }
 
-class WorldSpec extends WordSpec with Matchers {
+class DbSpec extends WordSpec with Matchers {
 
   "A Position" should {
     "return chunk 0, 0 for 0, 0, 0" in {

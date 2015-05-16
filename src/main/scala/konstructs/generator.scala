@@ -12,7 +12,7 @@ case class Bounds(pMin: Int, qMin: Int, kMin: Int, pMax: Int, qMax: Int, kMax: I
 
 class GeneratorActor extends Actor {
   import GeneratorActor._
-  import World.ChunkSize
+  import Db.ChunkSize
 
   val rnd = new Random
 

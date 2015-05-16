@@ -7,9 +7,9 @@ class ShardActor(shard: ShardPosition, chunkStore: ActorRef, chunkGenerator: Act
   import ShardActor._
   import StorageActor._
   import GeneratorActor._
-  import WorldActor._
+  import DbActor._
   import PlayerActor.ReceiveBlock
-  import World._
+  import Db._
   private val blocks = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
   private val compressionBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
   private val chunks = new Array[Option[Array[Byte]]](ShardSize * ShardSize * ShardSize)

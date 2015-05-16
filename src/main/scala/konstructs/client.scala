@@ -1,14 +1,14 @@
 package konstructs.protocol
 
-import konstructs.{ Item, PlayerActor, WorldActor }
+import konstructs.{ Item, PlayerActor, DbActor }
 
 import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 import akka.io.{ Tcp, TcpPipelineHandler }
 import akka.util.ByteString
 import TcpPipelineHandler.{ Init, WithinActorContext }
 
-class Client(init: Init[WithinActorContext, ByteString, ByteString], world: ActorRef) extends Actor with Stash {
-  import WorldActor.{ BlockList, CreatePlayer }
+class Client(init: Init[WithinActorContext, ByteString, ByteString], db: ActorRef) extends Actor with Stash {
+  import DbActor.{ BlockList, CreatePlayer }
   import Client._
   import PlayerActor._
   implicit val bo = java.nio.ByteOrder.BIG_ENDIAN
@@ -51,7 +51,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], world: Acto
       if (command.startsWith("V,2,")) {
         val strings = readData(s => s, command.drop(4))
 
-        world ! CreatePlayer(strings(0), strings(1))
+        db ! CreatePlayer(strings(0), strings(1))
         context.become(waitForPlayer(sender))
       } else {
         context.stop(self)
@@ -146,5 +146,5 @@ object Client {
   val P = 'P'.toByte
 
   case object Setup
-  def props(init: Init[WithinActorContext, ByteString, ByteString], world: ActorRef) = Props(classOf[Client], init, world)
+  def props(init: Init[WithinActorContext, ByteString, ByteString], db: ActorRef) = Props(classOf[Client], init, db)
 }
