@@ -7,8 +7,8 @@ class GeneratorActor(jsonStorage: ActorRef) extends Actor {
 
   val worlds = Seq[WorldEntry](
     WorldEntry(
-      Box(Position(-1024, 0, -1024), Position(2046, 1024, 2046)),
-      context.actorOf(FlatWorldActor.props("Terra", Position(2046 + 1024, 1024, 2046 + 1024), jsonStorage))
+      Box(Position(-1536, 0, -1536), Position(1536, 512, 1536)),
+      context.actorOf(FlatWorldActor.props("Terra", Position(3072, 1024, 3072), jsonStorage))
     )
   )
 
