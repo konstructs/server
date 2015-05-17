@@ -34,7 +34,7 @@ object Position {
 case class Box(start: Position, end: Position) {
 
   def contains(p: Position): Boolean =
-    p.x >= start.x && p.x <= end.x && p.y >= start.y && p.y <= end.y && p.z >= start.z && p.z <= end.z
+    p.x >= start.x && p.x < end.x && p.y >= start.y && p.y < end.y && p.z >= start.z && p.z < end.z
 
   def contains(chunk: ChunkPosition): Boolean =
     contains(Position(chunk, 0, 0, 0))

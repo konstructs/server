@@ -49,11 +49,11 @@ class GeometrySpec extends WordSpec with Matchers {
 
   "A Box" should {
     "contain 0, 0, 0 in (-32, 0, -32) (32, 0, 32)" in {
-      Box(Position(-32, 0, -32), Position(32, 0, 32)).contains(Position(0, 0, 0)) shouldEqual true
+      Box(Position(-32, 0, -32), Position(32, 1, 32)).contains(Position(0, 0, 0)) shouldEqual true
     }
 
     "contain ChunkPosition(0, 0, 0) in (-32, 0, -32) (32, 0, 32)" in {
-      Box(Position(-32, 0, -32), Position(32, 0, 32)).contains(ChunkPosition(0, 0, 0)) shouldEqual true
+      Box(Position(-32, 0, -32), Position(32, 1, 32)).contains(ChunkPosition(0, 0, 0)) shouldEqual true
     }
 
   }

@@ -11,6 +11,20 @@ trait LocalHeightMap {
   def sizeZ: Int
 }
 
+case class ArrayHeightMap(data: Array[Int], sizeX: Int, sizeZ: Int)
+    extends LocalHeightMap {
+  def get(pos: Position) = data(pos.x + pos.z * sizeZ)
+}
+
+object ArrayHeightMap {
+  def fromExistingHeightMap(map: PartialFunction[Position, Int], sizeX: Int, sizeZ: Int): ArrayHeightMap = {
+    val local = for(x <- 0 until sizeX; z <- 0 until sizeZ) yield {
+      map(Position(x, 0, z))
+    }
+    ArrayHeightMap(local.toArray, sizeX, sizeZ)
+  }
+}
+
 case class FlatHeightMap(height: Int) extends HeightMap {
   def apply(pos: Position) = height
   def isDefinedAt(pos: Position) = true
