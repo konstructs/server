@@ -17,6 +17,7 @@ case class Matrix(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int, g: Int, h: Int
 
 case class Position(x: Int, y: Int, z: Int) {
   def +(p: Position) = Position(x + p.x, y + p.y, z + p.z)
+  def -(p: Position) = Position(x - p.x, y - p.y, z - p.z)
 }
 
 object Position {
@@ -31,8 +32,16 @@ object Position {
 }
 
 case class Box(start: Position, end: Position) {
-  def contains(p: Position) =
+
+  def contains(p: Position): Boolean =
     p.x >= start.x && p.x <= end.x && p.y >= start.y && p.y <= end.y && p.z >= start.z && p.z <= end.z
+
+  def contains(chunk: ChunkPosition): Boolean =
+    contains(Position(chunk, 0, 0, 0))
+
+  def translate(chunk: ChunkPosition): ChunkPosition = {
+    ChunkPosition(Position(chunk, 0, 0, 0) - start)
+  }
 }
 
 case class ChunkPosition(p: Int, q: Int, k: Int) {

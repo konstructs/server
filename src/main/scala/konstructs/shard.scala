@@ -76,9 +76,9 @@ class ShardActor(shard: ShardPosition, chunkStore: ActorRef, chunkGenerator: Act
         case None =>
           chunkGenerator ! Generate(chunk)
       }
-    case Generated(chunk, blocks) =>
-      chunks(index(chunk)) = Some(blocks)
-      dirty = dirty + chunk
+    case Generated(position, chunk) =>
+      chunks(index(position)) = Some(chunk.data)
+      dirty = dirty + position
       unstashAll()
     case StoreChunks =>
       dirty.map { chunk =>
