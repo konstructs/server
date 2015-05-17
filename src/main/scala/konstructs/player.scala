@@ -14,7 +14,7 @@ case class Inventory(items: Map[String, Item])
 case class Player(nick: String, password: String, position: protocol.Position,
   active: Int, inventory: Inventory)
 
-class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, override val jsonStorage: ActorRef, startingPosition: protocol.Position) extends Actor with Stash with utils.Scheduled with JsonStorage {
+class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, universe: ActorRef, override val jsonStorage: ActorRef, startingPosition: protocol.Position) extends Actor with Stash with utils.Scheduled with JsonStorage {
   import PlayerActor._
   import DbActor._
   import Db.ChunkSize
@@ -182,7 +182,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   def ready: Receive = {
     case p: protocol.Position =>
       update(p)
-      db ! PlayerMovement(pid, data.position)
+      universe ! PlayerMovement(pid, data.position)
     case b: protocol.SendBlock =>
       client ! b
     case SendInventory =>
@@ -228,7 +228,7 @@ object PlayerActor {
   case class IncreaseChunks(amount: Int)
 
   val LoadYChunks = 5
-  def props(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, db, store, startingPosition)
+  def props(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, universe: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, db, universe, store, startingPosition)
 
 
   def visibleChunks(position: Position, visibility: Int): Set[ChunkPosition] = {
