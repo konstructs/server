@@ -6,9 +6,23 @@ import com.sksamuel.scrimage.Image
 trait HeightMap extends PartialFunction[Position, Int]
 
 trait LocalHeightMap {
-  def get(local: LocalPosition): Int
+  def get(local: Position): Int
   def sizeX: Int
   def sizeZ: Int
+}
+
+case class ArrayHeightMap(data: Array[Int], sizeX: Int, sizeZ: Int)
+    extends LocalHeightMap {
+  def get(pos: Position) = data(pos.x + pos.z * sizeZ)
+}
+
+object ArrayHeightMap {
+  def fromExistingHeightMap(map: PartialFunction[Position, Int], sizeX: Int, sizeZ: Int): ArrayHeightMap = {
+    val local = for(x <- 0 until sizeX; z <- 0 until sizeZ) yield {
+      map(Position(x, 0, z))
+    }
+    ArrayHeightMap(local.toArray, sizeX, sizeZ)
+  }
 }
 
 case class FlatHeightMap(height: Int) extends HeightMap {
@@ -23,7 +37,7 @@ case object EmptyHeightMap extends HeightMap {
 
 case class ImageHeightMap(img: Image, range: Int = 128) extends LocalHeightMap {
   private val scale: Double = (256*256*256) / range
-  def get(local: LocalPosition) = {
+  def get(local: Position) = {
     val v: Double = (img.pixel(local.x, local.z) & 0x00FFFFFF)
     (v / scale).toInt
   }
@@ -35,7 +49,7 @@ case class GlobalHeightMap(placement: Position, map: LocalHeightMap) extends Hei
   def apply(position: Position) = {
     val x = position.x - placement.x
     val z = position.z - placement.z
-    map.get(LocalPosition(x, 0, z))
+    map.get(Position(x, 0, z))
   }
   def isDefinedAt(position: Position) =
     (position.x >= placement.x &&
@@ -54,26 +68,26 @@ class DiamondSquareHeightMap(roughness: Float, baseSize: Int, placement: Positio
   private val array = Array.fill[Float](size * size)(Float.NaN)
   private val random = new scala.util.Random()
 
-  private val local = new PartialFunction[LocalPosition, Float] {
-    def apply(local: LocalPosition) = {
+  private val local = new PartialFunction[Position, Float] {
+    def apply(local: Position) = {
       array(local.x + size * local.z)
     }
-    def isDefinedAt(local: LocalPosition) =
+    def isDefinedAt(local: Position) =
       array.isDefinedAt(local.x + size * local.z)
   }
 
-  val g = new PartialFunction[LocalPosition, Float] {
-    def apply(local: LocalPosition) = {
+  val g = new PartialFunction[Position, Float] {
+    def apply(local: Position) = {
       val noise = (1.0f - (random.nextFloat() * 2.0f))
       global(Position(localPlacement.x + local.x, 0, localPlacement.z + local.z)).toFloat + noise
     }
-    def isDefinedAt(local: LocalPosition) =
+    def isDefinedAt(local: Position) =
       global.isDefinedAt(Position(localPlacement.x + local.x, 0, localPlacement.z + local.z))
   }
 
   val result = GlobalHeightMap(placement, new LocalHeightMap {
 
-    def get(local: LocalPosition): Int =
+    def get(local: Position): Int =
       math.round(array((local.x + offset) + size * (local.z + offset)))
 
     def sizeX = baseSize
@@ -92,7 +106,7 @@ class DiamondSquareHeightMap(roughness: Float, baseSize: Int, placement: Positio
   }
 
   private def getPoint(x: Int, z: Int): Option[Float] = {
-    val pos = LocalPosition(x, 0, z)
+    val pos = Position(x, 0, z)
     if(map.isDefinedAt(pos)) {
       val point = map(pos)
       if(point.isNaN) None

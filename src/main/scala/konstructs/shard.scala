@@ -2,23 +2,23 @@ package konstructs
 
 import akka.actor.{ Actor, Stash, ActorRef, Props }
 
-class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: ActorRef)
+class ShardActor(shard: ShardPosition, chunkStore: ActorRef, chunkGenerator: ActorRef)
     extends Actor with Stash with utils.Scheduled{
-  import RegionActor._
+  import ShardActor._
   import StorageActor._
   import GeneratorActor._
-  import WorldActor._
+  import DbActor._
   import PlayerActor.ReceiveBlock
-  import World._
+  import Db._
   private val blocks = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
   private val compressionBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
-  private val chunks = new Array[Option[Array[Byte]]](RegionSize * RegionSize * RegionSize)
+  private val chunks = new Array[Option[Array[Byte]]](ShardSize * ShardSize * ShardSize)
   private var dirty: Set[ChunkPosition] = Set()
 
   schedule(5000, StoreChunks)
 
   def loadChunk(chunk: ChunkPosition): Option[Array[Byte]] = {
-    val i = chunk.index
+    val i = index(chunk)
     val blocks = chunks(i)
     if(blocks != null) {
       if(!blocks.isDefined)
@@ -33,18 +33,17 @@ class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: 
   }
 
   def updateChunk(pos: Position)(update: Byte => Byte) {
-    val chunk = pos.chunk
+    val chunk = ChunkPosition(pos)
     loadChunk(chunk).map { compressedBlocks =>
       dirty = dirty + chunk
-      val local = pos.local
       val size = compress.inflate(compressedBlocks, blocks)
       assert(size == blocks.size)
-      val i = local.index
+      val i = index(chunk, pos)
       val oldBlock = blocks(i)
       val block = update(oldBlock)
       blocks(i) = block
       val compressed = compress.deflate(blocks, compressionBuffer)
-      chunks(chunk.index) = Some(compressed)
+      chunks(index(chunk)) = Some(compressed)
     }
   }
 
@@ -72,18 +71,18 @@ class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: 
     case Loaded(chunk, blocksOption) =>
       blocksOption match {
         case Some(blocks) =>
-          chunks(chunk.index) = Some(blocks)
+          chunks(index(chunk)) = Some(blocks)
           unstashAll()
         case None =>
           chunkGenerator ! Generate(chunk)
       }
-    case Generated(chunk, blocks) =>
-      chunks(chunk.index) = Some(blocks)
-      dirty = dirty + chunk
+    case Generated(position, chunk) =>
+      chunks(index(position)) = Some(chunk.data)
+      dirty = dirty + position
       unstashAll()
     case StoreChunks =>
       dirty.map { chunk =>
-        chunks(chunk.index).map { blocks =>
+        chunks(index(chunk)).map { blocks =>
           chunkStore ! Store(chunk, blocks)
         }
       }
@@ -92,9 +91,24 @@ class RegionActor(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: 
 
 }
 
-object RegionActor {
+object ShardActor {
   case object StoreChunks
   case class BlockUpdate(pos: Position, oldW: Int, newW: Int)
-  def props(region: RegionPosition, chunkStore: ActorRef, chunkGenerator: ActorRef) =
-    Props(classOf[RegionActor], region, chunkStore, chunkGenerator)
+
+  def index(c: ChunkPosition, p: Position): Int = {
+    val x = p.x - c.p * Db.ChunkSize
+    val y = p.y - c.k * Db.ChunkSize
+    val z = p.z - c.q * Db.ChunkSize
+    x + y * Db.ChunkSize + z * Db.ChunkSize * Db.ChunkSize
+  }
+
+  def index(c: ChunkPosition): Int = {
+    val lp = math.abs(c.p % Db.ShardSize)
+    val lq = math.abs(c.q % Db.ShardSize)
+    val lk = math.abs(c.k % Db.ShardSize)
+    lp + lq * Db.ShardSize + lk * Db.ShardSize * Db.ShardSize
+  }
+
+  def props(shard: ShardPosition, chunkStore: ActorRef, chunkGenerator: ActorRef) =
+    Props(classOf[ShardActor], shard, chunkStore, chunkGenerator)
 }

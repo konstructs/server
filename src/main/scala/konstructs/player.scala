@@ -14,12 +14,14 @@ case class Inventory(items: Map[String, Item])
 case class Player(nick: String, password: String, position: protocol.Position,
   active: Int, inventory: Inventory)
 
-class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, world: ActorRef, store: ActorRef, startingPosition: protocol.Position) extends Actor with Stash with utils.Scheduled {
+class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, override val jsonStorage: ActorRef, startingPosition: protocol.Position) extends Actor with Stash with utils.Scheduled with JsonStorage {
   import PlayerActor._
-  import WorldActor._
-  import World.ChunkSize
+  import DbActor._
+  import Db.ChunkSize
   import DefaultJsonProtocol._
-  import PlayerStorageActor._
+  import JsonStorage._
+
+  val ns = "players"
 
   implicit val itemFormat = jsonFormat2(Item)
   implicit val inventoryFormat = jsonFormat1(Inventory)
@@ -28,17 +30,17 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
 
   var sentChunks = Set.empty[ChunkPosition]
   var chunksToSend = Seq.empty[ChunkPosition]
-  var currentChunk = Position(startingPosition).chunk
+  var currentChunk = ChunkPosition(Position(startingPosition))
   var data: Player = null
   var maxChunksToSend = 0
 
   schedule(5000, StoreData)
 
-  store ! Load(nick)
+  load(nick)
 
   def receive = {
-    case Loaded(_, Some(json)) =>
-      val newData = (new String(json)).parseJson.convertTo[Player]
+    case JsonLoaded(_, _, Some(json)) =>
+      val newData = json.convertTo[Player]
       if(newData.password == password) {
         data = newData
         context.become(ready)
@@ -48,7 +50,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
         client ! PoisonPill
         context.stop(self)
       }
-    case Loaded(_, None) =>
+    case JsonLoaded(_, _, None) =>
       data = Player(nick, password, startingPosition, 0, Inventory(Map()))
       context.become(ready)
       client ! PlayerInfo(pid, nick, self, data.position)
@@ -58,7 +60,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
   }
 
   def updateChunk(position: Position) {
-    val chunk = position.chunk
+    val chunk = ChunkPosition(position)
     if(chunk != currentChunk) {
       val visible = visibleChunks(position, 8)
       sentChunks = sentChunks & visible
@@ -72,7 +74,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
   def sendChunks() {
     val toSend = chunksToSend.take(maxChunksToSend)
     for(chunk <- toSend) {
-      world ! SendBlocks(client, chunk, None)
+      db ! SendBlocks(client, chunk, None)
       maxChunksToSend -= 1
     }
     sentChunks ++= toSend
@@ -110,7 +112,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
     val tree = l.iterate("a[&[c][-c][--c][+c]]c", 4 + random.nextInt(5))
     val blocks = m.interpret(tree, pos.copy(y = pos.y - 1))
     for(b <- blocks)
-      world ! PutBlock(world, b._1, b._2)
+      db ! PutBlock(db, b._1, b._2)
   }
 
   val material = Set(2,3,4,5,6,8,10,11,12,13).toVector
@@ -118,7 +120,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
   def action(pos: Position, button: Int) = {
     button match {
       case 1 =>
-        world ! DestroyBlock(self, pos)
+        db ! DestroyBlock(self, pos)
       case 2 =>
         if(data.active == 8) {
           generateTree(pos)
@@ -143,7 +145,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
                 sender ! InventoryUpdate(Map(active -> updatedItem))
               }
             }
-            world ! PutBlock(self, pos, item.w)
+            db ! PutBlock(self, pos, item.w)
           }
         }
     }
@@ -173,14 +175,14 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
 
   override def postStop {
     if(data != null)
-      store ! Store(nick, data.toJson.compactPrint.getBytes)
-    world ! PlayerLogout(pid)
+      store(nick, data.toJson)
+    db ! PlayerLogout(pid)
   }
 
   def ready: Receive = {
     case p: protocol.Position =>
       update(p)
-      world ! PlayerMovement(pid, data.position)
+      db ! PlayerMovement(pid, data.position)
     case b: protocol.SendBlock =>
       client ! b
     case SendInventory =>
@@ -201,7 +203,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, wo
       to ! PlayerMovement(pid, data.position)
       to ! PlayerNick(pid, data.nick)
     case StoreData =>
-      store ! Store(nick, data.toJson.compactPrint.getBytes)
+      store(nick, data.toJson)
     case l: PlayerLogout =>
       client ! l
     case IncreaseChunks(amount) =>
@@ -226,12 +228,12 @@ object PlayerActor {
   case class IncreaseChunks(amount: Int)
 
   val LoadYChunks = 5
-  def props(pid: Int, nick: String, password: String, client: ActorRef, world: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, world, store, startingPosition)
+  def props(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, db, store, startingPosition)
 
 
   def visibleChunks(position: Position, visibility: Int): Set[ChunkPosition] = {
     val range = -visibility to visibility
-    val chunk = position.chunk
+    val chunk = ChunkPosition(position)
     (for(p <- range; q <- range; k <-range) yield {
       chunk.translate(p, q, k)
     }).filter(_.k >= 0).toSet
