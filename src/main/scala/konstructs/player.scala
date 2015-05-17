@@ -176,7 +176,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   override def postStop {
     if(data != null)
       store(nick, data.toJson)
-    db ! PlayerLogout(pid)
+    universe ! PlayerLogout(pid)
   }
 
   def ready: Receive = {
