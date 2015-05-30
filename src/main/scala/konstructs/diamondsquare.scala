@@ -1,5 +1,6 @@
 package konstructs
 
+import java.io.{ DataInputStream, ByteArrayInputStream, DataOutputStream, ByteArrayOutputStream }
 import scala.util.Try
 import com.sksamuel.scrimage.Image
 
@@ -13,7 +14,16 @@ trait LocalHeightMap {
 
 case class ArrayHeightMap(data: Array[Int], sizeX: Int, sizeZ: Int)
     extends LocalHeightMap {
+  private val SizeOfInt = 4
   def get(pos: Position) = data(pos.x + pos.z * sizeZ)
+  def toByteArray = {
+    val bytes = new ByteArrayOutputStream(sizeX*sizeZ*SizeOfInt)
+    val dataWriter = new DataOutputStream(bytes)
+    for(x <- 0 until sizeX; z <- 0 until sizeZ) {
+      dataWriter.writeInt(data(x + z * sizeZ))
+    }
+    bytes.toByteArray
+  }
 }
 
 object ArrayHeightMap {
@@ -22,6 +32,14 @@ object ArrayHeightMap {
       map(Position(x, 0, z))
     }
     ArrayHeightMap(local.toArray, sizeX, sizeZ)
+  }
+  def fromByteArray(data: Array[Byte], sizeX: Int, sizeZ: Int): ArrayHeightMap = {
+    val dataReader = new DataInputStream(new ByteArrayInputStream(data))
+    val mapData = new Array[Int](sizeX * sizeZ)
+    for(x <- 0 until sizeX; z <- 0 until sizeZ) {
+      mapData(x + z * sizeZ) = dataReader.readInt()
+    }
+    ArrayHeightMap(mapData, sizeX, sizeZ)
   }
 }
 

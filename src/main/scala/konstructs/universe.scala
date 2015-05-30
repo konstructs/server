@@ -5,9 +5,11 @@ import akka.actor.{ Actor, ActorRef, Props }
 class UniverseActor extends Actor {
   import UniverseActor._
 
-  val jsonStore = context.actorOf(JsonStorageActor.props(new java.io.File("meta/")))
-  val generator = context.actorOf(GeneratorActor.props(jsonStore))
-  val db = context.actorOf(DbActor.props(self, generator))
+  val jsonStorage = context.actorOf(JsonStorageActor.props(new java.io.File("meta/")))
+  val binaryStorage = context.actorOf(BinaryStorageActor.props(new java.io.File("binary/")))
+
+  val generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage))
+  val db = context.actorOf(DbActor.props(self, generator, binaryStorage))
 
   private var nextPid = 0
 
@@ -23,7 +25,7 @@ class UniverseActor extends Actor {
   }
 
   def player(nick: String, password: String) {
-    val player = context.actorOf(PlayerActor.props(nextPid, nick, password, sender, db, self, jsonStore, protocol.Position(0,32f,0,0,0)), playerActorId(nextPid))
+    val player = context.actorOf(PlayerActor.props(nextPid, nick, password, sender, db, self, jsonStorage, protocol.Position(0,32f,0,0,0)), playerActorId(nextPid))
     allPlayers(except = Some(nextPid)).foreach(_ ! PlayerActor.SendInfo(player))
     allPlayers(except = Some(nextPid)).foreach(player ! PlayerActor.SendInfo(_))
     nextPid = nextPid + 1

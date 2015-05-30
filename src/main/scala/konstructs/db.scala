@@ -23,11 +23,10 @@ object ShardPosition {
 
 }
 
-class DbActor(universe: ActorRef, generator: ActorRef) extends Actor {
+class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
+    extends Actor {
   import DbActor._
   import Db.ChunkSize
-
-  val chunkStore = context.actorOf(StorageActor.props(new java.io.File("db/")))
 
   def shardActorId(r: ShardPosition) = s"shard-${r.m}-${r.n}-${r.o}"
 
@@ -36,7 +35,7 @@ class DbActor(universe: ActorRef, generator: ActorRef) extends Actor {
     context.child(rid) match {
       case Some(a) => a
       case None =>
-        context.actorOf(ShardActor.props(shard, chunkStore, generator), rid)
+        context.actorOf(ShardActor.props(shard, binaryStorage, generator), rid)
     }
   }
 
@@ -62,5 +61,5 @@ object DbActor {
   case class PutBlock(from: ActorRef, pos: Position, w: Int)
   case class DestroyBlock(from: ActorRef, pos: Position)
 
-  def props(universe: ActorRef, generator: ActorRef) = Props(classOf[DbActor], universe, generator)
+  def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef) = Props(classOf[DbActor], universe, generator, binaryStorage)
 }
