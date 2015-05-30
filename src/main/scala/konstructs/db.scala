@@ -35,31 +35,31 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
     context.child(rid) match {
       case Some(a) => a
       case None =>
-        context.actorOf(ShardActor.props(shard, binaryStorage, generator), rid)
+        context.actorOf(ShardActor.props(self, shard, binaryStorage, generator), rid)
     }
   }
 
-  def sendBlocks(to: ActorRef, chunk: ChunkPosition, version: Option[Int]) {
-    getShardActor(ShardPosition(chunk)) ! SendBlocks(to, chunk, version)
+  def sendBlocks(chunk: ChunkPosition, version: Option[Int]) {
+    getShardActor(ShardPosition(chunk)) forward SendBlocks(chunk, version)
   }
 
   def receive = {
-    case SendBlocks(to, chunk, version) =>
-      sendBlocks(to, chunk, version)
+    case SendBlocks(chunk, version) =>
+      sendBlocks(chunk, version)
     case b: PutBlock =>
-      getShardActor(ShardPosition(b.pos)) ! b
+      getShardActor(ShardPosition(b.pos)) forward b
     case b: DestroyBlock =>
-      getShardActor(ShardPosition(b.pos)) ! b
+      getShardActor(ShardPosition(b.pos)) forward b
     case b: ShardActor.BlockUpdate =>
       universe ! b
   }
 }
 
 object DbActor {
-  case class SendBlocks(to: ActorRef, chunk: ChunkPosition, version: Option[Int])
+  case class SendBlocks(chunk: ChunkPosition, version: Option[Int])
   case class BlockList(chunk: ChunkPosition, blocks: Array[Byte])
-  case class PutBlock(from: ActorRef, pos: Position, w: Int)
-  case class DestroyBlock(from: ActorRef, pos: Position)
+  case class PutBlock(pos: Position, w: Int)
+  case class DestroyBlock(pos: Position)
 
   def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef) = Props(classOf[DbActor], universe, generator, binaryStorage)
 }

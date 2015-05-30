@@ -74,7 +74,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   def sendChunks() {
     val toSend = chunksToSend.take(maxChunksToSend)
     for(chunk <- toSend) {
-      db ! SendBlocks(client, chunk, None)
+      db tell(SendBlocks(chunk, None), client)
       maxChunksToSend -= 1
     }
     sentChunks ++= toSend
@@ -112,7 +112,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     val tree = l.iterate("a[&[c][-c][--c][+c]]c", 4 + random.nextInt(5))
     val blocks = m.interpret(tree, pos.copy(y = pos.y - 1))
     for(b <- blocks)
-      db ! PutBlock(db, b._1, b._2)
+      db tell(PutBlock(b._1, b._2), db)
   }
 
   val material = Set(2,3,4,5,6,8,10,11,12,13).toVector
@@ -120,7 +120,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   def action(pos: Position, button: Int) = {
     button match {
       case 1 =>
-        db ! DestroyBlock(self, pos)
+        db ! DestroyBlock(pos)
       case 2 =>
         if(data.active == 8) {
           generateTree(pos)
@@ -145,7 +145,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
                 sender ! InventoryUpdate(Map(active -> updatedItem))
               }
             }
-            db ! PutBlock(self, pos, item.w)
+            db ! PutBlock(pos, item.w)
           }
         }
     }
