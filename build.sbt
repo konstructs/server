@@ -15,5 +15,3 @@ libraryDependencies ++= Seq(
 )
 
 fork in run := true
-
-javaOptions in run += "-d64 -Xms5G -Xmx10G"
