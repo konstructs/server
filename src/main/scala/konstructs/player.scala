@@ -36,10 +36,10 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   schedule(5000, StoreData)
 
-  load(nick)
+  loadJson(nick)
 
   def receive = {
-    case JsonLoaded(_, _, Some(json)) =>
+    case JsonLoaded(_, Some(json)) =>
       val newData = json.convertTo[Player]
       if(newData.password == password) {
         data = newData
@@ -50,7 +50,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
         client ! PoisonPill
         context.stop(self)
       }
-    case JsonLoaded(_, _, None) =>
+    case JsonLoaded(_, None) =>
       data = Player(nick, password, startingPosition, 0, Inventory(Map()))
       context.become(ready)
       client ! PlayerInfo(pid, nick, self, data.position)
@@ -175,7 +175,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   override def postStop {
     if(data != null)
-      store(nick, data.toJson)
+      storeJson(nick, data.toJson)
     universe ! PlayerLogout(pid)
   }
 
@@ -203,7 +203,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       to ! PlayerMovement(pid, data.position)
       to ! PlayerNick(pid, data.nick)
     case StoreData =>
-      store(nick, data.toJson)
+      storeJson(nick, data.toJson)
     case l: PlayerLogout =>
       client ! l
     case IncreaseChunks(amount) =>

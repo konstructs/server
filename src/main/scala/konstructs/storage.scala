@@ -7,53 +7,53 @@ import spray.json._
 
 import org.apache.commons.io.FileUtils
 
-class StorageActor(directory: File) extends Actor {
-  import StorageActor._
+class BinaryStorageActor(directory: File) extends Actor {
+  import BinaryStorage._
+  import Storage._
 
-  private def chunkFile(c: ChunkPosition) = new File(directory, s"${c.p}/${c.q}/${c.k}.chunk")
+  val Suffix = ".binary"
 
   def receive = {
-    case Load(chunk) =>
-      val f = chunkFile(chunk)
-      val blocks = if(f.exists) {
-        Some(FileUtils.readFileToByteArray(f))
-      } else {
-        None
-      }
-      sender ! Loaded(chunk, blocks)
-    case Store(chunk, blocks) =>
-      val f = chunkFile(chunk)
-      FileUtils.writeByteArrayToFile(f, blocks)
+    case StoreBinary(id, ns, data) =>
+      write(directory, id, ns, Suffix, data)
+    case LoadBinary(id, ns) =>
+      sender ! BinaryLoaded(id, load(directory, id, ns, Suffix))
   }
-
 }
 
-object StorageActor {
-  case class Load(chunk: ChunkPosition)
-  case class Loaded(chunk: ChunkPosition, blocks: Option[Array[Byte]])
-  case class Store(chunk: ChunkPosition, blocks: Array[Byte])
+object BinaryStorage {
+  case class StoreBinary(id: String, ns: String, data: Array[Byte])
+  case class LoadBinary(id: String, ns: String)
+  case class BinaryLoaded(id: String, data: Option[Array[Byte]])
+}
 
-  def props(directory: File) =
-    Props(classOf[StorageActor], directory)
+trait BinaryStorage {
+  import BinaryStorage.{ StoreBinary, LoadBinary }
+
+  def ns: String
+  def binaryStorage: ActorRef
+
+  def loadBinary(id: String)(implicit sender: ActorRef) = binaryStorage ! LoadBinary(id, ns)
+  def storeBinary(id: String, data: Array[Byte])(implicit sender: ActorRef) = binaryStorage ! StoreBinary(id, ns, data)
+}
+
+object BinaryStorageActor {
+  def props(directory: File) = Props(classOf[BinaryStorageActor], directory)
 }
 
 class JsonStorageActor(directory: File) extends Actor {
   import JsonStorage.{ StoreJson, LoadJson, JsonLoaded }
-
-  private def file(id: String, ns: String) = new File(directory, s"$ns/$id.json")
+  import Storage._
+  private val Suffix = ".json"
 
   def receive = {
     case StoreJson(id, ns, data) =>
-      FileUtils.writeByteArrayToFile(file(id, ns), data.compactPrint.getBytes)
+      write(directory, id, ns, Suffix, data.compactPrint.getBytes)
     case LoadJson(id, ns) =>
-      val f = file(id, ns)
-      val data = if(f.exists) {
-        val content = FileUtils.readFileToByteArray(f)
-        Try((new String(content)).parseJson).toOption
-      } else {
-        None
+      val data = load(directory, id, ns, Suffix).flatMap { d =>
+        Try((new String(d)).parseJson).toOption
       }
-      sender ! JsonLoaded(id, ns, data)
+      sender ! JsonLoaded(id, data)
   }
 }
 
@@ -64,7 +64,7 @@ object JsonStorageActor {
 object JsonStorage {
   case class StoreJson(id: String, ns: String, data: JsValue)
   case class LoadJson(id: String, ns: String)
-  case class JsonLoaded(id: String, ns: String, data: Option[JsValue])
+  case class JsonLoaded(id: String, data: Option[JsValue])
 }
 
 trait JsonStorage {
@@ -73,6 +73,20 @@ trait JsonStorage {
   def ns: String
   def jsonStorage: ActorRef
 
-  def load(id: String)(implicit sender: ActorRef) = jsonStorage ! LoadJson(id, ns)
-  def store(id: String, data: JsValue)(implicit sender: ActorRef) = jsonStorage ! StoreJson(id, ns, data)
+  def loadJson(id: String)(implicit sender: ActorRef) = jsonStorage ! LoadJson(id, ns)
+  def storeJson(id: String, data: JsValue)(implicit sender: ActorRef) = jsonStorage ! StoreJson(id, ns, data)
+}
+
+object Storage {
+  def file(directory: File, id: String, ns: String, suffix: String) = new File(directory, s"$ns/$id.$suffix")
+  def write(directory: File, id: String, ns: String, suffix: String, data: Array[Byte]) =
+    FileUtils.writeByteArrayToFile(file(directory, id, ns, suffix), data)
+  def load(directory: File, id: String, ns: String, suffix: String): Option[Array[Byte]] = {
+    val f = file(directory, id, ns, suffix)
+    if(f.exists) {
+      Some(FileUtils.readFileToByteArray(f))
+    } else {
+      None
+    }
+  }
 }

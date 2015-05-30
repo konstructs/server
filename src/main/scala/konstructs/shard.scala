@@ -2,18 +2,31 @@ package konstructs
 
 import akka.actor.{ Actor, Stash, ActorRef, Props }
 
-class ShardActor(shard: ShardPosition, chunkStore: ActorRef, chunkGenerator: ActorRef)
-    extends Actor with Stash with utils.Scheduled{
+class ShardActor(shard: ShardPosition, val binaryStorage: ActorRef, chunkGenerator: ActorRef)
+    extends Actor with Stash with utils.Scheduled with BinaryStorage {
   import ShardActor._
-  import StorageActor._
+  import BinaryStorage._
   import GeneratorActor._
   import DbActor._
   import PlayerActor.ReceiveBlock
   import Db._
+
+  val ns = "chunks"
+
   private val blocks = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
   private val compressionBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
   private val chunks = new Array[Option[Array[Byte]]](ShardSize * ShardSize * ShardSize)
   private var dirty: Set[ChunkPosition] = Set()
+
+  private def chunkId(c: ChunkPosition): String =
+    s"${c.p}/${c.q}/${c.k}"
+
+  private def chunkFromId(id: String): ChunkPosition = {
+    val pqk = id.split('/').map(_.toInt)
+    ChunkPosition(pqk(0), pqk(1), pqk(2))
+  }
+
+
 
   schedule(5000, StoreChunks)
 
@@ -25,7 +38,7 @@ class ShardActor(shard: ShardPosition, chunkStore: ActorRef, chunkGenerator: Act
         stash()
       blocks
     } else {
-      chunkStore ! Load(chunk)
+      loadBinary(chunkId(chunk))
       chunks(i) = None
       stash()
       None
@@ -68,7 +81,8 @@ class ShardActor(shard: ShardPosition, chunkStore: ActorRef, chunkGenerator: Act
         sender ! BlockUpdate(p, old.toInt, 0)
         0
       }
-    case Loaded(chunk, blocksOption) =>
+    case BinaryLoaded(id, blocksOption) => {
+      val chunk = chunkFromId(id)
       blocksOption match {
         case Some(blocks) =>
           chunks(index(chunk)) = Some(blocks)
@@ -76,6 +90,7 @@ class ShardActor(shard: ShardPosition, chunkStore: ActorRef, chunkGenerator: Act
         case None =>
           chunkGenerator ! Generate(chunk)
       }
+    }
     case Generated(position, chunk) =>
       chunks(index(position)) = Some(chunk.data)
       dirty = dirty + position
@@ -83,7 +98,7 @@ class ShardActor(shard: ShardPosition, chunkStore: ActorRef, chunkGenerator: Act
     case StoreChunks =>
       dirty.map { chunk =>
         chunks(index(chunk)).map { blocks =>
-          chunkStore ! Store(chunk, blocks)
+          storeBinary(chunkId(chunk), blocks)
         }
       }
       dirty = Set()
@@ -109,6 +124,6 @@ object ShardActor {
     lp + lq * Db.ShardSize + lk * Db.ShardSize * Db.ShardSize
   }
 
-  def props(shard: ShardPosition, chunkStore: ActorRef, chunkGenerator: ActorRef) =
-    Props(classOf[ShardActor], shard, chunkStore, chunkGenerator)
+  def props(shard: ShardPosition, binaryStorage: ActorRef, chunkGenerator: ActorRef) =
+    Props(classOf[ShardActor], shard, binaryStorage, chunkGenerator)
 }

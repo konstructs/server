@@ -4,34 +4,49 @@ import scala.util.Random
 import akka.actor.{ Actor, ActorRef, Props, Stash }
 import spray.json._
 
-case class FlatWorld(map: ArrayHeightMap)
+case class FlatWorld(sizeX: Int, sizeZ: Int)
 
-class FlatWorldActor(name: String, end: Position, val jsonStorage: ActorRef)
-    extends Actor with Stash with JsonStorage {
+class FlatWorldActor(name: String, end: Position, val jsonStorage: ActorRef,
+                     val binaryStorage: ActorRef)
+    extends Actor with Stash with JsonStorage with BinaryStorage {
   import World._
   import GeneratorActor.Generated
   import Db.ChunkSize
   import JsonStorage._
   import DefaultJsonProtocol._
+  import BinaryStorage._
 
-  implicit val arrayHeightMapFormat = jsonFormat3(ArrayHeightMap.apply)
-  implicit val flatWorldFormat = jsonFormat1(FlatWorld)
+  implicit val flatWorldFormat = jsonFormat2(FlatWorld)
 
   val ns = "worlds"
 
-  load(name)
-
-  var map: PartialFunction[Position, Int] = null
+  loadJson(name)
 
   val random = new Random
+  val size = 1024
 
   def receive = {
-    case JsonLoaded(_, _, Some(json)) =>
-      map = GlobalHeightMap(Position(0, 0, 0), json.convertTo[FlatWorld].map)
-      context.become(ready)
+    case JsonLoaded(_, Some(json)) =>
+      val world = json.convertTo[FlatWorld]
+      loadBinary(name)
+      context.become(loadHeightMap(world))
       unstashAll()
-    case JsonLoaded(_, _, None) =>
-      val size = 1024
+    case JsonLoaded(_, None) =>
+      val world = FlatWorld(size*3, size*3)
+      storeJson(name, world.toJson)
+      loadBinary(name)
+      context.become(loadHeightMap(world))
+      unstashAll()
+    case _ =>
+      stash()
+  }
+
+  def loadHeightMap(world: FlatWorld): Receive = {
+    case BinaryLoaded(_, Some(data)) =>
+      val localMap = ArrayHeightMap.fromByteArray(data, world.sizeX, world.sizeZ)
+      val map = GlobalHeightMap(Position(0, 0, 0), localMap)
+      context.become(ready(world, map))
+    case BinaryLoaded(_, None) =>
       val newMap = {
         val diamond0 = new DiamondSquareHeightMap(0.1f, size, Position(0, 0, 0), EmptyHeightMap)
         val diamond1 = new DiamondSquareHeightMap(0.2f, size, Position(0, 0, size), diamond0)
@@ -45,17 +60,15 @@ class FlatWorldActor(name: String, end: Position, val jsonStorage: ActorRef)
         diamond0 orElse diamond1 orElse diamond2 orElse diamond3 orElse diamond4 orElse diamond5 orElse diamond6 orElse diamond7 orElse diamond8
       }
       val localMap = ArrayHeightMap.fromExistingHeightMap(newMap, size*3, size*3)
-      store(name, FlatWorld(localMap).toJson)
-      map = GlobalHeightMap(Position(0, 0, 0), localMap)
-      context.become(ready)
+      storeBinary(name, localMap.toByteArray)
+      val map = GlobalHeightMap(Position(0, 0, 0), localMap)
+      context.become(ready(world, map))
       unstashAll()
     case _ =>
       stash()
   }
 
-  val compressionBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
-
-  private def blockSeq(chunk: ChunkPosition): Seq[Byte] = {
+  private def blockSeq(chunk: ChunkPosition, map: HeightMap): Seq[Byte] = {
     for(
       z <- 0 until ChunkSize;
       y <- 0 until ChunkSize;
@@ -101,19 +114,21 @@ class FlatWorldActor(name: String, end: Position, val jsonStorage: ActorRef)
     }
   }
 
-  private def blocks(chunk: ChunkPosition): Chunk =
-    Chunk(compress.deflate(Array( blockSeq(chunk) :_*), compressionBuffer))
+  private val compressionBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
 
-  def ready: Receive = {
+  private def blocks(chunk: ChunkPosition, map: HeightMap): Chunk =
+    Chunk(compress.deflate(Array( blockSeq(chunk, map) :_*), compressionBuffer))
+
+  def ready(world: FlatWorld, map: HeightMap): Receive = {
     case Generate(real, chunk) =>
-      sender ! Generated(real, blocks(chunk))
+      sender ! Generated(real, blocks(chunk, map))
   }
 
 }
 
 object FlatWorldActor {
-  def props(name: String, end: Position, jsonStorage: ActorRef) =
-    Props(classOf[FlatWorldActor], name, end, jsonStorage)
+  def props(name: String, end: Position, jsonStorage: ActorRef, binaryStorage: ActorRef) =
+    Props(classOf[FlatWorldActor], name, end, jsonStorage, binaryStorage)
 }
 
 object World {
