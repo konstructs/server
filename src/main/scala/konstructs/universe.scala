@@ -1,12 +1,10 @@
 package konstructs
 
 import akka.actor.{ Actor, ActorRef, Props }
+import konstructs.plugin.{ PluginConstructor, Config }
 
-class UniverseActor extends Actor {
+class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef) extends Actor {
   import UniverseActor._
-
-  val jsonStorage = context.actorOf(JsonStorageActor.props(new java.io.File("meta/")))
-  val binaryStorage = context.actorOf(BinaryStorageActor.props(new java.io.File("binary/")))
 
   val generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage))
   val db = context.actorOf(DbActor.props(self, generator, binaryStorage))
@@ -49,5 +47,9 @@ class UniverseActor extends Actor {
 object UniverseActor {
   case class CreatePlayer(nick: String, password: String)
 
-  def props() = Props(classOf[UniverseActor])
+  @PluginConstructor
+  def props(name: String,
+    @Config(key = "binary-storage") binaryStorage: ActorRef,
+    @Config(key = "json-storage") jsonStorage: ActorRef)
+  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage)
 }
