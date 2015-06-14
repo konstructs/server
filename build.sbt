@@ -1,5 +1,7 @@
 import ReleaseTransformations._
 
+organization := "org.konstructs"
+
 name := "konstructs-server"
 
 scalaVersion := "2.10.4"
