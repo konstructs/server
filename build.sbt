@@ -14,4 +14,6 @@ libraryDependencies ++= Seq(
   "org.scalatest"          %% "scalatest"     % "2.2.1"  % "test"
 )
 
+bintrayOrganization := Some("konstructs")
+
 fork in run := true

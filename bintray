@@ -15,6 +15,16 @@ fi
 
 # Upload tagged releases to bintray
 if [ $TRAVIS_TAG ]; then
+	# Release downloadable JAR
 	curl -T $ARTIFACT $API_AUTH $API_URL/content/konstructs/jars/server/$TRAVIS_TAG/konstructs-server-build-$TRAVIS_TAG.jar
 	curl -X POST -unsg:$bintray_api_key $API_URL/content/konstructs/jars/server/$TRAVIS_TAG/publish
+	# Release to maven repository
+	mkdir -p ~/.bintray
+	cat <<END > ~/.bintray/.credentials
+realm = Bintray API Realm
+host = api.bintray.com
+user = nsg
+password = $bintray_api_key
+END
+	sbt publish
 fi
