@@ -2,7 +2,7 @@ package konstructs
 
 import akka.actor.{ Actor, Stash, ActorRef, Props }
 
-class ShardActor(shard: ShardPosition, val binaryStorage: ActorRef, chunkGenerator: ActorRef)
+class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef, chunkGenerator: ActorRef)
     extends Actor with Stash with utils.Scheduled with BinaryStorage {
   import ShardActor._
   import BinaryStorage._
@@ -61,24 +61,27 @@ class ShardActor(shard: ShardPosition, val binaryStorage: ActorRef, chunkGenerat
   }
 
   def receive() = {
-    case SendBlocks(to, chunk, _) =>
+    case SendBlocks(chunk, _) =>
+      val s = sender
       loadChunk(chunk).map { blocks =>
-        to ! BlockList(chunk, blocks)
+        s ! BlockList(chunk, blocks)
       }
-    case PutBlock(by, p, w) =>
+    case PutBlock(p, w) =>
+      val s = sender
       updateChunk(p) { old =>
         if(old == 0) {
-          sender ! BlockUpdate(p, old.toInt, w)
+          db ! BlockUpdate(p, old.toInt, w)
           w.toByte
         } else {
-          by ! ReceiveBlock(w.toByte)
+          s ! ReceiveBlock(w.toByte)
           old
         }
       }
-    case DestroyBlock(by, p) =>
+    case DestroyBlock(p) =>
+      val s = sender
       updateChunk(p) { old =>
-        by ! ReceiveBlock(old)
-        sender ! BlockUpdate(p, old.toInt, 0)
+        s ! ReceiveBlock(old)
+          db ! BlockUpdate(p, old.toInt, 0)
         0
       }
     case BinaryLoaded(id, blocksOption) => {
@@ -124,6 +127,6 @@ object ShardActor {
     lp + lq * Db.ShardSize + lk * Db.ShardSize * Db.ShardSize
   }
 
-  def props(shard: ShardPosition, binaryStorage: ActorRef, chunkGenerator: ActorRef) =
-    Props(classOf[ShardActor], shard, binaryStorage, chunkGenerator)
+  def props(db: ActorRef, shard: ShardPosition, binaryStorage: ActorRef, chunkGenerator: ActorRef) =
+    Props(classOf[ShardActor], db, shard, binaryStorage, chunkGenerator)
 }

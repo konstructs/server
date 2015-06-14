@@ -8,7 +8,9 @@ import TcpPipelineHandler.{ Init }
 
 import java.net.InetSocketAddress
 
-class Server(universe: ActorRef) extends Actor with ActorLogging {
+import konstructs.plugin.{ PluginConstructor, Config }
+
+class Server(name: String, universe: ActorRef) extends Actor with ActorLogging {
   import Tcp._
   import context.system
 
@@ -32,10 +34,12 @@ class Server(universe: ActorRef) extends Actor with ActorLogging {
       val handler = context.actorOf(Client.props(init, universe))
       val pipeline = context.actorOf(TcpPipelineHandler.props(
       init, connection, handler))
-    connection ! Tcp.Register(pipeline)
+      println(s"$remote connected!")
+      connection ! Tcp.Register(pipeline)
   }
 }
 
 object Server {
-  def props(universe: ActorRef) = Props(classOf[Server], universe)
+  @PluginConstructor
+  def props(name: String, @Config(key = "universe") universe: ActorRef) = Props(classOf[Server], name, universe)
 }

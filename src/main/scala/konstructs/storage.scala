@@ -4,10 +4,10 @@ import java.io.File
 import scala.util.Try
 import akka.actor.{ Actor, ActorRef, Props }
 import spray.json._
-
 import org.apache.commons.io.FileUtils
+import konstructs.plugin.{ PluginConstructor, Config }
 
-class BinaryStorageActor(directory: File) extends Actor {
+class BinaryStorageActor(name: String, directory: File) extends Actor {
   import BinaryStorage._
   import Storage._
 
@@ -38,10 +38,11 @@ trait BinaryStorage {
 }
 
 object BinaryStorageActor {
-  def props(directory: File) = Props(classOf[BinaryStorageActor], directory)
+  @PluginConstructor
+  def props(name: String, @Config(key = "directory") directory: File) = Props(classOf[BinaryStorageActor], name, directory)
 }
 
-class JsonStorageActor(directory: File) extends Actor {
+class JsonStorageActor(name: String, directory: File) extends Actor {
   import JsonStorage.{ StoreJson, LoadJson, JsonLoaded }
   import Storage._
   private val Suffix = ".json"
@@ -58,7 +59,8 @@ class JsonStorageActor(directory: File) extends Actor {
 }
 
 object JsonStorageActor {
-  def props(directory: File) = Props(classOf[JsonStorageActor], directory)
+  @PluginConstructor
+  def props(name: String, @Config(key = "directory") directory: File) = Props(classOf[JsonStorageActor], name, directory)
 }
 
 object JsonStorage {
