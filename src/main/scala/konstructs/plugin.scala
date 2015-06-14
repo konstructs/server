@@ -3,10 +3,13 @@ package konstructs.plugin
 import java.lang.reflect.{ Method, Type, Modifier }
 import java.io.File
 import scala.concurrent.Future
+import scala.collection.JavaConverters._
 import akka.util.Timeout
 import akka.actor.{ Props, ActorSystem, ActorRef, Actor, ActorSelection }
 import com.typesafe.config.{ Config => TypesafeConfig }
-case class PluginConfigParameterMeta(name: String, configType: Class[_])
+
+
+case class PluginConfigParameterMeta(name: String, configType: Class[_], listType: Option[Class[_]] = None)
 
 case class PluginConfigMeta(method: Method, parameters: Seq[PluginConfigParameterMeta])
 
@@ -14,11 +17,12 @@ object PluginConfigMeta {
   def apply(m: Method): PluginConfigMeta = {
     val annotations = m
       .getParameterAnnotations
-      .flatMap(_.filter(_.isInstanceOf[Config]))
-      .map(_.asInstanceOf[Config])
+      .flatMap(_.filter { a => a.isInstanceOf[Config] || a.isInstanceOf[ListConfig] } )
     val parameters = m.getParameterTypes.tail.zip(annotations).map {
-      case (t, c) =>
+      case (t, c: Config) =>
         PluginConfigParameterMeta(c.key, t)
+      case (t, c: ListConfig) =>
+        PluginConfigParameterMeta(c.key, c.elementType, Some(t))
     }
     apply(m, parameters)
   }
@@ -29,7 +33,7 @@ case class PluginMeta(configs: Seq[PluginConfigMeta])
 object PluginMeta {
 
   private def allParametersAreAnnotated(m: Method): Boolean =
-    m.getParameterAnnotations.filter(_.exists(_.isInstanceOf[Config])).size == m.getParameterTypes.size - 1
+    m.getParameterAnnotations.filter(_.exists { a => a.isInstanceOf[Config] || a.isInstanceOf[ListConfig] }).size == m.getParameterTypes.size - 1
 
   def apply(className: String): PluginMeta = {
     val clazz = Class.forName(className)
@@ -46,12 +50,13 @@ object PluginMeta {
 
 }
 
-case class ConfiguredPlugin(name: String, method: Method, args: Seq[Either[Object, String]]) {
+case class ConfiguredPlugin(name: String, method: Method, args: Seq[Either[Object, Either[String, Seq[String]]]]) {
 
   val dependencyEdges =
     args.collect {
-      case Right(dep) => (name, dep)
-    }
+      case Right(Left(dep)) => Seq((name, dep))
+      case Right(Right(deps)) => deps.map((name, _))
+    } flatten
 }
 
 class PluginLoaderActor(config: TypesafeConfig) extends Actor {
@@ -66,14 +71,26 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
 
   def configurePlugin(name: String, config: TypesafeConfig, c: PluginConfigMeta):
       ConfiguredPlugin = {
-    val args: Seq[Either[Object, String]] = c.parameters.map { p =>
+    val args: Seq[Either[Object, Either[String, Seq[String]]]] = c.parameters.map { p =>
       p.configType match {
-        case StringType => Left(config.getString(p.name))
-        case FileType => Left(new File(config.getString(p.name)))
-        case ActorRefType => Right(config.getString(p.name))
+        case StringType => if(p.listType.isDefined) {
+          Left(config.getStringList(p.name))
+        } else {
+          Left(config.getString(p.name))
+        }
+        case FileType =>  if(p.listType.isDefined) {
+          Left(config.getStringList(p.name).asScala.map(new File(_)).asJava)
+        } else {
+          Left(new File(config.getString(p.name)))
+        }
+        case ActorRefType => if(p.listType.isDefined) {
+          Right(Right(config.getStringList(p.name).asScala.toSeq))
+        } else {
+          Right(Left(config.getString(p.name)))
+        }
       }
     }
-    ConfiguredPlugin(name, c.method, Left[Object, String](name) +: args)
+    ConfiguredPlugin(name, c.method, Left[Object, Either[String, Seq[String]]](name) +: args)
   }
 
 
@@ -92,7 +109,10 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
     plugins match {
       case head :: tail =>
         val args = Future.sequence(head.args.map {
-          case Right(dep) => ActorSelection(self, dep).resolveOne
+          case Right(Left(dep)) => ActorSelection(self, dep).resolveOne
+          case Right(Right(deps)) => Future.sequence(deps.map { dep =>
+            ActorSelection(self, dep).resolveOne
+          }).map(_.toList.asJava)
           case Left(obj) => Future.successful(obj)
         })
         args.onFailure {
