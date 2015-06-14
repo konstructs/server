@@ -1,6 +1,6 @@
-name := "konstructs-server"
+import ReleaseTransformations._
 
-version := "0.1"
+name := "konstructs-server"
 
 scalaVersion := "2.10.4"
 
@@ -17,3 +17,15 @@ libraryDependencies ++= Seq(
 bintrayOrganization := Some("konstructs")
 
 fork in run := true
+
+releaseProcess := Seq[ReleaseStep](
+  checkSnapshotDependencies,
+  inquireVersions,
+  runTest,
+  setReleaseVersion,
+  commitReleaseVersion,
+  tagRelease,
+  setNextVersion,
+  commitNextVersion,
+  pushChanges
+)
