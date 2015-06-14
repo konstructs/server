@@ -26,5 +26,5 @@ host = api.bintray.com
 user = nsg
 password = $bintray_api_key
 END
-	sbt publish
+	sbt -batch publish
 fi
