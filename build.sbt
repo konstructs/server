@@ -4,6 +4,8 @@ name := "konstructs-server"
 
 scalaVersion := "2.10.4"
 
+licenses += ("MIT", url("http://opensource.org/licenses/MIT"))
+
 val akkaVersion = "2.2.4"
 
 libraryDependencies ++= Seq(
