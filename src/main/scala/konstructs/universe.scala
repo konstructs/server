@@ -60,6 +60,12 @@ object UniverseActor {
   def props(name: String,
     @Config(key = "binary-storage") binaryStorage: ActorRef,
     @Config(key = "json-storage") jsonStorage: ActorRef,
-    @ListConfig(key = "chat-filters", elementType = classOf[ActorRef]) chatFilters: Seq[ActorRef])
+    @ListConfig(key = "chat-filters", elementType = classOf[ActorRef]) chatFilters: Seq[ActorRef]): Props
   = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, chatFilters)
+
+  @PluginConstructor
+  def props(name: String,
+    @Config(key = "binary-storage") binaryStorage: ActorRef,
+    @Config(key = "json-storage") jsonStorage: ActorRef): Props
+  = props(name, jsonStorage, binaryStorage, Seq())
 }
