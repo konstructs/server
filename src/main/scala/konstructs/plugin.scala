@@ -50,12 +50,18 @@ object PluginMeta {
 
 }
 
-case class ConfiguredPlugin(name: String, method: Method, args: Seq[Either[Object, Either[String, Seq[String]]]]) {
+case class Dependencies(names: Seq[String], t: Class[_])
+
+object Dependencies {
+  def apply(dep: String): Dependencies = apply(Seq(dep), classOf[ActorRef])
+}
+
+case class ConfiguredPlugin(name: String, method: Method,
+                            args: Seq[Either[Object, Dependencies]]) {
 
   val dependencyEdges =
     args.collect {
-      case Right(Left(dep)) => Seq((name, dep))
-      case Right(Right(deps)) => deps.map((name, _))
+      case Right(deps) => deps.names.map((name, _))
     } flatten
 }
 
@@ -68,34 +74,40 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
   val StringType = classOf[String]
   val FileType = classOf[File]
   val ActorRefType = classOf[ActorRef]
+  val SeqType = classOf[Seq[_]]
+  val ListType = classOf[java.util.List[_]]
 
-  def configurePlugin(name: String, config: TypesafeConfig, c: PluginConfigMeta):
-      ConfiguredPlugin = {
-    val args: Seq[Either[Object, Either[String, Seq[String]]]] = c.parameters.map { p =>
+  private def listType(t: Class[_], list: java.util.List[_ <: AnyRef]): Object = t match {
+    case SeqType => list.asScala.toSeq
+    case ListType => list
+    case ActorRefType => list.asScala.head
+  }
+
+
+  def configurePlugin(name: String, config: TypesafeConfig, c: PluginConfigMeta): ConfiguredPlugin = {
+    val args: Seq[Either[Object, Dependencies]] = c.parameters.map { p =>
       p.configType match {
         case StringType => if(p.listType.isDefined) {
-          Left(config.getStringList(p.name))
+          Left(listType(p.listType.get, config.getStringList(p.name)))
         } else {
           Left(config.getString(p.name))
         }
-        case FileType =>  if(p.listType.isDefined) {
-          Left(config.getStringList(p.name).asScala.map(new File(_)).asJava)
+        case FileType => if(p.listType.isDefined) {
+          Left(listType(p.listType.get, config.getStringList(p.name).asScala.map(new File(_)).asJava))
         } else {
           Left(new File(config.getString(p.name)))
         }
         case ActorRefType => if(p.listType.isDefined) {
-          Right(Right(config.getStringList(p.name).asScala.toSeq))
+          Right(Dependencies(config.getStringList(p.name).asScala.toSeq, p.listType.get))
         } else {
-          Right(Left(config.getString(p.name)))
+          Right(Dependencies(config.getString(p.name)))
         }
       }
     }
-    ConfiguredPlugin(name, c.method, Left[Object, Either[String, Seq[String]]](name) +: args)
+    ConfiguredPlugin(name, c.method, Left[Object, Dependencies](name) +: args)
   }
 
-
-  def configurePlugin(name: String, config: TypesafeConfig, meta: PluginMeta):
-      ConfiguredPlugin = {
+  def configurePlugin(name: String, config: TypesafeConfig, meta: PluginMeta): ConfiguredPlugin = {
     for(c <- meta.configs) {
       try {
         return configurePlugin(name, config, c)
@@ -109,10 +121,10 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
     plugins match {
       case head :: tail =>
         val args = Future.sequence(head.args.map {
-          case Right(Left(dep)) => ActorSelection(self, dep).resolveOne
-          case Right(Right(deps)) => Future.sequence(deps.map { dep =>
-            ActorSelection(self, dep).resolveOne
-          }).map(_.toList.asJava)
+          case Right(d) =>
+            Future.sequence(d.names.map { dep =>
+              ActorSelection(self, dep).resolveOne
+            }).map { as => listType(d.t, as.toList.asJava) }
           case Left(obj) => Future.successful(obj)
         })
         args.onFailure {
