@@ -1,9 +1,10 @@
 package konstructs
 
 import akka.actor.{ Actor, ActorRef, Props }
-import konstructs.plugin.{ PluginConstructor, Config }
+import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
+import konstructs.api._
 
-class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef) extends Actor {
+class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef, chatFilters: Seq[ActorRef]) extends Actor {
   import UniverseActor._
 
   val generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage))
@@ -41,6 +42,14 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       allPlayers() foreach { p =>
         p ! protocol.SendBlock(chunk.p, chunk.q, b.pos.x, b.pos.y, b.pos.z, b.newW)
       }
+    case s: Say =>
+      val filters = chatFilters :+ self
+      filters.head.forward(SayFilter(filters.tail, s))
+    case s: SayFilter =>
+      allPlayers().foreach(_.forward(Said(s.message.message)))
+    case s: Said =>
+      allPlayers().foreach(_.forward(s))
+
   }
 }
 
@@ -50,6 +59,7 @@ object UniverseActor {
   @PluginConstructor
   def props(name: String,
     @Config(key = "binary-storage") binaryStorage: ActorRef,
-    @Config(key = "json-storage") jsonStorage: ActorRef)
-  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage)
+    @Config(key = "json-storage") jsonStorage: ActorRef,
+    @ListConfig(key = "chat-filters", elementType = classOf[ActorRef]) chatFilters: Seq[ActorRef])
+  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, chatFilters)
 }
