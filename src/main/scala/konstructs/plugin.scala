@@ -6,7 +6,7 @@ import scala.concurrent.Future
 import scala.collection.JavaConverters._
 import akka.util.Timeout
 import akka.actor.{ Props, ActorSystem, ActorRef, Actor, ActorSelection }
-import com.typesafe.config.{ Config => TypesafeConfig }
+import com.typesafe.config.{ Config => TypesafeConfig, ConfigException }
 
 
 case class PluginConfigParameterMeta(name: String, configType: Class[_], listType: Option[Class[_]] = None)
@@ -108,9 +108,11 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
   }
 
   def configurePlugin(name: String, config: TypesafeConfig, meta: PluginMeta): ConfiguredPlugin = {
-    for(c <- meta.configs) {
+    for(c <- meta.configs.sortBy(_.parameters.size).reverse) {
       try {
         return configurePlugin(name, config, c)
+      } catch {
+        case e: ConfigException.Missing =>
       }
     }
     println(s"Valid configurations: ${meta.configs}")
@@ -131,6 +133,7 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
           case e => println(s"Failed to start plugin ${head.name} due to $e")
         }
         for(a <- args) {
+          println(a)
           val props = head.method.invoke(null, a: _*).asInstanceOf[Props]
           context.actorOf(props, head.name)
           println(s"Started plugin ${head.name}")

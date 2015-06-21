@@ -49,7 +49,6 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       allPlayers().foreach(_.forward(Said(s.message.message)))
     case s: Said =>
       allPlayers().foreach(_.forward(s))
-
   }
 }
 
@@ -67,5 +66,5 @@ object UniverseActor {
   def props(name: String,
     @Config(key = "binary-storage") binaryStorage: ActorRef,
     @Config(key = "json-storage") jsonStorage: ActorRef): Props
-  = props(name, jsonStorage, binaryStorage, Seq())
+  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, Seq())
 }
