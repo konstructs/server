@@ -92,8 +92,8 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       sendPlayerNick(pipe, pid, nick)
     case PlayerLogout(pid) =>
       sendPlayerLogout(pipe, pid)
-    case Said(msg) =>
-      sendSaid(pipe, msg)
+    case Said(text) =>
+      sendSaid(pipe, text)
     case _: Tcp.ConnectionClosed =>
       player.actor ! PoisonPill
       context.stop(self)

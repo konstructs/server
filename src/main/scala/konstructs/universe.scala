@@ -46,7 +46,7 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       val filters = chatFilters :+ self
       filters.head.forward(SayFilter(filters.tail, s))
     case s: SayFilter =>
-      allPlayers().foreach(_.forward(Said(s.message.message)))
+      allPlayers().foreach(_.forward(Said(s.message.text)))
     case s: Said =>
       allPlayers().foreach(_.forward(s))
   }
