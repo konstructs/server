@@ -2,6 +2,7 @@ package konstructs
 
 import scala.util.{ Sorting, Random }
 import scala.math.Ordering
+import scala.collection.JavaConverters._
 
 trait ProductionRule {
   def predecessor: String
@@ -60,4 +61,9 @@ case class LSystem(rules: Seq[ProductionRule]) {
       init
     }
   }
+}
+
+object LSystem {
+  def fromList(rules: java.util.List[ProductionRule]): LSystem =
+    apply(rules.asScala.toSeq)
 }

@@ -5,9 +5,12 @@ import java.io.File
 import scala.concurrent.Future
 import scala.collection.JavaConverters._
 import akka.util.Timeout
-import akka.actor.{ Props, ActorSystem, ActorRef, Actor, ActorSelection }
+import akka.actor.{ Props, ActorSystem, ActorRef, Actor, ActorSelection, Stash }
 import com.typesafe.config.{ Config => TypesafeConfig, ConfigException }
 
+object Plugin {
+  val StaticParameters = 2
+}
 
 case class PluginConfigParameterMeta(name: String, configType: Class[_], listType: Option[Class[_]] = None)
 
@@ -18,7 +21,7 @@ object PluginConfigMeta {
     val annotations = m
       .getParameterAnnotations
       .flatMap(_.filter { a => a.isInstanceOf[Config] || a.isInstanceOf[ListConfig] } )
-    val parameters = m.getParameterTypes.tail.zip(annotations).map {
+    val parameters = m.getParameterTypes.drop(Plugin.StaticParameters).zip(annotations).map {
       case (t, c: Config) =>
         PluginConfigParameterMeta(c.key, t)
       case (t, c: ListConfig) =>
@@ -33,7 +36,7 @@ case class PluginMeta(configs: Seq[PluginConfigMeta])
 object PluginMeta {
 
   private def allParametersAreAnnotated(m: Method): Boolean =
-    m.getParameterAnnotations.filter(_.exists { a => a.isInstanceOf[Config] || a.isInstanceOf[ListConfig] }).size == m.getParameterTypes.size - 1
+    m.getParameterAnnotations.filter(_.exists { a => a.isInstanceOf[Config] || a.isInstanceOf[ListConfig] }).size == m.getParameterTypes.size - Plugin.StaticParameters
 
   def apply(className: String): PluginMeta = {
     val clazz = Class.forName(className)
@@ -42,6 +45,7 @@ object PluginMeta {
       .filter(_.getReturnType == classOf[Props])
       .filter { m => Modifier.isStatic(m.getModifiers) }
       .filter(_.getParameterTypes()(0) == classOf[String])
+      .filter(_.getParameterTypes()(1) == classOf[ActorRef])
       .filter(_.getAnnotations.exists(_.isInstanceOf[PluginConstructor]))
       .filter(allParametersAreAnnotated)
       .map(PluginConfigMeta.apply)
@@ -63,12 +67,15 @@ case class ConfiguredPlugin(name: String, method: Method,
     args.collect {
       case Right(deps) => deps.names.map((name, _))
     } flatten
+
 }
 
 class PluginLoaderActor(config: TypesafeConfig) extends Actor {
   import scala.collection.JavaConverters._
   import PluginLoaderActor._
   import context.dispatcher
+  import UniverseProxyActor.SetUniverse
+
   implicit val selectionTimeout = Timeout(1, java.util.concurrent.TimeUnit.SECONDS)
 
   val StringType = classOf[String]
@@ -76,6 +83,8 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
   val ActorRefType = classOf[ActorRef]
   val SeqType = classOf[Seq[_]]
   val ListType = classOf[java.util.List[_]]
+
+  val universeProxy = context.actorOf(UniverseProxyActor.props(), "universe-proxy")
 
   private def listType(t: Class[_], list: java.util.List[_ <: AnyRef]): Object = t match {
     case SeqType => list.asScala.toSeq
@@ -104,7 +113,10 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
         }
       }
     }
-    ConfiguredPlugin(name, c.method, Left[Object, Dependencies](name) +: args)
+    val staticArgs =
+      Seq(Left[Object, Dependencies](name), Left[Object, Dependencies](universeProxy))
+    ConfiguredPlugin(name, c.method,
+      staticArgs ++ args)
   }
 
   def configurePlugin(name: String, config: TypesafeConfig, meta: PluginMeta): ConfiguredPlugin = {
@@ -116,7 +128,7 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
       }
     }
     println(s"Valid configurations: ${meta.configs}")
-    throw new Exception("No valid plugin constructor found")
+    throw new Exception(s"No valid plugin constructor found for $name")
   }
 
   def invokePlugins(plugins: List[ConfiguredPlugin]) {
@@ -133,10 +145,13 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
           case e => println(s"Failed to start plugin ${head.name} due to $e")
         }
         for(a <- args) {
-          println(a)
           val props = head.method.invoke(null, a: _*).asInstanceOf[Props]
-          context.actorOf(props, head.name)
+          val actor = context.actorOf(props, head.name)
           println(s"Started plugin ${head.name}")
+          if(head.name == "universe") {
+            println("Universe started, updating proxy")
+            universeProxy ! SetUniverse(actor)
+          }
           invokePlugins(tail)
         }
       case _ => Nil
@@ -161,9 +176,13 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
 
       val pluginEdges = plugins.flatMap(_.dependencyEdges)
 
-      val sortedPlugins = tsort(pluginEdges).map(pluginMap).toSeq.reverse
+      println(s"Plugin dependencies: $pluginEdges")
 
-      invokePlugins(sortedPlugins.toList)
+      println("Resolving dependency order ...")
+      val sortedPlugins = tsort(pluginEdges).map(pluginMap).toSeq.reverse
+      val allPlugins = sortedPlugins ++ (plugins.toSet &~ sortedPlugins.toSet).toSeq
+      println(s"Loading plugins in dependency order: ${allPlugins.map(_.name)}")
+      invokePlugins(allPlugins.toList)
   }
 }
 
@@ -190,4 +209,27 @@ object PluginLoaderActor {
   }
 
   def props(config: TypesafeConfig) = Props(classOf[PluginLoaderActor], config)
+}
+
+class UniverseProxyActor extends Actor with Stash {
+  import UniverseProxyActor.SetUniverse
+
+  def receive = {
+    case SetUniverse(universe) =>
+      unstashAll()
+      context.become(ready(universe))
+    case _ =>
+      stash()
+  }
+
+  def ready(universe: ActorRef): Receive = {
+    case o =>
+      universe.forward(o)
+  }
+
+}
+
+object UniverseProxyActor {
+  case class SetUniverse(universe: ActorRef)
+  def props() = Props(classOf[UniverseProxyActor])
 }

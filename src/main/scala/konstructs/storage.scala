@@ -39,7 +39,8 @@ trait BinaryStorage {
 
 object BinaryStorageActor {
   @PluginConstructor
-  def props(name: String, @Config(key = "directory") directory: File) = Props(classOf[BinaryStorageActor], name, directory)
+  def props(name: String, universe: ActorRef,
+    @Config(key = "directory") directory: File) = Props(classOf[BinaryStorageActor], name, directory)
 }
 
 class JsonStorageActor(name: String, directory: File) extends Actor {
@@ -60,7 +61,8 @@ class JsonStorageActor(name: String, directory: File) extends Actor {
 
 object JsonStorageActor {
   @PluginConstructor
-  def props(name: String, @Config(key = "directory") directory: File) = Props(classOf[JsonStorageActor], name, directory)
+  def props(name: String, universe: ActorRef,
+    @Config(key = "directory") directory: File) = Props(classOf[JsonStorageActor], name, directory)
 }
 
 object JsonStorage {
