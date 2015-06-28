@@ -41,5 +41,5 @@ class Server(name: String, universe: ActorRef) extends Actor with ActorLogging {
 
 object Server {
   @PluginConstructor
-  def props(name: String, @Config(key = "universe") universe: ActorRef) = Props(classOf[Server], name, universe)
+  def props(name: String, universe: ActorRef) = Props(classOf[Server], name, universe)
 }

@@ -60,7 +60,7 @@ object UniverseActor {
   case class CreatePlayer(nick: String, password: String)
 
   @PluginConstructor
-  def props(name: String,
+  def props(name: String, notUsed: ActorRef,
     @Config(key = "binary-storage") binaryStorage: ActorRef,
     @Config(key = "json-storage") jsonStorage: ActorRef,
     @ListConfig(key = "chat-filters", elementType = classOf[ActorRef]) chatFilters: Seq[ActorRef],
@@ -69,14 +69,14 @@ object UniverseActor {
   = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, chatFilters, blockListeners)
 
   @PluginConstructor
-  def props(name: String,
+  def props(name: String, notUsed: ActorRef,
     @Config(key = "binary-storage") binaryStorage: ActorRef,
     @Config(key = "json-storage") jsonStorage: ActorRef,
     @ListConfig(key = "chat-filters", elementType = classOf[ActorRef]) chatFilters: Seq[ActorRef]): Props
   = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, chatFilters, Seq())
 
   @PluginConstructor
-  def props(name: String,
+  def props(name: String, notUsed: ActorRef,
     @Config(key = "binary-storage") binaryStorage: ActorRef,
     @Config(key = "json-storage") jsonStorage: ActorRef): Props
   = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, Seq(), Seq())
