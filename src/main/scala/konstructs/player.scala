@@ -7,6 +7,8 @@ import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 
 import spray.json._
 
+import konstructs.api._
+
 case class Item(amount: Int, w: Int)
 
 case class Inventory(items: Map[String, Item])
@@ -206,6 +208,10 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       storeJson(nick, data.toJson)
     case l: PlayerLogout =>
       client ! l
+    case s: Say =>
+      universe ! s
+    case s: Said =>
+      client.forward(s)
     case IncreaseChunks(amount) =>
       maxChunksToSend += amount
       sendChunks()

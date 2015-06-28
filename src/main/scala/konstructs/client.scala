@@ -1,11 +1,12 @@
 package konstructs.protocol
 
-import konstructs.{ Item, PlayerActor, UniverseActor, DbActor }
-
 import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 import akka.io.{ Tcp, TcpPipelineHandler }
 import akka.util.ByteString
 import TcpPipelineHandler.{ Init, WithinActorContext }
+
+import konstructs.{ Item, PlayerActor, UniverseActor, DbActor }
+import konstructs.api.{ Say, Said }
 
 class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef) extends Actor with Stash {
   import DbActor.BlockList
@@ -43,6 +44,9 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     } else if(command.startsWith("M,")) {
       val ints = readData(_.toInt, command.drop(2))
       player.actor ! Action(konstructs.Position(ints(0), ints(1), ints(2)), ints(3))
+    } else if(command.startsWith("T,")) {
+      val message = command.substring(2)
+      player.actor ! Say(message)
     }
   }
 
@@ -88,6 +92,8 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       sendPlayerNick(pipe, pid, nick)
     case PlayerLogout(pid) =>
       sendPlayerLogout(pipe, pid)
+    case Said(text) =>
+      sendSaid(pipe, text)
     case _: Tcp.ConnectionClosed =>
       player.actor ! PoisonPill
       context.stop(self)
@@ -95,6 +101,10 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
 
   def sendPlayerNick(pipe: ActorRef, pid: Int, nick: String) {
     send(pipe, s"N,$pid,$nick")
+  }
+
+  def sendSaid(pipe: ActorRef, msg: String) {
+    send(pipe, s"T,$msg")
   }
 
   def sendPlayerLogout(pipe: ActorRef, pid: Int) {
