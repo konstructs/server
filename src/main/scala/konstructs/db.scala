@@ -2,6 +2,8 @@ package konstructs
 
 import akka.actor.{ Actor, ActorRef, Props }
 
+import konstructs.api._
+
 object Db {
   val ChunkSize = 32
   val ShardSize = 8
@@ -50,7 +52,7 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
       getShardActor(ShardPosition(b.pos)) forward b
     case b: DestroyBlock =>
       getShardActor(ShardPosition(b.pos)) forward b
-    case b: ShardActor.BlockUpdate =>
+    case b: BlockUpdate =>
       universe ! b
   }
 }
@@ -58,8 +60,6 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
 object DbActor {
   case class SendBlocks(chunk: ChunkPosition, version: Option[Int])
   case class BlockList(chunk: ChunkPosition, blocks: Array[Byte])
-  case class PutBlock(pos: Position, w: Int)
-  case class DestroyBlock(pos: Position)
 
   def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef) = Props(classOf[DbActor], universe, generator, binaryStorage)
 }

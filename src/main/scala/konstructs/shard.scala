@@ -2,6 +2,8 @@ package konstructs
 
 import akka.actor.{ Actor, Stash, ActorRef, Props }
 
+import konstructs.api._
+
 class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef, chunkGenerator: ActorRef)
     extends Actor with Stash with utils.Scheduled with BinaryStorage {
   import ShardActor._
@@ -111,7 +113,6 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
 
 object ShardActor {
   case object StoreChunks
-  case class BlockUpdate(pos: Position, oldW: Int, newW: Int)
 
   def index(c: ChunkPosition, p: Position): Int = {
     val x = p.x - c.p * Db.ChunkSize
