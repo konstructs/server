@@ -29,7 +29,6 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
 
   def handle(player: PlayerInfo, data: ByteString) = {
     val command = data.decodeString("ascii")
-    println(s"RECV: |$command|")
     if(command.startsWith("P,")) {
       val floats = readData(_.toFloat, command.drop(2))
       player.actor ! Position(floats(0), floats(1), floats(2), floats(3), floats(4))
