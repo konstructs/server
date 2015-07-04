@@ -69,6 +69,14 @@ object UniverseActor {
   = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, chatFilters, blockListeners)
 
   @PluginConstructor
+  def propsWithOnlyBlocks(name: String, notUsed: ActorRef,
+    @Config(key = "binary-storage") binaryStorage: ActorRef,
+    @Config(key = "json-storage") jsonStorage: ActorRef,
+    @ListConfig(key = "block-listeners", elementType = classOf[ActorRef]) blockListeners: Seq[ActorRef]
+  ): Props
+  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, Seq(), blockListeners)
+
+  @PluginConstructor
   def props(name: String, notUsed: ActorRef,
     @Config(key = "binary-storage") binaryStorage: ActorRef,
     @Config(key = "json-storage") jsonStorage: ActorRef,
