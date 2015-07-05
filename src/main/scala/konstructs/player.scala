@@ -97,29 +97,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   val random = new scala.util.Random
 
   def generateTree(pos: Position) {
-    val l = LSystem(Seq(
-      DeterministicProductionRule("cc", "c[&[c][-c][--c][+c]]c[&[c][-c][--c][+c]]"),
-      DeterministicProductionRule("a","aa"),
-      ProbabilisticProductionRule("c",
-        Seq(
-          ProbalisticProduction(20, "c[&[d]]"),
-          ProbalisticProduction(20, "c[&[+d]]"),
-          ProbalisticProduction(20, "c[&[-d]]"),
-          ProbalisticProduction(20, "c[&[--d]]"),
-          ProbalisticProduction(20, "cc")
-        )),
-      ProbabilisticProductionRule("aa",
-        Seq(
-          ProbalisticProduction(40, "a[&[c][-c][--c][+c]]"),
-          ProbalisticProduction(60, "bbba")
-        )
-      )
-    ))
-    val m = BlockMachine(Map('a'-> 5, 'b' -> 5, 'c' -> 15, 'd' -> 15))
-    val tree = l.iterate("a[&[c][-c][--c][+c]]c", 4 + random.nextInt(5))
-    val blocks = m.interpret(tree, pos.copy(y = pos.y - 1))
-    for(b <- blocks)
-      db tell(b, db)
+    db ! PutBlock(pos, 37)
   }
 
   val material = Set(2,3,4,5,6,8,10,11,12,13).toVector
