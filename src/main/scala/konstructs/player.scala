@@ -185,8 +185,9 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     case p: protocol.Position =>
       update(p)
       universe ! PlayerMovement(pid, data.position)
-    case b: protocol.SendBlock =>
-      client ! b
+    case b: BlockUpdate =>
+      val chunk = ChunkPosition(b.pos)
+      client ! protocol.SendBlock(chunk.p, chunk.q, b.pos.x, b.pos.y, b.pos.z, b.newW)
     case SendInventory =>
       sender ! InventoryUpdate(data.inventory.items)
       sender ! InventoryActiveUpdate(data.active)
