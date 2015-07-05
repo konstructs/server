@@ -119,7 +119,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     val tree = l.iterate("a[&[c][-c][--c][+c]]c", 4 + random.nextInt(5))
     val blocks = m.interpret(tree, pos.copy(y = pos.y - 1))
     for(b <- blocks)
-      db tell(PutBlock(b._1, b._2), db)
+      db tell(b, db)
   }
 
   val material = Set(2,3,4,5,6,8,10,11,12,13).toVector

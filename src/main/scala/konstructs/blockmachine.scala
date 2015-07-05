@@ -1,15 +1,27 @@
 package konstructs
 
 import scala.collection.mutable
+import scala.collection.JavaConverters._
+
+import konstructs.api.PutBlock
 
 case class BlockMachine(alphabet: Map[Char, Int]) {
   import BlockMachine._
 
+  def interpretJava(program: String, initPos: Position, initDir: Matrix):
+      java.util.Collection[PutBlock] =
+    interpret(program, initPos, initDir).asJavaCollection
+
+  def interpretJava(program: String, initPos: Position):
+      java.util.Collection[PutBlock] =
+    interpretJava(program, initPos, Upwards)
+
+
   def interpret(program: String, initPos: Position, initDir: Matrix = Upwards):
-      Seq[(Position, Int)] = {
+      Seq[PutBlock] = {
 
     val stack: mutable.Stack[(Position, Matrix)] = mutable.Stack()
-    val blocks: mutable.ListBuffer[(Position, Int)] = mutable.ListBuffer()
+    val blocks: mutable.ListBuffer[PutBlock] = mutable.ListBuffer()
     var pos = initPos
     var dir = initDir
 
@@ -35,7 +47,7 @@ case class BlockMachine(alphabet: Map[Char, Int]) {
           dir = oldDir
         case a =>
           pos = pos + dir.adg
-          blocks += ((pos, alphabet(a)))
+          blocks += (PutBlock(pos, alphabet(a)))
       }
     }
     blocks.toSeq
@@ -65,4 +77,7 @@ object BlockMachine {
   val RollRight = Matrix(1,  0,  0,
                          0,  0,  1,
                          0, -1,  0)
+
+  def fromJavaMap(alphabet: java.util.Map[Char, Int]) =
+    apply(Map(alphabet.asScala.toSeq:_*))
 }
