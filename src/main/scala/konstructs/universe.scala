@@ -38,10 +38,7 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
     case l: PlayerActor.PlayerLogout =>
       allPlayers(except = Some(l.pid)).foreach(_ ! l)
     case b: BlockUpdate =>
-      val chunk = ChunkPosition(b.pos)
-      allPlayers() ++ blockListeners foreach { p =>
-        p ! protocol.SendBlock(chunk.p, chunk.q, b.pos.x, b.pos.y, b.pos.z, b.newW)
-      }
+      allPlayers() ++ blockListeners foreach(_ ! b)
     case s: Say =>
       val filters = chatFilters :+ self
       filters.head.forward(SayFilter(filters.tail, s))
