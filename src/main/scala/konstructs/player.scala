@@ -102,13 +102,18 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       DeterministicProductionRule("a","aa"),
       ProbabilisticProductionRule("c",
         Seq(
-          (20, "c[&[d]]"),
-          (20, "c[&[+d]]"),
-          (20, "c[&[-d]]"),
-          (20, "c[&[--d]]"),
-          (20, "cc")
+          ProbalisticProduction(20, "c[&[d]]"),
+          ProbalisticProduction(20, "c[&[+d]]"),
+          ProbalisticProduction(20, "c[&[-d]]"),
+          ProbalisticProduction(20, "c[&[--d]]"),
+          ProbalisticProduction(20, "cc")
         )),
-      ProbabilisticProductionRule("aa", Seq((40, "a[&[c][-c][--c][+c]]"), (60, "bbba")))
+      ProbabilisticProductionRule("aa",
+        Seq(
+          ProbalisticProduction(40, "a[&[c][-c][--c][+c]]"),
+          ProbalisticProduction(60, "bbba")
+        )
+      )
     ))
     val m = BlockMachine(Map('a'-> 5, 'b' -> 5, 'c' -> 15, 'd' -> 15))
     val tree = l.iterate("a[&[c][-c][--c][+c]]c", 4 + random.nextInt(5))

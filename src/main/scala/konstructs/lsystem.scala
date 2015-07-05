@@ -9,17 +9,19 @@ trait ProductionRule {
   def successor: String
 }
 
-case class ProbabilisticProductionRule(predecessor: String, successors: Seq[(Int, String)]) extends ProductionRule {
-  assert(successors.map(_._1).sum == 100, "Rules need to sum up to 100")
+case class ProbalisticProduction(probability: Int, successor: String)
+
+case class ProbabilisticProductionRule(predecessor: String, successors: Seq[ProbalisticProduction]) extends ProductionRule {
+  assert(successors.map(_.probability).sum == 100, "Rules need to sum up to 100")
 
   private val rand = new Random
 
-  private def select(p: Int, current: Int, successors: Seq[(Int, String)]): String = {
+  private def select(p: Int, current: Int, successors: Seq[ProbalisticProduction]): String = {
     val h = successors.head
-    if(p < h._1 + current) {
-      h._2
+    if(p < h.probability + current) {
+      h.successor
     } else {
-      select(p, current + h._1, successors.tail)
+      select(p, current + h.probability, successors.tail)
     }
   }
 
@@ -27,6 +29,12 @@ case class ProbabilisticProductionRule(predecessor: String, successors: Seq[(Int
     val p = rand.nextInt(100)
     select(p, 0, successors)
   }
+}
+
+object ProbabilisticProductionRule {
+  def fromList(predecessor: String,
+    successors: java.util.List[ProbalisticProduction]): ProbabilisticProductionRule =
+    apply(predecessor, successors.asScala.toSeq)
 }
 
 case class DeterministicProductionRule(predecessor: String, successor: String) extends ProductionRule
