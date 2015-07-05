@@ -78,6 +78,8 @@ object BlockMachine {
                          0,  0,  1,
                          0, -1,  0)
 
-  def fromJavaMap(alphabet: java.util.Map[Char, Int]) =
-    apply(Map(alphabet.asScala.toSeq:_*))
+  def fromJavaMap(alphabet: java.util.Map[java.lang.Character, java.lang.Integer]) =
+    apply(Map(alphabet.asScala.toSeq.map({
+      case (k, v) => (k.toChar, v.toInt)
+    }) :_*))
 }
