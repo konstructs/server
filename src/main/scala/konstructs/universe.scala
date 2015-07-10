@@ -50,6 +50,8 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       db.forward(p)
     case d: DestroyBlock =>
       db.forward(d)
+    case g: GetBlock =>
+      db.forward(g)
   }
 }
 

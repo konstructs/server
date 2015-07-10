@@ -47,6 +47,16 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     }
   }
 
+  def readChunk(pos: Position)(read: Byte => Unit) = {
+    val chunk = ChunkPosition(pos)
+    loadChunk(chunk).map { compressedBlocks =>
+      val size = compress.inflate(compressedBlocks, blocks)
+      assert(size == blocks.size)
+      val i = index(chunk, pos)
+      read(blocks(i))
+    }
+  }
+
   def updateChunk(pos: Position)(update: Byte => Byte) {
     val chunk = ChunkPosition(pos)
     loadChunk(chunk).map { compressedBlocks =>
@@ -78,6 +88,11 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
           s ! ReceiveBlock(w.toByte)
           old
         }
+      }
+    case GetBlock(p) =>
+      val s = sender
+      readChunk(p) { block =>
+        s ! BlockPosition(p, block.toInt)
       }
     case DestroyBlock(p) =>
       val s = sender

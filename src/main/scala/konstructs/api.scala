@@ -14,5 +14,7 @@ package api {
   /* Messages for world interaction */
   case class PutBlock(pos: Position, w: Int)
   case class DestroyBlock(pos: Position)
+  case class GetBlock(pos: Position)
+  case class BlockPosition(pos: Position, w: Int)
   case class BlockUpdate(pos: Position, oldW: Int, newW: Int)
 }
