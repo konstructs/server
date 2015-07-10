@@ -60,7 +60,7 @@ class JsonStorageActor(name: String, directory: File) extends Actor {
       val data = load(directory, id, ns, Suffix).flatMap { d =>
         Try(parser.parse(new String(d))).toOption
       }
-      sender ! GsonLoaded(id, data.getOrElse(null))
+      sender ! GsonLoaded(id, data)
 
   }
 }

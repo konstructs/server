@@ -31,5 +31,5 @@ package api {
   case class JsonLoaded(id: String, data: Option[JsValue])
   case class StoreGson(id: String, ns: String, data: JsonElement)
   case class LoadGson(id: String, ns: String)
-  case class GsonLoaded(id: String, data: JsonElement)
+  case class GsonLoaded(id: String, data: Option[JsonElement])
 }
