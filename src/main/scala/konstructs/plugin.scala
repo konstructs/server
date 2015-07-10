@@ -6,7 +6,7 @@ import scala.concurrent.Future
 import scala.collection.JavaConverters._
 import akka.util.Timeout
 import akka.actor.{ Props, ActorSystem, ActorRef, Actor, ActorSelection, Stash }
-import com.typesafe.config.{ Config => TypesafeConfig, ConfigException }
+import com.typesafe.config.{ Config => TypesafeConfig, ConfigException, ConfigValueType }
 
 object Plugin {
   val StaticParameters = 2
@@ -86,28 +86,40 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
 
   val universeProxy = context.actorOf(UniverseProxyActor.props(), "universe-proxy")
 
-  private def listType(t: Class[_], list: java.util.List[_ <: AnyRef]): Object = t match {
-    case SeqType => list.asScala.toSeq
-    case ListType => list
-    case ActorRefType => list.asScala.head
+  private def listType(t: Class[_], seq: Seq[_ <: AnyRef]): Object = t match {
+    case SeqType => seq
+    case ListType => seq.toList.asJava
+    case ActorRefType => seq.head
   }
 
+  private def keepString(s: String, config: TypesafeConfig): String = config.getString(s)
+
+  private def toFile(s: String, config: TypesafeConfig): File = new File(config.getString(s))
+
+  private def configToSeq[T](get: (String, TypesafeConfig) => T)(config: TypesafeConfig): Seq[T] =
+    config.entrySet.asScala.filterNot { e =>
+      val v = e.getValue
+      v.valueType == ConfigValueType.NULL
+    }.map { e =>
+      val k = e.getKey
+      get(k, config)
+    }.toSeq
 
   def configurePlugin(name: String, config: TypesafeConfig, c: PluginConfigMeta): ConfiguredPlugin = {
     val args: Seq[Either[Object, Dependencies]] = c.parameters.map { p =>
       p.configType match {
         case StringType => if(p.listType.isDefined) {
-          Left(listType(p.listType.get, config.getStringList(p.name)))
+          Left(listType(p.listType.get, configToSeq(keepString)(config.getConfig(p.name))))
         } else {
           Left(config.getString(p.name))
         }
         case FileType => if(p.listType.isDefined) {
-          Left(listType(p.listType.get, config.getStringList(p.name).asScala.map(new File(_)).asJava))
+          Left(listType(p.listType.get, configToSeq(toFile)(config.getConfig(p.name))))
         } else {
-          Left(new File(config.getString(p.name)))
+          Left(toFile(p.name, config))
         }
         case ActorRefType => if(p.listType.isDefined) {
-          Right(Dependencies(config.getStringList(p.name).asScala.toSeq, p.listType.get))
+          Right(Dependencies(configToSeq(keepString)(config.getConfig(p.name)), p.listType.get))
         } else {
           Right(Dependencies(config.getString(p.name)))
         }
@@ -138,7 +150,7 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
           case Right(d) =>
             Future.sequence(d.names.map { dep =>
               ActorSelection(self, dep).resolveOne
-            }).map { as => listType(d.t, as.toList.asJava) }
+            }).map { as => listType(d.t, as) }
           case Left(obj) => Future.successful(obj)
         })
         args.onFailure {
