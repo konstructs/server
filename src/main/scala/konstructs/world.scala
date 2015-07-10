@@ -3,6 +3,7 @@ package konstructs
 import scala.util.Random
 import akka.actor.{ Actor, ActorRef, Props, Stash }
 import spray.json._
+import konstructs.api._
 
 case class FlatWorld(sizeX: Int, sizeZ: Int)
 
@@ -12,9 +13,7 @@ class FlatWorldActor(name: String, end: Position, val jsonStorage: ActorRef,
   import World._
   import GeneratorActor.Generated
   import Db.ChunkSize
-  import JsonStorage._
   import DefaultJsonProtocol._
-  import BinaryStorage._
 
   implicit val flatWorldFormat = jsonFormat2(FlatWorld)
 

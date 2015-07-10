@@ -20,7 +20,6 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   import PlayerActor._
   import Db.ChunkSize
   import DefaultJsonProtocol._
-  import JsonStorage._
 
   val ns = "players"
 

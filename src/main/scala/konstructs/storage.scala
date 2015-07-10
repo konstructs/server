@@ -1,14 +1,15 @@
 package konstructs
 
 import java.io.File
-import scala.util.Try
+import scala.util.{ Try, Success, Failure }
 import akka.actor.{ Actor, ActorRef, Props }
 import spray.json._
 import org.apache.commons.io.FileUtils
 import konstructs.plugin.{ PluginConstructor, Config }
+import com.google.gson.{ Gson, JsonElement, JsonParser }
 
 class BinaryStorageActor(name: String, directory: File) extends Actor {
-  import BinaryStorage._
+  import konstructs.api.{ StoreBinary, LoadBinary, BinaryLoaded }
   import Storage._
 
   val Suffix = "binary"
@@ -21,14 +22,8 @@ class BinaryStorageActor(name: String, directory: File) extends Actor {
   }
 }
 
-object BinaryStorage {
-  case class StoreBinary(id: String, ns: String, data: Array[Byte])
-  case class LoadBinary(id: String, ns: String)
-  case class BinaryLoaded(id: String, data: Option[Array[Byte]])
-}
-
 trait BinaryStorage {
-  import BinaryStorage.{ StoreBinary, LoadBinary }
+  import konstructs.api.{ StoreBinary, LoadBinary }
 
   def ns: String
   def binaryStorage: ActorRef
@@ -44,9 +39,12 @@ object BinaryStorageActor {
 }
 
 class JsonStorageActor(name: String, directory: File) extends Actor {
-  import JsonStorage.{ StoreJson, LoadJson, JsonLoaded }
+  import konstructs.api.{ StoreJson, LoadJson, JsonLoaded, StoreGson, LoadGson, GsonLoaded }
   import Storage._
+
   private val Suffix = "json"
+  private val gson = new Gson()
+  private val parser = new JsonParser()
 
   def receive = {
     case StoreJson(id, ns, data) =>
@@ -56,6 +54,14 @@ class JsonStorageActor(name: String, directory: File) extends Actor {
         Try((new String(d)).parseJson).toOption
       }
       sender ! JsonLoaded(id, data)
+    case StoreGson(id, ns, data) =>
+      write(directory, id, ns, Suffix, gson.toJson(data).getBytes())
+    case LoadGson(id, ns) =>
+      val data = load(directory, id, ns, Suffix).flatMap { d =>
+        Try(parser.parse(new String(d))).toOption
+      }
+      sender ! GsonLoaded(id, data.getOrElse(null))
+
   }
 }
 
@@ -65,20 +71,15 @@ object JsonStorageActor {
     @Config(key = "directory") directory: File) = Props(classOf[JsonStorageActor], name, directory)
 }
 
-object JsonStorage {
-  case class StoreJson(id: String, ns: String, data: JsValue)
-  case class LoadJson(id: String, ns: String)
-  case class JsonLoaded(id: String, data: Option[JsValue])
-}
-
 trait JsonStorage {
-  import JsonStorage.{ StoreJson, LoadJson}
+  import konstructs.api.{ StoreJson, LoadJson }
 
   def ns: String
   def jsonStorage: ActorRef
 
   def loadJson(id: String)(implicit sender: ActorRef) = jsonStorage ! LoadJson(id, ns)
   def storeJson(id: String, data: JsValue)(implicit sender: ActorRef) = jsonStorage ! StoreJson(id, ns, data)
+
 }
 
 object Storage {
