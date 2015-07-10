@@ -52,6 +52,8 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
       getShardActor(ShardPosition(b.pos)) forward b
     case b: DestroyBlock =>
       getShardActor(ShardPosition(b.pos)) forward b
+    case g: GetBlock =>
+      getShardActor(ShardPosition(g.pos)) forward g
     case b: BlockUpdate =>
       universe ! b
   }
