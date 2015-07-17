@@ -11,7 +11,7 @@ class BinaryStorageActor(name: String, directory: File) extends Actor {
   import BinaryStorage._
   import Storage._
 
-  val Suffix = ".binary"
+  val Suffix = "binary"
 
   def receive = {
     case StoreBinary(id, ns, data) =>
@@ -46,7 +46,7 @@ object BinaryStorageActor {
 class JsonStorageActor(name: String, directory: File) extends Actor {
   import JsonStorage.{ StoreJson, LoadJson, JsonLoaded }
   import Storage._
-  private val Suffix = ".json"
+  private val Suffix = "json"
 
   def receive = {
     case StoreJson(id, ns, data) =>
