@@ -7,6 +7,8 @@ import konstructs.api._
 object Db {
   val ChunkSize = 32
   val ShardSize = 8
+  val Header = 2
+  val Version = 1.toByte
 }
 
 case class ShardPosition(m: Int, n: Int, o: Int)

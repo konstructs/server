@@ -86,12 +86,16 @@ object OpaqueFaces {
   }
 }
 
-case class ChunkData(blocks: Array[Byte], faces: OpaqueFaces) {
+case class ChunkData(data: Array[Byte]) {
   import ChunkData._
+  import Db._
+
+  val faces = OpaqueFaces(data(1))
+  val version = data(0)
 
   def unpackTo(blockBuffer: Array[Byte]) {
-    val size = compress.inflate(blocks, blockBuffer)
-    assert(size == blockBuffer.size)
+    val size = compress.inflate(data, blockBuffer, Header, data.size - Header)
+    assert(size == ChunkSize * ChunkSize * ChunkSize)
   }
 
   def block(c: ChunkPosition, p: Position, blockBuffer: Array[Byte]): Byte = {
@@ -124,45 +128,13 @@ case class ChunkData(blocks: Array[Byte], faces: OpaqueFaces) {
 }
 
 object ChunkData {
-  val ChunkEnd = Db.ChunkSize - 1
+  import Db._
 
   def apply(blocks: Array[Byte], buffer: Array[Byte]): ChunkData = {
-    val compressed = compress.deflate(blocks, buffer)
-    apply(compressed, OpaqueFaces(blocks))
-  }
-
-  def apply(blocks: Array[Byte], faces: Byte) {
-    apply(blocks, OpaqueFaces(faces))
-  }
-  /*
-   * Removes all blocks which are fully surrounded by opaque blocks
-   * except all blocks on the edges. The blocks on the edges are
-   * adjacent to blocks in other chunk so it is not efficient to
-   * query for them.
-   */
-  def removeInvisibleBlocks(in: Array[Byte], out: Array[Byte]) {
-    for(
-      x <- 0 until Db.ChunkSize;
-      y <- 0 until Db.ChunkSize;
-      z <- 0 until Db.ChunkSize
-    ) {
-      val i = index(x,y,z)
-      if(x != 0 && x != ChunkEnd && y != 0 && y != ChunkEnd && z != 0 && z != ChunkEnd) {
-        val f1 = isOpaque(in(index(x - 1, y, z)))
-        val f2 = isOpaque(in(index(x + 1, y, z)))
-        val f3 = isOpaque(in(index(x, y - 1, z)))
-        val f4 = isOpaque(in(index(x, y + 1, z)))
-        val f5 = isOpaque(in(index(x, y, z - 1)))
-        val f6 = isOpaque(in(index(x, y, z + 1)))
-        if(f1 && f2 && f3 && f4 && f5 && f6) {
-          out(i) = 0.toByte
-        } else {
-          out(i) = in(i)
-        }
-      } else {
-        out(i) = in(i)
-      }
-    }
+    val compressed = compress.deflate(blocks, buffer, Header)
+    compressed(0) = Db.Version
+    compressed(1) = OpaqueFaces(blocks).toByte
+    apply(compressed)
   }
 
   def isOpaque(w: Byte): Boolean = if(w == 0) { false } else { true }
@@ -187,12 +159,11 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
   import DbActor._
   import PlayerActor.ReceiveBlock
   import Db._
-  val Blocks = "blocks"
-  val Faces = "faces"
+
   val ns = "chunks"
 
   private val blockBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
-  private val compressionBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
+  private val compressionBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize + Header)
   private val chunks = new Array[Option[ChunkData]](ShardSize * ShardSize * ShardSize)
 
   private var dirty: Set[ChunkPosition] = Set()
@@ -215,7 +186,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         stash()
       blocks
     } else {
-      loadBinaries(chunkId(chunk), Set(Blocks, Faces))
+      loadBinary(chunkId(chunk))
       chunks(i) = None
       stash()
       None
@@ -272,13 +243,11 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         db ! BlockUpdate(p, old.toInt, 0)
         0
       }
-    case BinariesLoaded(id, data) =>
+    case BinaryLoaded(id, dataOption) =>
       val chunk = chunkFromId(id)
-      val blocksOption = data.getOrElse(Blocks, None)
-      val facesOption = data.getOrElse(Faces, None)
-        (blocksOption, facesOption) match {
-        case (Some(blocks), Some(faces)) =>
-          chunks(index(chunk)) = Some(ChunkData(blocks, OpaqueFaces(faces(0))))
+      dataOption match {
+        case Some(data) =>
+          chunks(index(chunk)) = Some(ChunkData(data))
           unstashAll()
         case _ =>
           chunkGenerator ! Generate(chunk)
@@ -290,7 +259,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     case StoreChunks =>
       dirty.map { chunk =>
         chunks(index(chunk)).map { c =>
-          storeBinaries(chunkId(chunk), Map(Blocks -> c.blocks, Faces -> Array(c.faces.toByte)))
+          storeBinary(chunkId(chunk), c.data)
         }
       }
       dirty = Set()
