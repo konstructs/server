@@ -1,8 +1,155 @@
 package konstructs
 
+import scala.collection.mutable
+
 import akka.actor.{ Actor, Stash, ActorRef, Props }
 
 import konstructs.api._
+
+case class OpaqueFaces(pn: Boolean, pp: Boolean, qn: Boolean, qp: Boolean, kn: Boolean, kp: Boolean) {
+  import OpaqueFaces._
+  def toByte = {
+    var v = 0
+    if(pn) {
+      v += PN
+    }
+    if(pp) {
+      v += PP
+    }
+    if(qn) {
+      v += QN
+    }
+    if(qp) {
+      v += QP
+    }
+    if(kn) {
+      v += KN
+    }
+    if(kp) {
+      v += KP
+    }
+    v.toByte
+  }
+}
+
+object OpaqueFaces {
+  import ChunkData._
+  val PN = 0x01
+  val PP = 0x02
+  val QN = 0x04
+  val QP = 0x08
+  val KN = 0x10
+  val KP = 0x20
+
+  def apply(blockBuffer: Array[Byte]): OpaqueFaces = {
+    val pn = !(for(
+      y <- 0 until Db.ChunkSize;
+      z <- 0 until Db.ChunkSize) yield {
+      val x = 0
+      isOpaque(blockBuffer(index(x, y, z)))
+    }).exists(!_)
+    val pp = !(for(
+      y <- 0 until Db.ChunkSize;
+      z <- 0 until Db.ChunkSize) yield {
+      val x = Db.ChunkSize - 1
+      isOpaque(blockBuffer(index(x, y, z)))
+    }).exists(!_)
+    val kn = !(for(
+      x <- 0 until Db.ChunkSize;
+      z <- 0 until Db.ChunkSize) yield {
+      val y = 0
+      isOpaque(blockBuffer(index(x, y, z)))
+    }).exists(!_)
+    val kp = !(for(
+      x <- 0 until Db.ChunkSize;
+      z <- 0 until Db.ChunkSize) yield {
+      val y = Db.ChunkSize - 1
+      isOpaque(blockBuffer(index(x, y, z)))
+    }).exists(!_)
+    val qn = !(for(
+      x <- 0 until Db.ChunkSize;
+      y <- 0 until Db.ChunkSize) yield {
+      val z = 0
+      isOpaque(blockBuffer(index(x, y, z)))
+    }).exists(!_)
+    val qp = !(for(
+      x <- 0 until Db.ChunkSize;
+      y <- 0 until Db.ChunkSize) yield {
+      val z = Db.ChunkSize - 1
+      isOpaque(blockBuffer(index(x, y, z)))
+    }).exists(!_)
+    apply(pn, pp, qn, qp, kn, kp)
+  }
+
+  def apply(data: Byte): OpaqueFaces = {
+    apply((data & PN) > 0, (data & PP) > 0, (data & QN) > 0, (data & QP) > 0, (data & KN) > 0, (data & KP) > 0)
+  }
+}
+
+case class ChunkData(data: Array[Byte]) {
+  import ChunkData._
+  import Db._
+
+  val faces = OpaqueFaces(data(1))
+  val version = data(0)
+
+  def unpackTo(blockBuffer: Array[Byte]) {
+    val size = compress.inflate(data, blockBuffer, Header, data.size - Header)
+    assert(size == ChunkSize * ChunkSize * ChunkSize)
+  }
+
+  def block(c: ChunkPosition, p: Position, blockBuffer: Array[Byte]): Byte = {
+    unpackTo(blockBuffer)
+    blockBuffer(index(c, p))
+  }
+
+  def chunks(position: ChunkPosition): Set[ChunkPosition] = {
+    val chunks = mutable.Set[ChunkPosition]()
+    if(!faces.pn) {
+      chunks += position.copy(p = position.p - 1)
+    }
+    if(!faces.pp) {
+      chunks += position.copy(p = position.p + 1)
+    }
+    if(!faces.qn) {
+      chunks += position.copy(q = position.q - 1)
+    }
+    if(!faces.qp) {
+      chunks += position.copy(q = position.q + 1)
+    }
+    if(!faces.kn) {
+      chunks += position.copy(k = position.k - 1)
+    }
+    if(!faces.kp) {
+      chunks += position.copy(k = position.k + 1)
+    }
+    chunks.toSet
+  }
+}
+
+object ChunkData {
+  import Db._
+
+  def apply(blocks: Array[Byte], buffer: Array[Byte]): ChunkData = {
+    val compressed = compress.deflate(blocks, buffer, Header)
+    compressed(0) = Db.Version
+    compressed(1) = OpaqueFaces(blocks).toByte
+    apply(compressed)
+  }
+
+  def isOpaque(w: Byte): Boolean = if(w == 0) { false } else { true }
+
+  def index(x: Int, y: Int, z: Int): Int =
+    x + y * Db.ChunkSize + z * Db.ChunkSize * Db.ChunkSize
+
+  def index(c: ChunkPosition, p: Position): Int = {
+    val x = p.x - c.p * Db.ChunkSize
+    val y = p.y - c.k * Db.ChunkSize
+    val z = p.z - c.q * Db.ChunkSize
+    index(x, y, z)
+  }
+
+}
 
 class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef, chunkGenerator: ActorRef)
     extends Actor with Stash with utils.Scheduled with BinaryStorage {
@@ -15,9 +162,10 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
 
   val ns = "chunks"
 
-  private val blocks = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
-  private val compressionBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
-  private val chunks = new Array[Option[Array[Byte]]](ShardSize * ShardSize * ShardSize)
+  private val blockBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
+  private val compressionBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize + Header)
+  private val chunks = new Array[Option[ChunkData]](ShardSize * ShardSize * ShardSize)
+
   private var dirty: Set[ChunkPosition] = Set()
 
   private def chunkId(c: ChunkPosition): String =
@@ -28,11 +176,9 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     ChunkPosition(pqk(0), pqk(1), pqk(2))
   }
 
-
-
   schedule(5000, StoreChunks)
 
-  def loadChunk(chunk: ChunkPosition): Option[Array[Byte]] = {
+  def loadChunk(chunk: ChunkPosition): Option[ChunkData] = {
     val i = index(chunk)
     val blocks = chunks(i)
     if(blocks != null) {
@@ -49,34 +195,30 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
 
   def readChunk(pos: Position)(read: Byte => Unit) = {
     val chunk = ChunkPosition(pos)
-    loadChunk(chunk).map { compressedBlocks =>
-      val size = compress.inflate(compressedBlocks, blocks)
-      assert(size == blocks.size)
-      val i = index(chunk, pos)
-      read(blocks(i))
+    loadChunk(chunk).map { c =>
+      val block = c.block(chunk, pos, blockBuffer)
+      read(block)
     }
   }
 
   def updateChunk(pos: Position)(update: Byte => Byte) {
     val chunk = ChunkPosition(pos)
-    loadChunk(chunk).map { compressedBlocks =>
+    loadChunk(chunk).map { c =>
       dirty = dirty + chunk
-      val size = compress.inflate(compressedBlocks, blocks)
-      assert(size == blocks.size)
-      val i = index(chunk, pos)
-      val oldBlock = blocks(i)
+      c.unpackTo(blockBuffer)
+      val i = ChunkData.index(chunk, pos)
+      val oldBlock = blockBuffer(i)
       val block = update(oldBlock)
-      blocks(i) = block
-      val compressed = compress.deflate(blocks, compressionBuffer)
-      chunks(index(chunk)) = Some(compressed)
+      blockBuffer(i) = block
+      chunks(index(chunk)) = Some(ChunkData(blockBuffer, compressionBuffer))
     }
   }
 
   def receive() = {
     case SendBlocks(chunk, _) =>
       val s = sender
-      loadChunk(chunk).map { blocks =>
-        s ! BlockList(chunk, blocks)
+      loadChunk(chunk).map { c =>
+        s ! BlockList(chunk, c)
       }
     case PutBlock(p, w) =>
       val s = sender
@@ -98,27 +240,26 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       val s = sender
       updateChunk(p) { old =>
         s ! ReceiveBlock(old)
-          db ! BlockUpdate(p, old.toInt, 0)
+        db ! BlockUpdate(p, old.toInt, 0)
         0
       }
-    case BinaryLoaded(id, blocksOption) => {
+    case BinaryLoaded(id, dataOption) =>
       val chunk = chunkFromId(id)
-      blocksOption match {
-        case Some(blocks) =>
-          chunks(index(chunk)) = Some(blocks)
+      dataOption match {
+        case Some(data) =>
+          chunks(index(chunk)) = Some(ChunkData(data))
           unstashAll()
-        case None =>
+        case _ =>
           chunkGenerator ! Generate(chunk)
       }
-    }
-    case Generated(position, chunk) =>
-      chunks(index(position)) = Some(chunk.data)
+    case Generated(position, data) =>
+      chunks(index(position)) = Some(ChunkData(data, compressionBuffer))
       dirty = dirty + position
       unstashAll()
     case StoreChunks =>
       dirty.map { chunk =>
-        chunks(index(chunk)).map { blocks =>
-          storeBinary(chunkId(chunk), blocks)
+        chunks(index(chunk)).map { c =>
+          storeBinary(chunkId(chunk), c.data)
         }
       }
       dirty = Set()
@@ -128,13 +269,6 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
 
 object ShardActor {
   case object StoreChunks
-
-  def index(c: ChunkPosition, p: Position): Int = {
-    val x = p.x - c.p * Db.ChunkSize
-    val y = p.y - c.k * Db.ChunkSize
-    val z = p.z - c.q * Db.ChunkSize
-    x + y * Db.ChunkSize + z * Db.ChunkSize * Db.ChunkSize
-  }
 
   def index(c: ChunkPosition): Int = {
     val lp = math.abs(c.p % Db.ShardSize)

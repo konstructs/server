@@ -12,11 +12,7 @@ class GeneratorActor(jsonStorage: ActorRef, binaryStorage: ActorRef) extends Act
     )
   )
 
-  val EmptyChunk = {
-    val blocks = new Array[Byte](Db.ChunkSize * Db.ChunkSize * Db.ChunkSize)
-    val compressionBuffer = new Array[Byte](Db.ChunkSize * Db.ChunkSize * Db.ChunkSize)
-    Chunk(compress.deflate(blocks, compressionBuffer))
-  }
+  def EmptyChunk = new Array[Byte](Db.ChunkSize * Db.ChunkSize * Db.ChunkSize)
 
   def receive = {
     case Generate(chunk) =>
@@ -32,7 +28,7 @@ class GeneratorActor(jsonStorage: ActorRef, binaryStorage: ActorRef) extends Act
 
 object GeneratorActor {
   case class Generate(position: ChunkPosition)
-  case class Generated(position: ChunkPosition, chunk: Chunk)
+  case class Generated(position: ChunkPosition, blocks: Array[Byte])
 
   case class WorldEntry(box: Box, actor: ActorRef)
   def props(jsonStorage: ActorRef, binaryStorage: ActorRef) = Props(classOf[GeneratorActor], jsonStorage, binaryStorage)

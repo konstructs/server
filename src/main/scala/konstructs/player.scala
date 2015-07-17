@@ -18,7 +18,6 @@ case class Player(nick: String, password: String, position: protocol.Position,
 
 class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, universe: ActorRef, override val jsonStorage: ActorRef, startingPosition: protocol.Position) extends Actor with Stash with utils.Scheduled with JsonStorage {
   import PlayerActor._
-  import DbActor._
   import Db.ChunkSize
   import DefaultJsonProtocol._
   import JsonStorage._
@@ -29,12 +28,8 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   implicit val inventoryFormat = jsonFormat1(Inventory)
   implicit val protocolFormat = jsonFormat5(protocol.Position)
   implicit val playerFormat = jsonFormat5(Player)
-
-  var sentChunks = Set.empty[ChunkPosition]
-  var chunksToSend = Seq.empty[ChunkPosition]
-  var currentChunk = ChunkPosition(Position(startingPosition))
+  var chunkLoader: ActorRef = null
   var data: Player = null
-  var maxChunksToSend = 0
 
   schedule(5000, StoreData)
 
@@ -45,6 +40,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       val newData = json.convertTo[Player]
       if(newData.password == password) {
         data = newData
+        chunkLoader = context.actorOf(ChunkLoaderActor.props(client, db, Position(data.position)))
         context.become(ready)
         client ! PlayerInfo(pid, nick, self, data.position)
         unstashAll()
@@ -54,6 +50,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       }
     case JsonLoaded(_, None) =>
       data = Player(nick, password, startingPosition, 0, Inventory(Map()))
+      chunkLoader = context.actorOf(ChunkLoaderActor.props(client, db, Position(data.position)))
       context.become(ready)
       client ! PlayerInfo(pid, nick, self, data.position)
       unstashAll()
@@ -61,33 +58,10 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       stash()
   }
 
-  def updateChunk(position: Position) {
-    val chunk = ChunkPosition(position)
-    if(chunk != currentChunk) {
-      val visible = visibleChunks(position, 8)
-      sentChunks = sentChunks & visible
-      val ordering = (visible &~ sentChunks).toArray
-      Sorting.quickSort(ordering)(Ordering.by[ChunkPosition, Double](_.distance(chunk)))
-      chunksToSend = ordering.toSeq
-      currentChunk = chunk
-    }
-  }
-
-  def sendChunks() {
-    val toSend = chunksToSend.take(maxChunksToSend)
-    for(chunk <- toSend) {
-      db tell(SendBlocks(chunk, None), client)
-      maxChunksToSend -= 1
-    }
-    sentChunks ++= toSend
-    chunksToSend = chunksToSend diff toSend
-  }
-
   def update(position: protocol.Position) {
     val pos = Position(position)
     data = data.copy(position = position)
-    updateChunk(pos)
-    sendChunks()
+    chunkLoader ! ChunkLoaderActor.UpdatePosition(pos)
   }
 
   def update(inventory: Inventory) {
@@ -196,9 +170,8 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       universe ! s
     case s: Said =>
       client.forward(s)
-    case IncreaseChunks(amount) =>
-      maxChunksToSend += amount
-      sendChunks()
+    case i: IncreaseChunks =>
+      chunkLoader.forward(i)
   }
 }
 
@@ -220,12 +193,92 @@ object PlayerActor {
   val LoadYChunks = 5
   def props(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, universe: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, db, universe, store, startingPosition)
 
+}
 
-  def visibleChunks(position: Position, visibility: Int): Set[ChunkPosition] = {
+class ChunkLoaderActor(client: ActorRef, db: ActorRef, position: Position) extends Actor {
+  import ChunkLoaderActor._
+  import DbActor._
+  import PlayerActor._
+
+  var sentChunks = Map.empty[ChunkPosition, ChunkData]
+  var requestedChunks = Set.empty[ChunkPosition]
+  var chunksToSend = Seq.empty[ChunkPosition]
+  var currentChunk = ChunkPosition(position)
+  var visible = visibleChunks(currentChunk, 8)
+  var maxChunksToSend = 0
+  var centralChunks = neighbors(currentChunk)
+
+  def visibleSentChunksNeighbours =
+    sentChunks flatMap {
+      case (position, data) =>
+        data.chunks(position).filter(visible(_))
+    } toSet
+
+  def neighbors(chunk: ChunkPosition) =
+    Set(
+      chunk,
+      chunk.copy(p = chunk.p - 1),
+      chunk.copy(p = chunk.p + 1),
+      chunk.copy(q = chunk.q - 1),
+      chunk.copy(q = chunk.q + 1),
+      chunk.copy(k = chunk.k - 1),
+      chunk.copy(k = chunk.k + 1)
+    )
+
+  def update() {
+    sentChunks = sentChunks filterKeys (sentChunks.keySet & visible)
+    requestedChunks = requestedChunks & visible
+    val filtered = visibleSentChunksNeighbours ++ centralChunks
+    val ordering = (filtered &~ requestedChunks).toArray
+    Sorting.quickSort(ordering)(Ordering.by[ChunkPosition, Double](_.distance(currentChunk)))
+    chunksToSend = ordering.toSeq
+  }
+
+  def sendChunks() {
+    val toSend = chunksToSend.take(maxChunksToSend)
+    for(chunk <- toSend) {
+      db ! SendBlocks(chunk, None)
+      maxChunksToSend -= 1
+    }
+    requestedChunks ++= toSend
+    chunksToSend = chunksToSend diff toSend
+  }
+
+  def receive = {
+    case IncreaseChunks(amount) =>
+      maxChunksToSend += amount
+      sendChunks()
+    case UpdatePosition(pos) =>
+      val chunk = ChunkPosition(pos)
+      if(chunk != currentChunk) {
+        currentChunk = chunk
+        visible = visibleChunks(currentChunk, 8)
+        centralChunks = neighbors(currentChunk)
+        update()
+        sendChunks()
+      }
+    case b: BlockList =>
+      client ! b
+      sentChunks = sentChunks + (b.chunk -> b.data)
+      if(sentChunks.keySet == requestedChunks) {
+        update()
+        sendChunks()
+      }
+  }
+
+}
+
+object ChunkLoaderActor {
+  case class UpdatePosition(pos: Position)
+
+  def visibleChunks(chunk: ChunkPosition, visibility: Int): Set[ChunkPosition] = {
     val range = -visibility to visibility
-    val chunk = ChunkPosition(position)
     (for(p <- range; q <- range; k <-range) yield {
       chunk.translate(p, q, k)
     }).filter(_.k >= 0).toSet
   }
+
+  def props(client: ActorRef, db: ActorRef, position: Position) =
+    Props(classOf[ChunkLoaderActor], client, db, position)
+
 }

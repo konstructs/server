@@ -52,7 +52,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
   def receive = {
     case init.Event(data) =>
       val command = data.decodeString("ascii")
-      if (command.startsWith("V,2,")) {
+      if (command.startsWith(s"V,$Version,")) {
         val strings = readData(s => s, command.drop(4))
 
         universe ! CreatePlayer(strings(0), strings(1))
@@ -77,8 +77,8 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
   def ready(pipe: ActorRef, player: PlayerInfo): Receive = {
     case init.Event(command) =>
       handle(player, command)
-    case BlockList(chunk, blocks) =>
-      sendBlocks(pipe, chunk, blocks)
+    case BlockList(chunk, data) =>
+      sendBlocks(pipe, chunk, data.data)
     case b: SendBlock =>
       sendBlock(pipe, b)
     case InventoryUpdate(items) =>
@@ -154,7 +154,7 @@ object Client {
   val B = 'B'.toByte
   val V = 'V'.toByte
   val P = 'P'.toByte
-
+  val Version = 3
   case object Setup
   def props(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef) = Props(classOf[Client], init, universe)
 }

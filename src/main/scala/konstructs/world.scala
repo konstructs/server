@@ -114,10 +114,8 @@ class FlatWorldActor(name: String, end: Position, val jsonStorage: ActorRef,
     }
   }
 
-  private val compressionBuffer = new Array[Byte](ChunkSize * ChunkSize * ChunkSize)
-
-  private def blocks(chunk: ChunkPosition, map: HeightMap): Chunk =
-    Chunk(compress.deflate(Array( blockSeq(chunk, map) :_*), compressionBuffer))
+  private def blocks(chunk: ChunkPosition, map: HeightMap): Array[Byte] =
+    Array(blockSeq(chunk, map) :_*)
 
   def ready(world: FlatWorld, map: HeightMap): Receive = {
     case Generate(real, chunk) =>
