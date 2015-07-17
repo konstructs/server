@@ -61,7 +61,7 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
 
 object DbActor {
   case class SendBlocks(chunk: ChunkPosition, version: Option[Int])
-  case class BlockList(chunk: ChunkPosition, blocks: Array[Byte])
+  case class BlockList(chunk: ChunkPosition, data: ChunkData)
 
   def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef) = Props(classOf[DbActor], universe, generator, binaryStorage)
 }

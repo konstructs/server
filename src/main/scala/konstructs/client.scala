@@ -77,8 +77,8 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
   def ready(pipe: ActorRef, player: PlayerInfo): Receive = {
     case init.Event(command) =>
       handle(player, command)
-    case BlockList(chunk, blocks) =>
-      sendBlocks(pipe, chunk, blocks)
+    case BlockList(chunk, data) =>
+      sendBlocks(pipe, chunk, data.blocks)
     case b: SendBlock =>
       sendBlock(pipe, b)
     case InventoryUpdate(items) =>
