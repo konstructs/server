@@ -70,10 +70,6 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   val random = new scala.util.Random
 
-  def generateTree(pos: Position) {
-    db ! PutBlock(pos, 37)
-  }
-
   val material = Set(2,3,4,5,6,8,10,11,12,13).toVector
 
   def action(pos: Position, button: Int) = {
@@ -81,31 +77,27 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       case 1 =>
         db ! DestroyBlock(pos)
       case 2 =>
-        if(data.active == 8) {
-          generateTree(pos)
-        } else {
-          val inventory = data.inventory
-          val active = data.active.toString
-          inventory.items.get(active).map { item =>
-            val updatedItem = item.copy(amount = item.amount - 1)
-            if(updatedItem.amount > 0) {
+        val inventory = data.inventory
+        val active = data.active.toString
+        inventory.items.get(active).map { item =>
+          val updatedItem = item.copy(amount = item.amount - 1)
+          if(updatedItem.amount > 0) {
+            update(inventory.copy(items =
+              inventory.items + (active -> updatedItem)))
+            sender ! InventoryUpdate(Map(active -> updatedItem))
+          } else {
+            if(data.active < 6) {
+              val newItem = (active -> Item(64, material(random.nextInt(material.size))))
               update(inventory.copy(items =
-                inventory.items + (active -> updatedItem)))
-              sender ! InventoryUpdate(Map(active -> updatedItem))
+                inventory.items + newItem))
+              sender ! InventoryUpdate(Map(newItem))
             } else {
-              if(data.active < 6) {
-                val newItem = (active -> Item(64, material(random.nextInt(material.size))))
-                update(inventory.copy(items =
-                  inventory.items + newItem))
-                sender ! InventoryUpdate(Map(newItem))
-              } else {
-                update(inventory.copy(items =
-                  inventory.items - active))
-                sender ! InventoryUpdate(Map(active -> updatedItem))
-              }
+              update(inventory.copy(items =
+                inventory.items - active))
+              sender ! InventoryUpdate(Map(active -> updatedItem))
             }
-            db ! PutBlock(pos, item.w)
           }
+          db ! PutBlock(pos, item.w)
         }
     }
   }
