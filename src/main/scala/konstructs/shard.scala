@@ -3,6 +3,7 @@ package konstructs
 import scala.collection.mutable
 
 import akka.actor.{ Actor, Stash, ActorRef, Props }
+import konstructs.api._
 
 import konstructs.api._
 
@@ -176,7 +177,6 @@ object ChunkData {
 class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef, chunkGenerator: ActorRef)
     extends Actor with Stash with utils.Scheduled with BinaryStorage {
   import ShardActor._
-  import BinaryStorage._
   import GeneratorActor._
   import DbActor._
   import PlayerActor.ReceiveBlock

@@ -14,6 +14,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka"      %% "akka-actor"    % akkaVersion,
   "commons-io"             %  "commons-io"    % "2.4",
   "io.spray"               %% "spray-json"    % "1.3.1",
+  "com.google.code.gson"   %  "gson"          % "2.2.4",
   "com.sksamuel.scrimage"  %% "scrimage-core" % "1.4.2",
   "org.scalatest"          %% "scalatest"     % "2.2.1"  % "test"
 )
