@@ -129,6 +129,16 @@ case class ChunkData(data: Array[Byte]) {
 
 object ChunkData {
   import Db._
+  val EMPTY = 0
+  val GLASS = 10
+  val LEAVES = 15
+  val TALL_GRASS = 17
+  val YELLOW_FLOWER = 18
+  val RED_FLOWER = 19
+  val PURPLE_FLOWER = 20
+  val SUN_FLOWER = 21
+  val WHITE_FLOWER = 22
+  val BLUE_FLOWER = 23
 
   def apply(blocks: Array[Byte], buffer: Array[Byte]): ChunkData = {
     val compressed = compress.deflate(blocks, buffer, Header)
@@ -137,7 +147,19 @@ object ChunkData {
     apply(compressed)
   }
 
-  def isOpaque(w: Byte): Boolean = if(w == 0) { false } else { true }
+  def isOpaque(w: Byte): Boolean = w match {
+    case EMPTY => false
+    case GLASS => false
+    case LEAVES => false
+    case TALL_GRASS => false
+    case YELLOW_FLOWER => false
+    case RED_FLOWER => false
+    case PURPLE_FLOWER => false
+    case SUN_FLOWER => false
+    case WHITE_FLOWER => false
+    case BLUE_FLOWER => false
+    case _ => true
+  }
 
   def index(x: Int, y: Int, z: Int): Int =
     x + y * Db.ChunkSize + z * Db.ChunkSize * Db.ChunkSize
