@@ -61,6 +61,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
         universe ! CreatePlayer(strings(0), strings(1))
         context.become(waitForPlayer(sender))
       } else {
+        sendSaid(sender, s"This server only supports protocol version $Version")
         context.stop(self)
       }
     case _: Tcp.ConnectionClosed =>
