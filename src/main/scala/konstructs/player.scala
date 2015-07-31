@@ -40,8 +40,8 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       if(newData.password == password) {
         data = newData
         chunkLoader = context.actorOf(ChunkLoaderActor.props(client, db, Position(data.position)))
-        context.become(ready)
         client ! PlayerInfo(pid, nick, self, data.position)
+        context.become(sendBelt)
         unstashAll()
       } else {
         client ! PoisonPill
@@ -50,7 +50,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     case JsonLoaded(_, None) =>
       data = Player(nick, password, startingPosition, 0, Inventory(Map()))
       chunkLoader = context.actorOf(ChunkLoaderActor.props(client, db, Position(data.position)))
-      context.become(ready)
+      context.become(sendBelt)
       client ! PlayerInfo(pid, nick, self, data.position)
       unstashAll()
     case _ =>
@@ -129,6 +129,13 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     universe ! PlayerLogout(pid)
   }
 
+  def sendBelt: Receive = {
+    /* Send belt*/
+    client ! InventoryUpdate(data.inventory.items)
+    client ! InventoryActiveUpdate(data.active)
+    ready
+  }
+
   def ready: Receive = {
     case p: protocol.Position =>
       update(p)
@@ -136,9 +143,6 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     case b: BlockUpdate =>
       val chunk = ChunkPosition(b.pos)
       client ! protocol.SendBlock(chunk.p, chunk.q, b.pos.x, b.pos.y, b.pos.z, b.newW)
-    case SendInventory =>
-      sender ! InventoryUpdate(data.inventory.items)
-      sender ! InventoryActiveUpdate(data.active)
     case ActivateInventoryItem(newActive) if(newActive >= 0 && newActive < 9) =>
       data = data.copy(active = newActive)
       sender ! InventoryActiveUpdate(data.active)

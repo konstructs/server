@@ -35,8 +35,6 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     } else if(command.startsWith("C,")) {
       val ints = readData(_.toInt, command.drop(2))
       player.actor ! IncreaseChunks(ints(0))
-    } else if(command.startsWith("I")) {
-      player.actor ! SendInventory
     } else if(command.startsWith("A,")) {
       val ints = readData(_.toInt, command.drop(2))
       player.actor ! ActivateInventoryItem(ints(0))
