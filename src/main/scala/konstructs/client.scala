@@ -37,7 +37,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       player.actor ! IncreaseChunks(ints(0))
     } else if(command.startsWith("A,")) {
       val ints = readData(_.toInt, command.drop(2))
-      player.actor ! ActivateInventoryItem(ints(0))
+      player.actor ! ActivateBeltItem(ints(0))
     } else if(command.startsWith("M,")) {
       val ints = readData(_.toInt, command.drop(2))
       player.actor ! Action(konstructs.Position(ints(0), ints(1), ints(2)), ints(3))
@@ -46,6 +46,9 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       player.actor ! Say(message)
     } else if(command.startsWith("K")) {
       player.actor ! Konstruct
+    } else if(command.startsWith("R,")) {
+      val ints = readData(_.toInt, command.drop(2))
+      player.actor ! MoveItem(ints(0), ints(1), ints(2), ints(3))
     }
   }
 
@@ -81,10 +84,12 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       sendBlocks(pipe, chunk, data.data)
     case b: SendBlock =>
       sendBlock(pipe, b)
+    case BeltUpdate(items) =>
+      sendBelt(pipe, items)
+    case BeltActiveUpdate(active) =>
+      sendBeltActive(pipe, active)
     case InventoryUpdate(items) =>
       sendInventory(pipe, items)
-    case InventoryActiveUpdate(active) =>
-      sendInventoryActive(pipe, active)
     case p: PlayerMovement =>
       sendPlayerMovement(pipe, p)
     case PlayerNick(pid, nick) =>
@@ -114,14 +119,20 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     send(pipe, s"P,${p.pid},${p.pos.x},${p.pos.y},${p.pos.z},${p.pos.rx},${p.pos.ry}")
   }
 
+  def sendBelt(pipe: ActorRef, items: Map[String, Item]) {
+    for((p, i) <- items) {
+      send(pipe, s"G,${p},${i.amount},${i.w}")
+    }
+  }
+
+  def sendBeltActive(pipe: ActorRef, active: Int) {
+    send(pipe, s"A,${active}")
+  }
+
   def sendInventory(pipe: ActorRef, items: Map[String, Item]) {
     for((p, i) <- items) {
       send(pipe, s"I,${p},${i.amount},${i.w}")
     }
-  }
-
-  def sendInventoryActive(pipe: ActorRef, active: Int) {
-    send(pipe, s"A,${active}")
   }
 
   def sendBlock(pipe: ActorRef, b: SendBlock) {
@@ -154,7 +165,7 @@ object Client {
   val B = 'B'.toByte
   val V = 'V'.toByte
   val P = 'P'.toByte
-  val Version = 3
+  val Version = 4
   case object Setup
   def props(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef) = Props(classOf[Client], init, universe)
 }
