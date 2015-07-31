@@ -21,6 +21,8 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   import Db.ChunkSize
   import DefaultJsonProtocol._
 
+  val BeltPositions = (0 until 9).toSet
+
   val ns = "players"
 
   implicit val itemFormat = jsonFormat2(Item)
@@ -123,6 +125,25 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     }
   }
 
+  def moveInBelt(from: String, to: String) {
+    val inventory = data.inventory
+    val items = inventory.items
+    if(!items.get(to).isDefined && items.get(from).isDefined) {
+      val move = (to -> items(from))
+      update(Inventory(items = items + move - from))
+    }
+  }
+
+  def sendInventory() {
+    val items = for(i <- 9 until 256) yield {
+      i.toString -> Item(0, -1)
+    }
+    val belt = for(i <- 0 until 9) yield {
+      i.toString -> data.inventory.items.getOrElse(i.toString, Item(0, 0))
+    }
+    sender ! InventoryUpdate((belt ++ items).toMap)
+  }
+
   override def postStop {
     if(data != null)
       storeJson(nick, data.toJson)
@@ -168,14 +189,17 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     case i: IncreaseChunks =>
       chunkLoader.forward(i)
     case Konstruct =>
-      val items = for(i <- 9 until 256) yield {
-        i.toString -> Item(0, -1)
+      sendInventory()
+    case MoveItem(from, to) =>
+      if((BeltPositions contains from) && (BeltPositions contains to)) {
+        moveInBelt(from.toString, to.toString)
+        sendInventory()
+        val items = data.inventory.items
+        val beltUpdate = 0 until 9 map(_.toString) map { i =>
+          i -> items.getOrElse(i, Item(0,0))
+        }
+        client ! BeltUpdate(beltUpdate.toMap)
       }
-      val belt = for(i <- 0 until 9) yield {
-        i.toString -> data.inventory.items.getOrElse(i.toString, Item(0, 0))
-      }
-      sender ! InventoryUpdate((belt ++ items).toMap)
-
   }
 }
 
@@ -194,7 +218,7 @@ object PlayerActor {
   case class IncreaseChunks(amount: Int)
   case class InventoryUpdate(items: Map[String, Item])
   case object Konstruct
-  case class MoveItem(from: Int, fromSlot: Int, to: Int, toSlot: Int)
+  case class MoveItem(from: Int, to: Int)
 
   def props(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, universe: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, db, universe, store, startingPosition)
 

@@ -48,7 +48,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       player.actor ! Konstruct
     } else if(command.startsWith("R,")) {
       val ints = readData(_.toInt, command.drop(2))
-      player.actor ! MoveItem(ints(0), ints(1), ints(2), ints(3))
+      player.actor ! MoveItem(ints(0), ints(1))
     }
   }
 
