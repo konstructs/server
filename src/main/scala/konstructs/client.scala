@@ -46,6 +46,8 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     } else if(command.startsWith("T,")) {
       val message = command.substring(2)
       player.actor ! Say(message)
+    } else if(command.startsWith("K")) {
+      player.actor ! Konstruct
     }
   }
 

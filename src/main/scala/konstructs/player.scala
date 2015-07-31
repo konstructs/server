@@ -180,6 +180,7 @@ object PlayerActor {
   case class Action(pos: Position, button: Int)
   case class SendInfo(to: ActorRef)
   case class IncreaseChunks(amount: Int)
+  case object Konstruct
 
   def props(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, universe: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, db, universe, store, startingPosition)
 
