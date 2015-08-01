@@ -1,4 +1,5 @@
 package konstructs.api
+
 import java.util.UUID
 import akka.actor.ActorRef
 import com.google.gson.JsonElement
@@ -75,7 +76,7 @@ case class Stack(blocks: Seq[Block]) {
 case class Inventory(items: Map[String, Stack])
 
 /* Messages for chat */
-case class Say(text: String)
+case class Say(player: String, text: String)
 case class SayFilter(chain: Seq[ActorRef], message: Say) extends Filter[Say] {
   def next(chain: Seq[ActorRef]) = copy(chain = chain)
   def next(chain: Seq[ActorRef], message: Say) = copy(chain = chain, message = message)
@@ -83,6 +84,17 @@ case class SayFilter(chain: Seq[ActorRef], message: Say) extends Filter[Say] {
 case class Said(text: String)
 
 /* Messages for world interaction */
+case class InteractPrimary(sender: ActorRef, player: String, pos: Position, block: Option[Block])
+case class InteractPrimaryFilter(chain: Seq[ActorRef], message: InteractPrimary) extends Filter[InteractPrimary] {
+  def next(chain: Seq[ActorRef]) = copy(chain = chain)
+  def next(chain: Seq[ActorRef], message: InteractPrimary) = copy(chain = chain, message = message)
+}
+
+case class InteractSecondary(sender: ActorRef, player: String, pos: Position, block: Option[Block])
+case class InteractSecondaryFilter(chain: Seq[ActorRef], message: InteractSecondary) extends Filter[InteractSecondary] {
+  def next(chain: Seq[ActorRef]) = copy(chain = chain)
+  def next(chain: Seq[ActorRef], message: InteractSecondary) = copy(chain = chain, message = message)
+}
 case class PutBlock(pos: Position, block: Block)
 case class DestroyBlock(pos: Position)
 case class ReceiveStack(stack: Stack)

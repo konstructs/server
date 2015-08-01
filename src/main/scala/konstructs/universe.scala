@@ -4,7 +4,8 @@ import akka.actor.{ Actor, ActorRef, Props }
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 import konstructs.api._
 
-class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef, chatFilters: Seq[ActorRef], blockListeners: Seq[ActorRef]) extends Actor {
+class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef, chatFilters: Seq[ActorRef], blockListeners: Seq[ActorRef], primaryInteractionFilters: Seq[ActorRef],
+  secondaryInteractionFilters: Seq[ActorRef]) extends Actor {
   import UniverseActor._
 
   val generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage))
@@ -46,6 +47,18 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       allPlayers().foreach(_.forward(Said(s.message.text)))
     case s: Said =>
       allPlayers().foreach(_.forward(s))
+    case i: InteractPrimary =>
+      val filters = primaryInteractionFilters :+ self
+      filters.head.forward(InteractPrimaryFilter(filters.tail, i))
+    case i: InteractPrimaryFilter =>
+      db.tell(DestroyBlock(i.message.pos), i.message.sender)
+    case i: InteractSecondary =>
+      val filters = secondaryInteractionFilters :+ self
+      filters.head.forward(InteractSecondaryFilter(filters.tail, i))
+    case i: InteractSecondaryFilter =>
+      i.message.block.map { block =>
+        db.tell(PutBlock(i.message.pos, block), i.message.sender)
+      }
     case p: PutBlock =>
       db.forward(p)
     case d: DestroyBlock =>
@@ -65,7 +78,7 @@ object UniverseActor {
     @ListConfig(key = "chat-filters", elementType = classOf[ActorRef]) chatFilters: Seq[ActorRef],
     @ListConfig(key = "block-listeners", elementType = classOf[ActorRef]) blockListeners: Seq[ActorRef]
   ): Props
-  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, chatFilters, blockListeners)
+  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, chatFilters, blockListeners, Seq(), Seq())
 
   @PluginConstructor
   def propsWithOnlyBlocks(name: String, notUsed: ActorRef,
@@ -73,18 +86,29 @@ object UniverseActor {
     @Config(key = "json-storage") jsonStorage: ActorRef,
     @ListConfig(key = "block-listeners", elementType = classOf[ActorRef]) blockListeners: Seq[ActorRef]
   ): Props
-  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, Seq(), blockListeners)
+  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, Seq(), blockListeners, Seq(), Seq())
 
   @PluginConstructor
   def props(name: String, notUsed: ActorRef,
     @Config(key = "binary-storage") binaryStorage: ActorRef,
     @Config(key = "json-storage") jsonStorage: ActorRef,
     @ListConfig(key = "chat-filters", elementType = classOf[ActorRef]) chatFilters: Seq[ActorRef]): Props
-  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, chatFilters, Seq())
+  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, chatFilters, Seq(), Seq(), Seq())
 
   @PluginConstructor
   def props(name: String, notUsed: ActorRef,
     @Config(key = "binary-storage") binaryStorage: ActorRef,
     @Config(key = "json-storage") jsonStorage: ActorRef): Props
-  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, Seq(), Seq())
+  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, Seq(), Seq(), Seq(), Seq())
+
+  @PluginConstructor
+  def props(name: String, notUsed: ActorRef,
+    @Config(key = "binary-storage") binaryStorage: ActorRef,
+    @Config(key = "json-storage") jsonStorage: ActorRef,
+    @ListConfig(key = "chat-filters", elementType = classOf[ActorRef]) chatFilters: Seq[ActorRef],
+    @ListConfig(key = "block-listeners", elementType = classOf[ActorRef]) blockListeners: Seq[ActorRef],
+    @ListConfig(key = "primary-interaction-listeners", elementType = classOf[ActorRef]) primaryListeners: Seq[ActorRef],
+    @ListConfig(key = "secondary-interaction-listeners", elementType = classOf[ActorRef]) secondaryListeners: Seq[ActorRef]
+  ): Props
+  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, chatFilters, blockListeners, primaryListeners, secondaryListeners)
 }

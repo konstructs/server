@@ -71,36 +71,42 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   val material = Set(2,3,4,5,6,8,10,11,12,13).toVector
 
+  def getInventoryBlock: Option[Block] = {
+    val inventory = data.inventory
+    val active = data.active.toString
+    inventory.items.get(active) map { item =>
+      val updatedStack = item.copy(blocks = item.blocks.tail)
+      if(!updatedStack.blocks.isEmpty) {
+        update(inventory.copy(items =
+          inventory.items + (active -> updatedStack)))
+        client ! BeltUpdate(Map(active -> updatedStack))
+      } else {
+        if(data.active < 6) {
+          val m = material(random.nextInt(material.size))
+          val newStack = active -> Stack(for(i <- 0 until 64) yield { Block(Some(UUID.randomUUID), m) })
+          update(inventory.copy(items =
+            inventory.items + newStack))
+          client ! BeltUpdate(Map(newStack))
+        } else {
+          update(inventory.copy(items =
+            inventory.items - active))
+          client ! BeltUpdate(Map(active -> updatedStack))
+        }
+      }
+      item.blocks.head
+    }
+  }
+
   def action(pos: Position, button: Int) = {
     button match {
       case 1 =>
-        db ! DestroyBlock(pos)
+        universe ! InteractPrimary(self, nick, pos, getInventoryBlock)
       case 2 =>
-        val inventory = data.inventory
-        val active = data.active.toString
-        inventory.items.get(active).map { item =>
-          val updatedStack = item.copy(blocks = item.blocks.tail)
-          if(!updatedStack.blocks.isEmpty) {
-            update(inventory.copy(items =
-              inventory.items + (active -> updatedStack)))
-            sender ! BeltUpdate(Map(active -> updatedStack))
-          } else {
-            if(data.active < 6) {
-              val m = material(random.nextInt(material.size))
-              val newStack = active -> Stack(for(i <- 0 until 64) yield { Block(Some(UUID.randomUUID), m) })
-              update(inventory.copy(items =
-                inventory.items + newStack))
-              sender ! BeltUpdate(Map(newStack))
-            } else {
-              update(inventory.copy(items =
-                inventory.items - active))
-              sender ! BeltUpdate(Map(active -> updatedStack))
-            }
-          }
-          db ! PutBlock(pos, item.blocks.head)
-        }
+        universe ! InteractSecondary(self, nick, pos, getInventoryBlock)
     }
   }
+
+
 
   def putInBelt(stack: Stack) {
     val block = stack.blocks.head
@@ -181,8 +187,8 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       storeJson(nick, data.toJson)
     case l: PlayerLogout =>
       client ! l
-    case s: Say =>
-      universe ! s
+    case protocol.Say(msg) =>
+      universe ! Say(nick, msg)
     case s: Said =>
       client.forward(s)
     case i: IncreaseChunks =>

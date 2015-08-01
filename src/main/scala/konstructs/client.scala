@@ -43,7 +43,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       player.actor ! Action(konstructs.api.Position(ints(0), ints(1), ints(2)), ints(3))
     } else if(command.startsWith("T,")) {
       val message = command.substring(2)
-      player.actor ! Say(message)
+      player.actor ! konstructs.protocol.Say(message)
     } else if(command.startsWith("K")) {
       player.actor ! Konstruct
     } else if(command.startsWith("R,")) {
