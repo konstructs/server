@@ -8,7 +8,10 @@ import konstructs.protocol
 import konstructs.Db
 
 /* Data structures */
-case class Block(id: Option[UUID], w: Int)
+case class Block(id: Option[UUID], w: Int) {
+  def withId = copy(id = Some(UUID.randomUUID))
+}
+
 trait Filter[T] {
   def chain: Seq[ActorRef]
   def next(chain: Seq[ActorRef]): Filter[T]
@@ -63,6 +66,13 @@ object Position {
     )
 }
 
+case class Stack(blocks: Seq[Block]) {
+  def w = blocks.headOption.map(_.w).getOrElse(0)
+  def size = blocks.size
+  def isEmpty = blocks.isEmpty
+}
+
+case class Inventory(items: Map[String, Stack])
 
 /* Messages for chat */
 case class Say(text: String)
@@ -75,7 +85,7 @@ case class Said(text: String)
 /* Messages for world interaction */
 case class PutBlock(pos: Position, block: Block)
 case class DestroyBlock(pos: Position)
-case class ReceiveBlock(pos: Position, block: Block)
+case class ReceiveStack(stack: Stack)
 case class GetBlock(pos: Position)
 case class GetBlockResponse(pos: Position, block: Block)
 case class BlockDataUpdate(pos: Position, oldW: Int, newW: Int)
@@ -83,6 +93,16 @@ case class BlockDataUpdate(pos: Position, oldW: Int, newW: Int)
 /* Manage block IDs */
 case class GetOrCreateBlockId(pos: Position)
 case class GetOrCreateBlockIdResponse(pos: Position, id: UUID)
+
+/* Manage inventories */
+case class CreateInventory(blockId: UUID)
+case class GetInventory(blockId: UUID)
+case class GetInventoryResponse(blockId: UUID, inventory: Option[Inventory])
+case class PutStack(blockId: UUID, slot: String, stack: Stack)
+case class GetSlot(blockId: UUID, slot: String)
+case class GetSlotResponse(blockId: UUID, slot: String, stack: Option[Stack])
+case class DeleteInventory(blockId: UUID)
+case class MoveStack(fromBlockId: UUID, from: String, toBlockId: UUID, to: String)
 
 /* Messages for binary storage */
 case class StoreBinary(id: String, ns: String, data: Array[Byte])

@@ -5,8 +5,8 @@ import akka.io.{ Tcp, TcpPipelineHandler }
 import akka.util.ByteString
 import TcpPipelineHandler.{ Init, WithinActorContext }
 
-import konstructs.{ Item, PlayerActor, UniverseActor, DbActor }
-import konstructs.api.{ Say, Said }
+import konstructs.{ PlayerActor, UniverseActor, DbActor }
+import konstructs.api._
 
 class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef) extends Actor with Stash {
   import DbActor.BlockList
@@ -120,19 +120,19 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     send(pipe, s"P,${p.pid},${p.pos.x},${p.pos.y},${p.pos.z},${p.pos.rx},${p.pos.ry}")
   }
 
-  def sendBelt(pipe: ActorRef, items: Map[String, Item]) {
+  def sendBelt(pipe: ActorRef, items: Map[String, Stack]) {
     for((p, i) <- items) {
-      send(pipe, s"G,${p},${i.blocks.size},${i.w}")
+      send(pipe, s"G,${p},${i.size},${i.w}")
     }
   }
 
-  def sendBeltActive(pipe: ActorRef, active: Int) {
+  def sendBeltActive(pipe: ActorRef, active: String) {
     send(pipe, s"A,${active}")
   }
 
-  def sendInventory(pipe: ActorRef, items: Map[String, Item]) {
+  def sendInventory(pipe: ActorRef, items: Map[String, Stack]) {
     for((p, i) <- items) {
-      send(pipe, s"I,${p},${i.blocks.size},${i.w}")
+      send(pipe, s"I,${p},${i.size},${i.w}")
     }
   }
 

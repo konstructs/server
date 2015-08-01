@@ -11,10 +11,6 @@ import spray.json._
 
 import konstructs.api._
 
-case class Item(w: Int, blocks: Seq[Block])
-
-case class Inventory(items: Map[String, Item])
-
 case class Player(nick: String, password: String, position: protocol.Position,
   active: Int, inventory: Inventory)
 
@@ -27,7 +23,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   val ns = "players"
 
-  implicit val itemFormat = jsonFormat2(Item)
+  implicit val itemFormat = jsonFormat1(Stack)
   implicit val inventoryFormat = jsonFormat1(Inventory)
   implicit val protocolFormat = jsonFormat5(protocol.Position)
   implicit val playerFormat = jsonFormat5(Player)
@@ -83,22 +79,22 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
         val inventory = data.inventory
         val active = data.active.toString
         inventory.items.get(active).map { item =>
-          val updatedItem = item.copy(blocks = item.blocks.tail)
-          if(!updatedItem.blocks.isEmpty) {
+          val updatedStack = item.copy(blocks = item.blocks.tail)
+          if(!updatedStack.blocks.isEmpty) {
             update(inventory.copy(items =
-              inventory.items + (active -> updatedItem)))
-            sender ! BeltUpdate(Map(active -> updatedItem))
+              inventory.items + (active -> updatedStack)))
+            sender ! BeltUpdate(Map(active -> updatedStack))
           } else {
             if(data.active < 6) {
               val m = material(random.nextInt(material.size))
-              val newItem = active -> Item(m, for(i <- 0 until 64) yield { Block(Some(UUID.randomUUID), m) })
+              val newStack = active -> Stack(for(i <- 0 until 64) yield { Block(Some(UUID.randomUUID), m) })
               update(inventory.copy(items =
-                inventory.items + newItem))
-              sender ! BeltUpdate(Map(newItem))
+                inventory.items + newStack))
+              sender ! BeltUpdate(Map(newStack))
             } else {
               update(inventory.copy(items =
                 inventory.items - active))
-              sender ! BeltUpdate(Map(active -> updatedItem))
+              sender ! BeltUpdate(Map(active -> updatedStack))
             }
           }
           db ! PutBlock(pos, item.blocks.head)
@@ -106,7 +102,8 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     }
   }
 
-  def putInBelt(block: Block) {
+  def putInBelt(stack: Stack) {
+    val block = stack.blocks.head
     val inventory = data.inventory
     inventory.items.find {
       case (position, item) =>
@@ -120,7 +117,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
         (0 until 9).find { i =>
           !inventory.items.get(i.toString).isDefined
         } map { i =>
-          val itemUpdate = i.toString -> Item(block.w, Seq(block))
+          val itemUpdate = i.toString -> Stack(Seq(block))
           update(inventory.copy(items = inventory.items + itemUpdate))
           client ! BeltUpdate(Map(itemUpdate))
         }
@@ -138,10 +135,10 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   def sendInventory() {
     val items = for(i <- 9 until 256) yield {
-      i.toString -> Item(-1, Seq())
+      i.toString -> Stack(Seq())
     }
     val belt = for(i <- 0 until 9) yield {
-      i.toString -> data.inventory.items.getOrElse(i.toString, Item(0, Seq()))
+      i.toString -> data.inventory.items.getOrElse(i.toString, Stack(Seq()))
     }
     sender ! InventoryUpdate((belt ++ items).toMap)
   }
@@ -155,7 +152,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   def sendBelt: Receive = {
     /* Send belt*/
     client ! BeltUpdate(data.inventory.items)
-    client ! BeltActiveUpdate(data.active)
+    client ! BeltActiveUpdate(data.active.toString)
     ready
   }
 
@@ -168,11 +165,11 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       client ! protocol.SendBlock(chunk.p, chunk.q, b.pos.x, b.pos.y, b.pos.z, b.newW)
     case ActivateBeltItem(newActive) if(newActive >= 0 && newActive < 9) =>
       data = data.copy(active = newActive)
-      sender ! BeltActiveUpdate(data.active)
+      sender ! BeltActiveUpdate(data.active.toString)
     case Action(pos, button) =>
       action(pos, button)
-    case ReceiveBlock(_, block) =>
-      putInBelt(block)
+    case ReceiveStack(stack) =>
+      putInBelt(stack)
     case p: PlayerMovement =>
       client ! p
     case p: PlayerNick =>
@@ -198,7 +195,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
         sendInventory()
         val items = data.inventory.items
         val beltUpdate = 0 until 9 map(_.toString) map { i =>
-          i -> items.getOrElse(i, Item(0,Seq()))
+          i -> items.getOrElse(i, Stack(Seq()))
         }
         client ! BeltUpdate(beltUpdate.toMap)
       }
@@ -212,12 +209,12 @@ object PlayerActor {
   case class PlayerInfo(pid: Int, nick: String, actor: ActorRef, pos: protocol.Position)
   case class PlayerNick(pid: Int, nick: String)
   case class ActivateBeltItem(activate: Int)
-  case class BeltUpdate(items: Map[String, Item])
-  case class BeltActiveUpdate(active: Int)
+  case class BeltUpdate(items: Map[String, Stack])
+  case class BeltActiveUpdate(active: String)
   case class Action(pos: Position, button: Int)
   case class SendInfo(to: ActorRef)
   case class IncreaseChunks(amount: Int)
-  case class InventoryUpdate(items: Map[String, Item])
+  case class InventoryUpdate(items: Map[String, Stack])
   case object Konstruct
   case class MoveItem(from: Int, to: Int)
 
