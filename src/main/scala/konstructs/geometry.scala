@@ -1,5 +1,7 @@
 package konstructs
 
+import konstructs.api.Position
+
 case class Matrix(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int, g: Int, h: Int, i: Int) {
   def *(m: Matrix) =
     Matrix(a*m.a + b*m.d + c*m.g, a*m.b + b*m.e + c*m.h, a*m.c + b*m.f + c*m.i,
@@ -13,22 +15,6 @@ case class Matrix(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int, g: Int, h: Int
   def beh = Position(b, e, h)
   def cfi = Position(c, f, i)
   override def toString = s"Matrix(\n\t$a,\t$b,\t$c\n\t$d,\t$e,\t$f\n\t$g,\t$h,\t$i\n)"
-}
-
-case class Position(x: Int, y: Int, z: Int) {
-  def +(p: Position) = Position(x + p.x, y + p.y, z + p.z)
-  def -(p: Position) = Position(x - p.x, y - p.y, z - p.z)
-}
-
-object Position {
-  def apply(pos: protocol.Position): Position =
-    apply(math.round(pos.x), math.round(pos.y), math.round(pos.z))
-  def apply(chunk: ChunkPosition, x: Int, y: Int, z: Int): Position =
-    Position(
-      chunk.p * Db.ChunkSize + x,
-      chunk.k * Db.ChunkSize + y,
-      chunk.q * Db.ChunkSize + z
-    )
 }
 
 case class Box(start: Position, end: Position) {

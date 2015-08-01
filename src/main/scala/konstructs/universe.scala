@@ -8,7 +8,7 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
   import UniverseActor._
 
   val generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage))
-  val db = context.actorOf(DbActor.props(self, generator, binaryStorage))
+  val db = context.actorOf(DbActor.props(self, generator, binaryStorage, jsonStorage))
 
   private var nextPid = 0
 
@@ -37,7 +37,7 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       allPlayers(except = Some(m.pid)).foreach(_ ! m)
     case l: PlayerActor.PlayerLogout =>
       allPlayers(except = Some(l.pid)).foreach(_ ! l)
-    case b: BlockUpdate =>
+    case b: BlockDataUpdate =>
       allPlayers() ++ blockListeners foreach(_ ! b)
     case s: Say =>
       val filters = chatFilters :+ self

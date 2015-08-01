@@ -3,6 +3,7 @@ package konstructs
 import java.io.{ DataInputStream, ByteArrayInputStream, DataOutputStream, ByteArrayOutputStream }
 import scala.util.Try
 import com.sksamuel.scrimage.Image
+import konstructs.api._
 
 trait HeightMap extends PartialFunction[Position, Int]
 

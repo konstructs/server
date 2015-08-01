@@ -40,7 +40,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       player.actor ! ActivateBeltItem(ints(0))
     } else if(command.startsWith("M,")) {
       val ints = readData(_.toInt, command.drop(2))
-      player.actor ! Action(konstructs.Position(ints(0), ints(1), ints(2)), ints(3))
+      player.actor ! Action(konstructs.api.Position(ints(0), ints(1), ints(2)), ints(3))
     } else if(command.startsWith("T,")) {
       val message = command.substring(2)
       player.actor ! Say(message)
@@ -122,7 +122,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
 
   def sendBelt(pipe: ActorRef, items: Map[String, Item]) {
     for((p, i) <- items) {
-      send(pipe, s"G,${p},${i.amount},${i.w}")
+      send(pipe, s"G,${p},${i.blocks.size},${i.w}")
     }
   }
 
@@ -132,7 +132,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
 
   def sendInventory(pipe: ActorRef, items: Map[String, Item]) {
     for((p, i) <- items) {
-      send(pipe, s"I,${p},${i.amount},${i.w}")
+      send(pipe, s"I,${p},${i.blocks.size},${i.w}")
     }
   }
 
