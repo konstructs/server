@@ -12,33 +12,31 @@ class InventoryActor extends Actor {
 
   val inventories: mutable.HashMap[UUID, Inventory] = mutable.HashMap[UUID, Inventory]()
 
-  private def put(blockId: UUID, slot: String, stack: Stack): Option[Stack] = {
+  private def put(blockId: UUID, slot: Int, stack: Stack): Option[Stack] = {
     if(inventories.contains(blockId)) {
       val inventory = inventories(blockId)
-      val items = inventory.items
-      inventories += blockId -> Inventory(items + (slot -> stack))
-      items.get(slot)
+      inventories += blockId -> inventory.withSlot(slot, stack)
+      inventory.stackOption(slot)
     } else {
       Some(stack)
     }
   }
 
-  private def get(blockId: UUID, slot: String): Option[Stack] =
+  private def get(blockId: UUID, slot: Int): Option[Stack] =
     inventories.get(blockId).flatMap { i =>
-      i.items.get(slot)
+      i.stackOption(slot)
     }
 
-  private def remove(blockId: UUID, slot: String): Option[Stack] =
+  private def remove(blockId: UUID, slot: Int): Option[Stack] =
     inventories.get(blockId).flatMap { i =>
-      val items = i.items
-        inventories += blockId -> Inventory(items - slot)
-      items.get(slot)
+      inventories += blockId -> i.withoutSlot(slot)
+      i.stackOption(slot)
     }
 
   def receive = {
-    case CreateInventory(blockId) =>
+    case CreateInventory(blockId, size) =>
       if(!inventories.contains(blockId)) {
-        inventories += blockId -> Inventory(Map())
+        inventories += blockId -> Inventory.createEmpty(size)
       }
 
     case GetInventory(blockId) =>

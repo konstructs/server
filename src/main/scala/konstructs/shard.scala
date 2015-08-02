@@ -249,7 +249,7 @@ class ShardActor(db: ActorRef, blockMeta: ActorRef, shard: ShardPosition, val bi
           blockMeta ! PutBlockId(p, b, old, db)
           b.w.toByte
         } else {
-          s ! ReceiveStack(Stack(Seq(b)))
+          s ! ReceiveStack(Stack.fromBlock(b))
           old
         }
       }

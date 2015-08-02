@@ -120,9 +120,10 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     send(pipe, s"P,${p.pid},${p.pos.x},${p.pos.y},${p.pos.z},${p.pos.rx},${p.pos.ry}")
   }
 
-  def sendBelt(pipe: ActorRef, items: Map[String, Stack]) {
-    for((p, i) <- items) {
-      send(pipe, s"G,${p},${i.size},${i.w}")
+  def sendBelt(pipe: ActorRef, items: Array[Stack]) {
+    for(i <- 0 until items.size) {
+      val stack = items(i)
+      send(pipe, s"G,${i},${stack.size},${stack.w}")
     }
   }
 

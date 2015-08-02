@@ -23,8 +23,6 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   val ns = "players"
 
-  implicit val itemFormat = jsonFormat1(Stack)
-  implicit val inventoryFormat = jsonFormat1(Inventory)
   implicit val protocolFormat = jsonFormat5(protocol.Position)
   implicit val playerFormat = jsonFormat5(Player)
   var chunkLoader: ActorRef = null
@@ -48,7 +46,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
         context.stop(self)
       }
     case JsonLoaded(_, None) =>
-      data = Player(nick, password, startingPosition, 0, Inventory(Map()))
+      data = Player(nick, password, startingPosition, 0, Inventory.createEmpty(9))
       chunkLoader = context.actorOf(ChunkLoaderActor.props(client, db, Position(data.position)))
       context.become(sendBelt)
       client ! PlayerInfo(pid, nick, self, data.position)
@@ -65,6 +63,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   def update(inventory: Inventory) {
     data = data.copy(inventory = inventory)
+    client ! BeltUpdate(inventory.stacks)
   }
 
   val random = new scala.util.Random
@@ -73,28 +72,12 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   def getInventoryBlock: Option[Block] = {
     val inventory = data.inventory
-    val active = data.active.toString
-    inventory.items.get(active) map { item =>
-      val updatedStack = item.copy(blocks = item.blocks.tail)
-      if(!updatedStack.blocks.isEmpty) {
-        update(inventory.copy(items =
-          inventory.items + (active -> updatedStack)))
-        client ! BeltUpdate(Map(active -> updatedStack))
-      } else {
-        if(data.active < 6) {
-          val m = material(random.nextInt(material.size))
-          val newStack = active -> Stack(for(i <- 0 until 64) yield { Block(Some(UUID.randomUUID), m) })
-          update(inventory.copy(items =
-            inventory.items + newStack))
-          client ! BeltUpdate(Map(newStack))
-        } else {
-          update(inventory.copy(items =
-            inventory.items - active))
-          client ! BeltUpdate(Map(active -> updatedStack))
-        }
-      }
-      item.blocks.head
+    val active = data.active
+    val block = inventory.blockHeadOption(active)
+    if(block.isDefined) {
+      update(inventory.stackTail(active))
     }
+    block
   }
 
   def action(pos: Position, button: Int) = {
@@ -102,49 +85,40 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       case 1 =>
         universe ! InteractPrimary(self, nick, pos, getInventoryBlock)
       case 2 =>
-        universe ! InteractSecondary(self, nick, pos, getInventoryBlock)
-    }
-  }
-
-
-
-  def putInBelt(stack: Stack) {
-    val block = stack.blocks.head
-    val inventory = data.inventory
-    inventory.items.find {
-      case (position, item) =>
-        item.w == block.w && item.blocks.size < 64
-    } match {
-      case Some((position, item)) =>
-        val itemUpdate = position -> item.copy(blocks = item.blocks :+ block)
-        update(inventory.copy(items = inventory.items + itemUpdate))
-        client ! BeltUpdate(Map(itemUpdate))
-      case None =>
-        (0 until 9).find { i =>
-          !inventory.items.get(i.toString).isDefined
-        } map { i =>
-          val itemUpdate = i.toString -> Stack(Seq(block))
-          update(inventory.copy(items = inventory.items + itemUpdate))
-          client ! BeltUpdate(Map(itemUpdate))
+        getInventoryBlock match {
+          case None =>
+            if(data.active < 6) {
+              val m = material(random.nextInt(material.size))
+              val stack = Stack.fromSeq(for(i <- 0 until Stack.MaxSize) yield { Block(None, m) })
+              update(data.inventory.withSlot(data.active, stack))
+            } else {
+              universe ! InteractSecondary(self, nick, pos, None)
+            }
+          case b =>
+            universe ! InteractSecondary(self, nick, pos, b)
         }
     }
   }
 
-  def moveInBelt(from: String, to: String) {
+  def putInBelt(stack: Stack) {
+    val block = stack.head
     val inventory = data.inventory
-    val items = inventory.items
-    if(!items.get(to).isDefined && items.get(from).isDefined) {
-      val move = (to -> items(from))
-      update(Inventory(items = items + move - from))
+    inventory.accept(block) map { i =>
+      update(i)
     }
+  }
+
+  def moveInBelt(from: Int, to: Int) {
+    val inventory = data.inventory
+    update(inventory.moveSlot(from, to))
   }
 
   def sendInventory() {
     val items = for(i <- 9 until 256) yield {
-      i.toString -> Stack(Seq())
+      i.toString -> Stack.Empty
     }
     val belt = for(i <- 0 until 9) yield {
-      i.toString -> data.inventory.items.getOrElse(i.toString, Stack(Seq()))
+      i.toString -> data.inventory.stacks(i)
     }
     sender ! InventoryUpdate((belt ++ items).toMap)
   }
@@ -157,7 +131,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   def sendBelt: Receive = {
     /* Send belt*/
-    client ! BeltUpdate(data.inventory.items)
+    client ! BeltUpdate(data.inventory.stacks)
     client ! BeltActiveUpdate(data.active.toString)
     ready
   }
@@ -197,13 +171,8 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       sendInventory()
     case MoveItem(from, to) =>
       if((BeltPositions contains from) && (BeltPositions contains to)) {
-        moveInBelt(from.toString, to.toString)
+        moveInBelt(from, to)
         sendInventory()
-        val items = data.inventory.items
-        val beltUpdate = 0 until 9 map(_.toString) map { i =>
-          i -> items.getOrElse(i, Stack(Seq()))
-        }
-        client ! BeltUpdate(beltUpdate.toMap)
       }
   }
 }
@@ -215,7 +184,7 @@ object PlayerActor {
   case class PlayerInfo(pid: Int, nick: String, actor: ActorRef, pos: protocol.Position)
   case class PlayerNick(pid: Int, nick: String)
   case class ActivateBeltItem(activate: Int)
-  case class BeltUpdate(items: Map[String, Stack])
+  case class BeltUpdate(items: Array[Stack])
   case class BeltActiveUpdate(active: String)
   case class Action(pos: Position, button: Int)
   case class SendInfo(to: ActorRef)

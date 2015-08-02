@@ -1,6 +1,7 @@
 package konstructs.api
 
 import java.util.UUID
+import scala.collection.JavaConverters._
 import akka.actor.ActorRef
 import com.google.gson.JsonElement
 import spray.json._
@@ -67,13 +68,85 @@ object Position {
     )
 }
 
-case class Stack(blocks: Seq[Block]) {
-  def w = blocks.headOption.map(_.w).getOrElse(0)
+case class Stack(blocks: java.util.List[Block]) {
+  def w = blocks.asScala.headOption.map(_.w).getOrElse(0)
   def size = blocks.size
   def isEmpty = blocks.isEmpty
+  def isFull = blocks.size == Stack.MaxSize
+  def head = blocks.asScala.head
+  def headOption = blocks.asScala.headOption
+  def tail = Stack(blocks.asScala.tail.asJava)
+  def accepts(block: Block): Boolean = isEmpty || (block.w == w && !isFull)
+  def accept(block: Block): Option[Stack] = if(accepts(block)) {
+    val newBlocks = blocks.asScala :+ block
+    Some(Stack(newBlocks.asJava))
+  } else {
+    None
+  }
 }
 
-case class Inventory(items: Map[String, Stack])
+object Stack {
+  def fromSeq(blocks: Seq[Block]): Stack =
+    apply(blocks.toList.asJava)
+  def fromBlock(block: Block): Stack =
+    apply(List(block).asJava)
+  val Empty = Stack(List.empty[Block].asJava)
+  val MaxSize = 64
+}
+
+case class Inventory(stacks: Array[Stack]) {
+  def withoutSlot(slot: Int) = {
+    val newStacks = stacks.clone()
+    newStacks(slot) = Stack.Empty
+    Inventory(newStacks)
+  }
+
+  def withSlot(slot: Int, stack: Stack) = {
+    val newStacks = stacks.clone()
+    newStacks(slot) = stack
+    Inventory(newStacks)
+  }
+
+  def stackOption(slot: Int): Option[Stack] = {
+    val stack = stacks(slot)
+    if(stack.isEmpty) {
+      None
+    } else {
+      Some(stack)
+    }
+  }
+
+  def blockHeadOption(slot: Int): Option[Block] = {
+    stackOption(slot) flatMap { stack =>
+      stack.headOption
+    }
+  }
+
+  def stackTail(slot: Int): Inventory = {
+    val stack = stacks(slot)
+    withSlot(slot, stack.tail)
+  }
+
+  def accept(block: Block): Option[Inventory] = {
+    stacks.zipWithIndex.find(_._1.accepts(block)) flatMap {
+      case (stack, slot) =>
+        stack.accept(block).map(withSlot(slot, _))
+    }
+  }
+
+  def moveSlot(from: Int, to: Int): Inventory = {
+    val fromStack = stacks(from)
+    val toStack = stacks(to)
+    withSlot(from, toStack).withSlot(to, fromStack)
+  }
+}
+
+object Inventory {
+  def createEmpty(dimension: Int): Inventory =
+    apply(Array.fill(dimension)(Stack.Empty))
+}
+
+case class InventoryView(items: Map[Int, Either[Int, Stack]])
 
 /* Messages for chat */
 case class Say(player: String, text: String)
@@ -107,14 +180,17 @@ case class GetOrCreateBlockId(pos: Position)
 case class GetOrCreateBlockIdResponse(pos: Position, id: UUID)
 
 /* Manage inventories */
-case class CreateInventory(blockId: UUID)
+case class CreateInventory(blockId: UUID, size: Int)
 case class GetInventory(blockId: UUID)
 case class GetInventoryResponse(blockId: UUID, inventory: Option[Inventory])
-case class PutStack(blockId: UUID, slot: String, stack: Stack)
-case class GetSlot(blockId: UUID, slot: String)
-case class GetSlotResponse(blockId: UUID, slot: String, stack: Option[Stack])
+case class PutStack(blockId: UUID, slot: Int, stack: Stack)
+case class GetSlot(blockId: UUID, slot: Int)
+case class GetSlotResponse(blockId: UUID, slot: Int, stack: Option[Stack])
 case class DeleteInventory(blockId: UUID)
-case class MoveStack(fromBlockId: UUID, from: String, toBlockId: UUID, to: String)
+case class MoveStack(fromBlockId: UUID, from: Int, toBlockId: UUID, to: Int)
+
+/* Manage player */
+case class ConnectInventoryView(manager: ActorRef, view: InventoryView)
 
 /* Messages for binary storage */
 case class StoreBinary(id: String, ns: String, data: Array[Byte])
@@ -137,5 +213,15 @@ object KonstructsJsonProtocol extends DefaultJsonProtocol {
       case x => deserializationError("Expected UUID as JsString, but got " + x)
     }
   }
+
+  implicit def javaListFormat[T :JsonFormat] = new RootJsonFormat[java.util.List[T]] {
+    def write(list: java.util.List[T]) = JsArray(list.asScala.map(_.toJson).toVector)
+    def read(value: JsValue): java.util.List[T] = value match {
+      case JsArray(elements) => elements.map(_.convertTo[T])(collection.breakOut).asJava
+      case x => deserializationError("Expected List as JsArray, but got " + x)
+    }
+  }
   implicit val blockFormat = jsonFormat2(Block)
+  implicit val stackFormat = jsonFormat1(Stack.apply)
+  implicit val inventoryFormat = jsonFormat1(Inventory.apply)
 }

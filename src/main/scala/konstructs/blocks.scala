@@ -47,7 +47,7 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef)
       sendTo ! GetBlockResponse(pos, Block(uuid, w))
     case ReceiveBlockId(pos, w, sendTo) =>
       val uuid = positionMapping.remove(str(pos))
-      sendTo ! ReceiveStack(Stack(Seq(Block(uuid, w))))
+      sendTo ! ReceiveStack(Stack.fromBlock(Block(uuid, w)))
     case GetOrCreateBlockId(pos) =>
       val uuid = positionMapping.getOrElseUpdate(str(pos), UUID.randomUUID)
       sender ! GetOrCreateBlockIdResponse(pos, uuid)
