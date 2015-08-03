@@ -14,6 +14,12 @@ case class Block(id: Option[UUID], w: Int) {
   def withId = copy(id = Some(UUID.randomUUID))
 }
 
+object Block {
+  def createWithId(w: Int): Block = {
+    apply(Some(UUID.randomUUID), w)
+  }
+}
+
 trait Filter[T] {
   def chain: Seq[ActorRef]
   def next(chain: Seq[ActorRef]): Filter[T]
@@ -146,7 +152,45 @@ object Inventory {
     apply(Array.fill(dimension)(Stack.Empty))
 }
 
-case class InventoryView(items: Map[Int, Either[Int, Stack]])
+case class InventoryView(rowOffset: Int, columnOffset: Int, rows: Int, columns: Int) {
+  import View._
+  def translate(pos: Int): Int = {
+    val r = pos / Columns
+    val c = pos % Columns
+    val row = r - rowOffset
+    val column = c - columnOffset
+    row * columns + column
+  }
+
+  def contains(pos: Int): Boolean = {
+    val row = pos / Columns
+    val col = pos % Columns
+    row >= rowOffset && row < rowOffset + rows && col >= columnOffset && col < columnOffset + columns
+  }
+}
+
+case class View(items: Map[Int, Option[Stack]]) {
+  import View._
+
+  def add(inventoryView: InventoryView, inventory: Inventory): View = {
+    View(items ++ (for(
+      row <- 0 until inventoryView.rows;
+      column <- 0 until inventoryView.columns
+    ) yield {
+      val r = row + inventoryView.rowOffset
+      val c = column + inventoryView.columnOffset
+      ((r * Columns + c) -> Some(inventory.stacks(row * inventoryView.columns + column)))
+    }))
+  }
+
+}
+
+object View {
+  val Columns = 16
+  val Empty = View((for(i <- 0 until 256) yield {
+    i -> None
+  }).toMap)
+}
 
 /* Messages for chat */
 case class Say(player: String, text: String)
@@ -184,13 +228,19 @@ case class CreateInventory(blockId: UUID, size: Int)
 case class GetInventory(blockId: UUID)
 case class GetInventoryResponse(blockId: UUID, inventory: Option[Inventory])
 case class PutStack(blockId: UUID, slot: Int, stack: Stack)
-case class GetSlot(blockId: UUID, slot: Int)
-case class GetSlotResponse(blockId: UUID, slot: Int, stack: Option[Stack])
+case class RemoveStack(blockId: UUID, slot: Int)
+case class GetStack(blockId: UUID, slot: Int)
+case class GetStackResponse(blockId: UUID, slot: Int, stack: Option[Stack])
 case class DeleteInventory(blockId: UUID)
 case class MoveStack(fromBlockId: UUID, from: Int, toBlockId: UUID, to: Int)
 
 /* Manage player */
-case class ConnectInventoryView(manager: ActorRef, view: InventoryView)
+case class ConnectView(manager: ActorRef, view: View)
+case class UpdateView(view: View)
+case class MoveViewStack(from: Int, to: Int)
+case class PutViewStack(stack: Stack, to: Int)
+case class RemoveViewStack(from: Int)
+case object CloseInventory
 
 /* Messages for binary storage */
 case class StoreBinary(id: String, ns: String, data: Array[Byte])
@@ -221,7 +271,7 @@ object KonstructsJsonProtocol extends DefaultJsonProtocol {
       case x => deserializationError("Expected List as JsArray, but got " + x)
     }
   }
-  implicit val blockFormat = jsonFormat2(Block)
+  implicit val blockFormat = jsonFormat2(Block.apply)
   implicit val stackFormat = jsonFormat1(Stack.apply)
   implicit val inventoryFormat = jsonFormat1(Inventory.apply)
 }

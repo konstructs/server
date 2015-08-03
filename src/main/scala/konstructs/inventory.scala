@@ -4,8 +4,9 @@ import java.util.UUID
 
 import scala.collection.mutable
 
-import akka.actor.Actor
+import akka.actor.{ Actor, Props, ActorRef }
 
+import konstructs.plugin.PluginConstructor
 import konstructs.api._
 
 class InventoryActor extends Actor {
@@ -47,8 +48,16 @@ class InventoryActor extends Actor {
         sender ! ReceiveStack(s)
       }
 
-    case GetSlot(blockId, slot) =>
-      sender ! GetSlotResponse(blockId, slot, get(blockId, slot))
+    case RemoveStack(blockId, slot) =>
+      val stack = remove(blockId, slot)
+      if(stack.isDefined) {
+        sender ! ReceiveStack(stack.get)
+      } else {
+        sender ! ReceiveStack(Stack.Empty)
+      }
+
+    case GetStack(blockId, slot) =>
+      sender ! GetStackResponse(blockId, slot, get(blockId, slot))
 
     case DeleteInventory(blockId) =>
       inventories -= blockId
@@ -58,4 +67,11 @@ class InventoryActor extends Actor {
         remove(fromBlockId, from).map(put(toBlockId, to, _))
       }
   }
+}
+
+object InventoryActor {
+
+  @PluginConstructor
+  def props(name: String, universe: ActorRef): Props =
+    Props(classOf[InventoryActor])
 }

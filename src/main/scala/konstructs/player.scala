@@ -19,8 +19,6 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   import Db.ChunkSize
   import KonstructsJsonProtocol._
 
-  val BeltPositions = (0 until 9).toSet
-
   val ns = "players"
 
   implicit val protocolFormat = jsonFormat5(protocol.Position)
@@ -46,7 +44,11 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
         context.stop(self)
       }
     case JsonLoaded(_, None) =>
-      data = Player(nick, password, startingPosition, 0, Inventory.createEmpty(9))
+      val inventoryBlock = Block.createWithId(konstructs.SackActor.BlockId)
+      universe ! CreateInventory(inventoryBlock.id.get, 16)
+      Inventory.createEmpty(9).accept(inventoryBlock) map { inventory =>
+        data = Player(nick, password, startingPosition, 0, inventory)
+      }
       chunkLoader = context.actorOf(ChunkLoaderActor.props(client, db, Position(data.position)))
       context.become(sendBelt)
       client ! PlayerInfo(pid, nick, self, data.position)
@@ -113,16 +115,6 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     update(inventory.moveSlot(from, to))
   }
 
-  def sendInventory() {
-    val items = for(i <- 9 until 256) yield {
-      i.toString -> Stack.Empty
-    }
-    val belt = for(i <- 0 until 9) yield {
-      i.toString -> data.inventory.stacks(i)
-    }
-    sender ! InventoryUpdate((belt ++ items).toMap)
-  }
-
   override def postStop {
     if(data != null)
       storeJson(nick, data.toJson)
@@ -167,13 +159,56 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       client.forward(s)
     case i: IncreaseChunks =>
       chunkLoader.forward(i)
-    case Konstruct =>
-      sendInventory()
+    case ConnectView(inventoryActor, view) =>
+      context.become(manageInventory(inventoryActor, view), discardOld = false)
+      client ! InventoryUpdate(addBelt(view))
+  }
+
+  val BeltView = InventoryView(0,0,1,9)
+
+  def addBelt(view: View) = view.add(BeltView, data.inventory)
+
+  def manageInventory(inventoryActor: ActorRef, view: View): Receive = {
     case MoveItem(from, to) =>
-      if((BeltPositions contains from) && (BeltPositions contains to)) {
-        moveInBelt(from, to)
-        sendInventory()
+      if(BeltView.contains(from) && BeltView.contains(to)) {
+        moveInBelt(BeltView.translate(from), BeltView.translate(to))
+        client ! InventoryUpdate(addBelt(view))
+      } else if(BeltView.contains(from)) {
+        val slot = BeltView.translate(from)
+        data.inventory.stackOption(slot) map { stack =>
+          update(data.inventory.withoutSlot(slot))
+          inventoryActor ! PutViewStack(stack, to)
+        }
+      } else if(BeltView.contains(to)) {
+        val slot = BeltView.translate(to)
+        if(!data.inventory.stackOption(slot).isDefined) {
+          inventoryActor ! RemoveViewStack(from)
+          context.become(waitForStack(slot), discardOld = false)
+        }
+      } else {
+        inventoryActor ! MoveViewStack(from, to)
       }
+    case UpdateView(view) =>
+      client ! InventoryUpdate(addBelt(view))
+    case CloseInventory =>
+      inventoryActor ! CloseInventory
+      context.unbecome()
+      unstashAll()
+    case _ =>
+      stash()
+  }
+
+  def waitForStack(slot: Int): Receive = {
+    case ReceiveStack(stack) =>
+      update(data.inventory.withSlot(slot, stack))
+      context.unbecome()
+      unstashAll()
+    case CloseInventory =>
+      stash()
+      context.unbecome()
+      unstashAll()
+    case _ =>
+      stash()
   }
 }
 
@@ -189,7 +224,7 @@ object PlayerActor {
   case class Action(pos: Position, button: Int)
   case class SendInfo(to: ActorRef)
   case class IncreaseChunks(amount: Int)
-  case class InventoryUpdate(items: Map[String, Stack])
+  case class InventoryUpdate(view: View)
   case object Konstruct
   case class MoveItem(from: Int, to: Int)
 

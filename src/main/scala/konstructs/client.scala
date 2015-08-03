@@ -46,6 +46,8 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       player.actor ! konstructs.protocol.Say(message)
     } else if(command.startsWith("K")) {
       player.actor ! Konstruct
+    } else if(command.startsWith("I")) {
+      player.actor ! CloseInventory
     } else if(command.startsWith("R,")) {
       val ints = readData(_.toInt, command.drop(2))
       player.actor ! MoveItem(ints(0), ints(1))
@@ -89,8 +91,8 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       sendBelt(pipe, items)
     case BeltActiveUpdate(active) =>
       sendBeltActive(pipe, active)
-    case InventoryUpdate(items) =>
-      sendInventory(pipe, items)
+    case InventoryUpdate(view) =>
+      sendInventory(pipe, view)
     case p: PlayerMovement =>
       sendPlayerMovement(pipe, p)
     case PlayerNick(pid, nick) =>
@@ -131,9 +133,14 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     send(pipe, s"A,${active}")
   }
 
-  def sendInventory(pipe: ActorRef, items: Map[String, Stack]) {
-    for((p, i) <- items) {
-      send(pipe, s"I,${p},${i.size},${i.w}")
+  def sendInventory(pipe: ActorRef, view: View) {
+    for((p, stackOption) <- view.items) {
+      stackOption match {
+        case Some(stack) =>
+          send(pipe, s"I,${p},${stack.size},${stack.w}")
+        case None =>
+          send(pipe, s"I,${p},0,-1")
+      }
     }
   }
 
