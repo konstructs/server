@@ -16,6 +16,8 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
   import InventoryActor._
   import KonstructsJsonProtocol._
 
+  schedule(5000, StoreData)
+
   loadJson(InventoriesFile)
 
   var inventories: mutable.HashMap[String, Inventory] = null
