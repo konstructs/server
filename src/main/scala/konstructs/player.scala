@@ -72,7 +72,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   val material = Set(2,3,4,5,6,8,10,11,12,13).toVector
 
-  def getInventoryBlock: Option[Block] = {
+  def getBeltBlock: Option[Block] = {
     val inventory = data.inventory
     val active = data.active
     val block = inventory.blockHeadOption(active)
@@ -85,9 +85,9 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   def action(pos: Position, button: Int) = {
     button match {
       case 1 =>
-        universe ! InteractPrimary(self, nick, pos, getInventoryBlock)
+        universe ! InteractPrimary(self, nick, pos, getBeltBlock)
       case 2 =>
-        getInventoryBlock match {
+        getBeltBlock match {
           case None =>
             if(data.active < 6) {
               val m = material(random.nextInt(material.size))
