@@ -189,6 +189,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
         inventoryActor ! MoveViewStack(from, to)
       }
     case UpdateView(view) =>
+      context.become(manageInventory(inventoryActor, view))
       client ! InventoryUpdate(addBelt(view))
     case CloseInventory =>
       inventoryActor ! CloseInventory
