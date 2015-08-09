@@ -181,7 +181,6 @@ object PlayerActor {
   case class SendInfo(to: ActorRef)
   case class IncreaseChunks(amount: Int)
 
-  val LoadYChunks = 5
   def props(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, universe: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, db, universe, store, startingPosition)
 
 }
@@ -195,7 +194,7 @@ class ChunkLoaderActor(client: ActorRef, db: ActorRef, position: Position) exten
   var requestedChunks = Set.empty[ChunkPosition]
   var chunksToSend = Seq.empty[ChunkPosition]
   var currentChunk = ChunkPosition(position)
-  var visible = visibleChunks(currentChunk, 8)
+  var visible = visibleChunks(currentChunk, ChunksVisible)
   var maxChunksToSend = 0
   var centralChunks = neighbors(currentChunk)
 
@@ -243,7 +242,7 @@ class ChunkLoaderActor(client: ActorRef, db: ActorRef, position: Position) exten
       val chunk = ChunkPosition(pos)
       if(chunk != currentChunk) {
         currentChunk = chunk
-        visible = visibleChunks(currentChunk, 8)
+        visible = visibleChunks(currentChunk, ChunksVisible)
         centralChunks = neighbors(currentChunk)
         update()
         sendChunks()
@@ -260,13 +259,20 @@ class ChunkLoaderActor(client: ActorRef, db: ActorRef, position: Position) exten
 }
 
 object ChunkLoaderActor {
+  val ChunksVisible = 11
   case class UpdatePosition(pos: Position)
 
   def visibleChunks(chunk: ChunkPosition, visibility: Int): Set[ChunkPosition] = {
     val range = -visibility to visibility
     (for(p <- range; q <- range; k <-range) yield {
-      chunk.translate(p, q, k)
-    }).filter(_.k >= 0).toSet
+      (p, q, k)
+    }).filter {
+      case (p, q, k) =>
+        math.sqrt(p*p + q*q + k*k) < visibility
+    } map {
+      case (p, q, k) =>
+        chunk.translate(p, q, k)
+    } toSet
   }
 
   def props(client: ActorRef, db: ActorRef, position: Position) =
