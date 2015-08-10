@@ -90,58 +90,25 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
 object UniverseActor {
   case class CreatePlayer(nick: String, password: String)
 
-  @PluginConstructor
-  def props(name: String, notUsed: ActorRef,
-    @Config(key = "binary-storage") binaryStorage: ActorRef,
-    @Config(key = "json-storage") jsonStorage: ActorRef,
-    @Config(key = "inventory-manager") inventoryManager: ActorRef,
-    @ListConfig(key = "chat-filters", elementType = classOf[ActorRef]) chatFilters: Seq[ActorRef],
-    @ListConfig(key = "block-listeners", elementType = classOf[ActorRef]) blockListeners: Seq[ActorRef]
-  ): Props
-  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, inventoryManager, chatFilters, blockListeners, Seq(), Seq())
+  def nullAsEmpty[T](seq: Seq[T]): Seq[T] = if(seq == null) {
+    Seq.empty[T]
+  } else {
+    seq
+  }
 
-  @PluginConstructor
-  def propsWithOnlyBlocks(name: String, notUsed: ActorRef,
-    @Config(key = "binary-storage") binaryStorage: ActorRef,
-    @Config(key = "json-storage") jsonStorage: ActorRef,
-    @Config(key = "inventory-manager") inventoryManager: ActorRef,
-    @ListConfig(key = "block-listeners", elementType = classOf[ActorRef]) blockListeners: Seq[ActorRef]
-  ): Props
-  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, inventoryManager, Seq(), blockListeners, Seq(), Seq())
 
   @PluginConstructor
   def props(name: String, notUsed: ActorRef,
     @Config(key = "binary-storage") binaryStorage: ActorRef,
     @Config(key = "json-storage") jsonStorage: ActorRef,
     @Config(key = "inventory-manager") inventoryManager: ActorRef,
-    @ListConfig(key = "chat-filters", elementType = classOf[ActorRef]) chatFilters: Seq[ActorRef]): Props
-  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, inventoryManager, chatFilters, Seq(), Seq(), Seq())
+    @ListConfig(key = "chat-filters", elementType = classOf[ActorRef], optional = true) chatFilters: Seq[ActorRef],
+    @ListConfig(key = "block-listeners", elementType = classOf[ActorRef], optional = true) blockListeners: Seq[ActorRef],
+    @ListConfig(key = "primary-interaction-listeners", elementType = classOf[ActorRef], optional = true) primaryListeners: Seq[ActorRef],
+    @ListConfig(key = "secondary-interaction-listeners", elementType = classOf[ActorRef], optional = true) secondaryListeners: Seq[ActorRef]
+  ): Props =
+    Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, inventoryManager,
+      nullAsEmpty(chatFilters), nullAsEmpty(blockListeners), nullAsEmpty(primaryListeners),
+      nullAsEmpty(secondaryListeners))
 
-  @PluginConstructor
-  def props(name: String, notUsed: ActorRef,
-    @Config(key = "binary-storage") binaryStorage: ActorRef,
-    @Config(key = "json-storage") jsonStorage: ActorRef,
-      @Config(key = "inventory-manager") inventoryManager: ActorRef): Props
-  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, inventoryManager, Seq(), Seq(), Seq(), Seq())
-
-  @PluginConstructor
-  def props(name: String, notUsed: ActorRef,
-    @Config(key = "binary-storage") binaryStorage: ActorRef,
-    @Config(key = "json-storage") jsonStorage: ActorRef,
-    @Config(key = "inventory-manager") inventoryManager: ActorRef,
-    @ListConfig(key = "chat-filters", elementType = classOf[ActorRef]) chatFilters: Seq[ActorRef],
-    @ListConfig(key = "block-listeners", elementType = classOf[ActorRef]) blockListeners: Seq[ActorRef],
-    @ListConfig(key = "primary-interaction-listeners", elementType = classOf[ActorRef]) primaryListeners: Seq[ActorRef],
-    @ListConfig(key = "secondary-interaction-listeners", elementType = classOf[ActorRef]) secondaryListeners: Seq[ActorRef]
-  ): Props
-  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, inventoryManager, chatFilters, blockListeners, primaryListeners, secondaryListeners)
-
-  @PluginConstructor
-  def propsWithOnlySecondary(name: String, notUsed: ActorRef,
-    @Config(key = "binary-storage") binaryStorage: ActorRef,
-    @Config(key = "json-storage") jsonStorage: ActorRef,
-    @Config(key = "inventory-manager") inventoryManager: ActorRef,
-    @ListConfig(key = "secondary-interaction-listeners", elementType = classOf[ActorRef]) secondaryListeners: Seq[ActorRef]
-  ): Props
-  = Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, inventoryManager, Seq(), Seq(), Seq(), secondaryListeners)
 }

@@ -12,7 +12,7 @@ object Plugin {
   val StaticParameters = 2
 }
 
-case class PluginConfigParameterMeta(name: String, configType: Class[_], listType: Option[Class[_]] = None)
+case class PluginConfigParameterMeta(name: String, configType: Class[_], optional: Boolean, listType: Option[Class[_]] = None)
 
 case class PluginConfigMeta(method: Method, parameters: Seq[PluginConfigParameterMeta])
 
@@ -23,9 +23,9 @@ object PluginConfigMeta {
       .flatMap(_.filter { a => a.isInstanceOf[Config] || a.isInstanceOf[ListConfig] } )
     val parameters = m.getParameterTypes.drop(Plugin.StaticParameters).zip(annotations).map {
       case (t, c: Config) =>
-        PluginConfigParameterMeta(c.key, t)
+        PluginConfigParameterMeta(c.key, t, c.optional)
       case (t, c: ListConfig) =>
-        PluginConfigParameterMeta(c.key, c.elementType, Some(t))
+        PluginConfigParameterMeta(c.key, c.elementType, c.optional, Some(t))
     }
     apply(m, parameters)
   }
@@ -92,6 +92,18 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
     case ActorRefType => seq.head
   }
 
+  private def getOptional(optional: Boolean)(f: => Object): Object = {
+    if(optional) {
+      try {
+        f
+      } catch {
+        case _: ConfigException.Missing => null
+      }
+    } else {
+      f
+    }
+  }
+
   private def keepString(s: String, config: TypesafeConfig): String = config.getString(s)
 
   private def toFile(s: String, config: TypesafeConfig): File = new File(config.getString(s))
@@ -107,21 +119,27 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
 
   def configurePlugin(name: String, config: TypesafeConfig, c: PluginConfigMeta): ConfiguredPlugin = {
     val args: Seq[Either[Object, Dependencies]] = c.parameters.map { p =>
+      val opt =
+        getOptional(p.optional) _
       p.configType match {
         case StringType => if(p.listType.isDefined) {
-          Left(listType(p.listType.get, configToSeq(keepString)(config.getConfig(p.name))))
+          Left(opt(listType(p.listType.get, configToSeq(keepString)(config.getConfig(p.name)))))
         } else {
-          Left(config.getString(p.name))
+          Left(opt(config.getString(p.name)))
         }
         case FileType => if(p.listType.isDefined) {
-          Left(listType(p.listType.get, configToSeq(toFile)(config.getConfig(p.name))))
+          Left(opt(listType(p.listType.get, configToSeq(toFile)(config.getConfig(p.name)))))
         } else {
-          Left(toFile(p.name, config))
+          Left(opt(toFile(p.name, config)))
         }
-        case ActorRefType => if(p.listType.isDefined) {
-          Right(Dependencies(configToSeq(keepString)(config.getConfig(p.name)), p.listType.get))
-        } else {
-          Right(Dependencies(config.getString(p.name)))
+        case ActorRefType => try {
+          if(p.listType.isDefined) {
+            Right(Dependencies(configToSeq(keepString)(config.getConfig(p.name)), p.listType.get))
+          } else {
+            Right(Dependencies(config.getString(p.name)))
+          }
+        } catch {
+          case _: ConfigException.Missing => Left(null)
         }
       }
     }
