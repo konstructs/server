@@ -27,10 +27,14 @@ object ShardPosition {
 
 }
 
-class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
+class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
+  jsonStorage: ActorRef)
     extends Actor {
   import DbActor._
   import Db.ChunkSize
+
+  val blockMeta =
+    context.actorOf(BlockMetaActor.props("block-meta", jsonStorage), "block-meta")
 
   def shardActorId(r: ShardPosition) = s"shard-${r.m}-${r.n}-${r.o}"
 
@@ -39,7 +43,7 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
     context.child(rid) match {
       case Some(a) => a
       case None =>
-        context.actorOf(ShardActor.props(self, shard, binaryStorage, generator), rid)
+        context.actorOf(ShardActor.props(self, blockMeta, shard, binaryStorage, generator), rid)
     }
   }
 
@@ -56,7 +60,7 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
       getShardActor(ShardPosition(b.pos)) forward b
     case g: GetBlock =>
       getShardActor(ShardPosition(g.pos)) forward g
-    case b: BlockUpdate =>
+    case b: BlockDataUpdate =>
       universe ! b
   }
 }
@@ -65,5 +69,7 @@ object DbActor {
   case class SendBlocks(chunk: ChunkPosition, version: Option[Int])
   case class BlockList(chunk: ChunkPosition, data: ChunkData)
 
-  def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef) = Props(classOf[DbActor], universe, generator, binaryStorage)
+  def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
+    jsonStorage: ActorRef) =
+    Props(classOf[DbActor], universe, generator, binaryStorage, jsonStorage)
 }

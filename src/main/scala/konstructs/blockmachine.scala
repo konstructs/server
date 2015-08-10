@@ -3,7 +3,7 @@ package konstructs
 import scala.collection.mutable
 import scala.collection.JavaConverters._
 
-import konstructs.api.PutBlock
+import konstructs.api._
 
 case class BlockMachine(alphabet: Map[Char, Int]) {
   import BlockMachine._
@@ -47,7 +47,7 @@ case class BlockMachine(alphabet: Map[Char, Int]) {
           dir = oldDir
         case a =>
           pos = pos + dir.adg
-          blocks += (PutBlock(pos, alphabet(a)))
+          blocks += (PutBlock(pos, Block(None, alphabet(a))))
       }
     }
     blocks.toSeq

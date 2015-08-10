@@ -2,6 +2,8 @@ package konstructs
 
 import org.scalatest.{ Matchers, WordSpec }
 
+import konstructs.api._
+
 class GeometrySpec extends WordSpec with Matchers {
 
   "A Position" should {

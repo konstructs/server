@@ -9,4 +9,5 @@ import java.lang.annotation.ElementType;
 @Target(ElementType.PARAMETER)
 public @interface Config {
     public String key();
+    public boolean optional() default false;
 }

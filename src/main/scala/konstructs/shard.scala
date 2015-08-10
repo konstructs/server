@@ -174,13 +174,13 @@ object ChunkData {
 
 }
 
-class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef, chunkGenerator: ActorRef)
+class ShardActor(db: ActorRef, blockMeta: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef, chunkGenerator: ActorRef)
     extends Actor with Stash with utils.Scheduled with BinaryStorage {
   import ShardActor._
   import GeneratorActor._
   import DbActor._
-  import PlayerActor.ReceiveBlock
   import Db._
+  import BlockMetaActor._
 
   val ns = "chunks"
 
@@ -242,27 +242,27 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       loadChunk(chunk).map { c =>
         s ! BlockList(chunk, c)
       }
-    case PutBlock(p, w) =>
+    case PutBlock(p, b) =>
       val s = sender
       updateChunk(p) { old =>
         if(old == 0) {
-          db ! BlockUpdate(p, old.toInt, w)
-          w.toByte
+          blockMeta ! PutBlockId(p, b, old, db)
+          b.w.toByte
         } else {
-          s ! ReceiveBlock(w.toByte)
+          s ! ReceiveStack(Stack.fromBlock(b))
           old
         }
       }
     case GetBlock(p) =>
       val s = sender
       readChunk(p) { block =>
-        s ! BlockPosition(p, block.toInt)
+        blockMeta ! GetBlockId(p, block.toInt, s)
       }
     case DestroyBlock(p) =>
       val s = sender
       updateChunk(p) { old =>
-        s ! ReceiveBlock(old)
-        db ! BlockUpdate(p, old.toInt, 0)
+        blockMeta ! ReceiveBlockId(p, old, s)
+        db ! BlockDataUpdate(p, old.toInt, 0)
         0
       }
     case BinaryLoaded(id, dataOption) =>
@@ -299,6 +299,7 @@ object ShardActor {
     lp + lq * Db.ShardSize + lk * Db.ShardSize * Db.ShardSize
   }
 
-  def props(db: ActorRef, shard: ShardPosition, binaryStorage: ActorRef, chunkGenerator: ActorRef) =
-    Props(classOf[ShardActor], db, shard, binaryStorage, chunkGenerator)
+  def props(db: ActorRef, blockMeta: ActorRef, shard: ShardPosition,
+    binaryStorage: ActorRef, chunkGenerator: ActorRef) =
+    Props(classOf[ShardActor], db, blockMeta, shard, binaryStorage, chunkGenerator)
 }

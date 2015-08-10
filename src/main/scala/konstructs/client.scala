@@ -5,8 +5,8 @@ import akka.io.{ Tcp, TcpPipelineHandler }
 import akka.util.ByteString
 import TcpPipelineHandler.{ Init, WithinActorContext }
 
-import konstructs.{ Item, PlayerActor, UniverseActor, DbActor }
-import konstructs.api.{ Say, Said }
+import konstructs.{ PlayerActor, UniverseActor, DbActor }
+import konstructs.api._
 
 class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef) extends Actor with Stash {
   import DbActor.BlockList
@@ -35,17 +35,22 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     } else if(command.startsWith("C,")) {
       val ints = readData(_.toInt, command.drop(2))
       player.actor ! IncreaseChunks(ints(0))
-    } else if(command.startsWith("I")) {
-      player.actor ! SendInventory
     } else if(command.startsWith("A,")) {
       val ints = readData(_.toInt, command.drop(2))
-      player.actor ! ActivateInventoryItem(ints(0))
+      player.actor ! ActivateBeltItem(ints(0))
     } else if(command.startsWith("M,")) {
       val ints = readData(_.toInt, command.drop(2))
-      player.actor ! Action(konstructs.Position(ints(0), ints(1), ints(2)), ints(3))
+      player.actor ! Action(konstructs.api.Position(ints(0), ints(1), ints(2)), ints(3))
     } else if(command.startsWith("T,")) {
       val message = command.substring(2)
-      player.actor ! Say(message)
+      player.actor ! konstructs.protocol.Say(message)
+    } else if(command.startsWith("K")) {
+      player.actor ! Konstruct
+    } else if(command.startsWith("I")) {
+      player.actor ! CloseInventory
+    } else if(command.startsWith("R,")) {
+      val ints = readData(_.toInt, command.drop(2))
+      player.actor ! MoveItem(ints(0), ints(1))
     }
   }
 
@@ -58,6 +63,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
         universe ! CreatePlayer(strings(0), strings(1))
         context.become(waitForPlayer(sender))
       } else {
+        sendSaid(sender, s"This server only supports protocol version $Version")
         context.stop(self)
       }
     case _: Tcp.ConnectionClosed =>
@@ -81,10 +87,12 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       sendBlocks(pipe, chunk, data.data)
     case b: SendBlock =>
       sendBlock(pipe, b)
-    case InventoryUpdate(items) =>
-      sendInventory(pipe, items)
-    case InventoryActiveUpdate(active) =>
-      sendInventoryActive(pipe, active)
+    case BeltUpdate(items) =>
+      sendBelt(pipe, items)
+    case BeltActiveUpdate(active) =>
+      sendBeltActive(pipe, active)
+    case InventoryUpdate(view) =>
+      sendInventory(pipe, view)
     case p: PlayerMovement =>
       sendPlayerMovement(pipe, p)
     case PlayerNick(pid, nick) =>
@@ -114,14 +122,26 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     send(pipe, s"P,${p.pid},${p.pos.x},${p.pos.y},${p.pos.z},${p.pos.rx},${p.pos.ry}")
   }
 
-  def sendInventory(pipe: ActorRef, items: Map[String, Item]) {
-    for((p, i) <- items) {
-      send(pipe, s"I,${p},${i.amount},${i.w}")
+  def sendBelt(pipe: ActorRef, items: Array[Stack]) {
+    for(i <- 0 until items.size) {
+      val stack = items(i)
+      send(pipe, s"G,${i},${stack.size},${stack.w}")
     }
   }
 
-  def sendInventoryActive(pipe: ActorRef, active: Int) {
+  def sendBeltActive(pipe: ActorRef, active: String) {
     send(pipe, s"A,${active}")
+  }
+
+  def sendInventory(pipe: ActorRef, view: View) {
+    for((p, stackOption) <- view.items) {
+      stackOption match {
+        case Some(stack) =>
+          send(pipe, s"I,${p},${stack.size},${stack.w}")
+        case None =>
+          send(pipe, s"I,${p},0,-1")
+      }
+    }
   }
 
   def sendBlock(pipe: ActorRef, b: SendBlock) {
@@ -154,7 +174,7 @@ object Client {
   val B = 'B'.toByte
   val V = 'V'.toByte
   val P = 'P'.toByte
-  val Version = 3
+  val Version = 4
   case object Setup
   def props(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef) = Props(classOf[Client], init, universe)
 }

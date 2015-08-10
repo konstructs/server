@@ -2,6 +2,8 @@ package konstructs
 
 import akka.actor.{ Actor, ActorRef, Props }
 
+import konstructs.api._
+
 class GeneratorActor(jsonStorage: ActorRef, binaryStorage: ActorRef) extends Actor {
   import GeneratorActor._
 

@@ -10,4 +10,5 @@ import java.lang.annotation.ElementType;
 public @interface ListConfig {
     public String key();
     public Class elementType();
+    public boolean optional() default false;
 }
