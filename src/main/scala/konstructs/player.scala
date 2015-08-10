@@ -46,12 +46,11 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     case JsonLoaded(_, None) =>
       val inventoryBlock = Block.createWithId(konstructs.SackActor.BlockId)
       universe ! CreateInventory(inventoryBlock.id.get, 16)
-      Inventory.createEmpty(9).accept(inventoryBlock) map { inventory =>
-        data = Player(nick, password, startingPosition, 0, inventory)
-      }
+      val inventory = Inventory.createEmpty(9).withSlot(0, Stack.fromBlock(inventoryBlock))
+      data = Player(nick, password, startingPosition, 0, inventory)
       chunkLoader = context.actorOf(ChunkLoaderActor.props(client, db, Position(data.position)))
-      context.become(sendBelt)
       client ! PlayerInfo(pid, nick, self, data.position)
+      context.become(sendBelt)
       unstashAll()
     case _ =>
       stash()
