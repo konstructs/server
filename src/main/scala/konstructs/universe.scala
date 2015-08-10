@@ -26,7 +26,7 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
   }
 
   def player(nick: String, password: String) {
-    val player = context.actorOf(PlayerActor.props(nextPid, nick, password, sender, db, self, jsonStorage, protocol.Position(0,32f,0,0,0)), playerActorId(nextPid))
+    val player = context.actorOf(PlayerActor.props(nextPid, nick, password, sender, db, self, jsonStorage, protocol.Position(0,512f,0,0,0)), playerActorId(nextPid))
     allPlayers(except = Some(nextPid)).foreach(_ ! PlayerActor.SendInfo(player))
     allPlayers(except = Some(nextPid)).foreach(player ! PlayerActor.SendInfo(_))
     nextPid = nextPid + 1
