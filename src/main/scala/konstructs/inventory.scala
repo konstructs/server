@@ -25,8 +25,19 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
   private def put(blockId: UUID, slot: Int, stack: Stack): Option[Stack] = {
     if(inventories.contains(blockId.toString)) {
       val inventory = inventories(blockId.toString)
-      inventories += blockId.toString -> inventory.withSlot(slot, stack)
-      inventory.stackOption(slot)
+      val oldStack = inventory.stacks.get(slot)
+      oldStack.acceptStack(stack) match {
+        case Some((newStack, left)) =>
+          inventories += blockId.toString -> inventory.withSlot(slot, newStack)
+          if(left != Stack.Empty) {
+            Some(left)
+          } else {
+            None
+          }
+        case None =>
+          inventories += blockId.toString -> inventory.withSlot(slot, stack)
+          inventory.stackOption(slot)
+      }
     } else {
       Some(stack)
     }
@@ -84,11 +95,6 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
 
     case DeleteInventory(blockId) =>
       inventories -= blockId.toString
-
-    case MoveStack(fromBlockId, from, toBlockId, to) =>
-      if(!get(toBlockId, to).isDefined) {
-        remove(fromBlockId, from).map(put(toBlockId, to, _))
-      }
 
     case StoreData =>
       storeJson(InventoriesFile, inventories.toMap.toJson)

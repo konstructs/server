@@ -77,12 +77,30 @@ object Position {
 case class Stack(blocks: java.util.List[Block]) {
   def w = blocks.asScala.headOption.map(_.w).getOrElse(0)
   def size = blocks.size
+  def room = Stack.MaxSize - size
   def isEmpty = blocks.isEmpty
   def isFull = blocks.size == Stack.MaxSize
   def head = blocks.asScala.head
   def headOption = blocks.asScala.headOption
   def tail = Stack(blocks.asScala.tail.asJava)
+  def take(n: Int) = Stack(blocks.asScala.take(n).asJava)
+  def drop(n: Int) = {
+    val left = blocks.asScala.drop(n)
+    if(left.size != 0) {
+      Stack(left.asJava)
+    } else {
+      Stack.Empty
+    }
+  }
+  def acceptsStack(stack: Stack): Boolean = isEmpty || (stack.w == w && !isFull)
   def accepts(block: Block): Boolean = isEmpty || (block.w == w && !isFull)
+  def acceptStack(stack: Stack): Option[(Stack, Stack)] = if(acceptsStack(stack)) {
+    val r = room
+    val newBlocks = blocks.asScala ++ stack.take(r).blocks.asScala
+    Some((Stack(newBlocks.asJava), stack.drop(r)))
+  } else {
+    None
+  }
   def accept(block: Block): Option[Stack] = if(accepts(block)) {
     val newBlocks = blocks.asScala :+ block
     Some(Stack(newBlocks.asJava))
@@ -100,23 +118,23 @@ object Stack {
   val MaxSize = 64
 }
 
-case class Inventory(stacks: Array[Stack]) {
-  def isEmpty = !stacks.exists(!_.isEmpty)
+case class Inventory(stacks: java.util.List[Stack]) {
+  def isEmpty = !stacks.asScala.exists(!_.isEmpty)
 
   def withoutSlot(slot: Int) = {
-    val newStacks = stacks.clone()
+    val newStacks = stacks.asScala.clone
     newStacks(slot) = Stack.Empty
-    Inventory(newStacks)
+    copy(newStacks.asJava)
   }
 
   def withSlot(slot: Int, stack: Stack) = {
-    val newStacks = stacks.clone()
+    val newStacks = stacks.asScala.clone
     newStacks(slot) = stack
-    Inventory(newStacks)
+    copy(newStacks.asJava)
   }
 
   def stackOption(slot: Int): Option[Stack] = {
-    val stack = stacks(slot)
+    val stack = stacks.get(slot)
     if(stack.isEmpty) {
       None
     } else {
@@ -131,27 +149,91 @@ case class Inventory(stacks: Array[Stack]) {
   }
 
   def stackTail(slot: Int): Inventory = {
-    val stack = stacks(slot)
+    val stack = stacks.get(slot)
     withSlot(slot, stack.tail)
   }
 
   def accept(block: Block): Option[Inventory] = {
-    stacks.zipWithIndex.find(_._1.accepts(block)) flatMap {
+    stacks.asScala.zipWithIndex.find(_._1.accepts(block)) flatMap {
       case (stack, slot) =>
         stack.accept(block).map(withSlot(slot, _))
     }
   }
 
+  def accept(stack: Stack): Option[(Inventory, Stack)] = {
+    stacks.asScala.zipWithIndex.find(_._1.acceptsStack(stack)) match {
+      case Some((stackWithRoom, slot)) =>
+        stackWithRoom.acceptStack(stack).flatMap {
+          case (newStack, Stack.Empty) =>
+            Some((withSlot(slot, newStack), Stack.Empty))
+          case (newStack, left) =>
+            val i = withSlot(slot, newStack)
+            i.accept(left)
+        }
+      case None =>
+        Some(this, stack)
+    }
+  }
+
+  def removeStack(stack: Stack): Inventory = {
+    stacks.asScala.zipWithIndex.find(_._1.take(stack.size) == stack) match {
+      case Some((s, slot)) =>
+        withSlot(slot, s.drop(stack.size))
+      case None =>
+        this
+    }
+  }
+
   def moveSlot(from: Int, to: Int): Inventory = {
-    val fromStack = stacks(from)
-    val toStack = stacks(to)
+    val fromStack = stacks.get(from)
+    val toStack = stacks.get(to)
     withSlot(from, toStack).withSlot(to, fromStack)
+  }
+
+  def pattern(view: InventoryView): Option[Pattern] = {
+    if(isEmpty) {
+      None
+    } else {
+      val rows = stacks.asScala.grouped(view.columns).toSeq.dropWhile { stacks =>
+        !stacks.exists(!_.isEmpty)
+      }.reverse.dropWhile { stacks =>
+        !stacks.exists(!_.isEmpty)
+      } reverse
+
+      val shortestEmptyPrefix = rows.map { stacks =>
+        stacks.takeWhile(_.isEmpty).size
+      } min
+      val shortestEmptySuffix = rows.map { stacks =>
+        stacks.reverse.takeWhile(_.isEmpty).size
+      } min
+
+      val columns = view.columns - shortestEmptyPrefix - shortestEmptySuffix
+      val stackArray = new Array[Stack](rows.size * columns)
+
+      for(i <- 0 until rows.size) {
+        val stacks = rows(i).drop(shortestEmptyPrefix).dropRight(shortestEmptySuffix)
+
+        for(j <- 0 until stacks.size) {
+          stackArray(i*columns + j) = stacks(j)
+        }
+      }
+      val p = Pattern(stackArray.toList.asJava, rows.size, columns)
+      Some(p)
+    }
+  }
+
+  def removePattern(pattern: Pattern): Inventory = {
+    var n = this
+    for(stack <- pattern.stacks.asScala) {
+      n = n.removeStack(stack)
+    }
+    n
   }
 }
 
 object Inventory {
   def createEmpty(dimension: Int): Inventory =
-    apply(Array.fill(dimension)(Stack.Empty))
+    apply(List.fill(dimension)(Stack.Empty).asJava)
 }
 
 case class InventoryView(rowOffset: Int, columnOffset: Int, rows: Int, columns: Int) {
@@ -181,7 +263,7 @@ case class View(items: Map[Int, Option[Stack]]) {
     ) yield {
       val r = row + inventoryView.rowOffset
       val c = column + inventoryView.columnOffset
-      ((r * Columns + c) -> Some(inventory.stacks(row * inventoryView.columns + column)))
+      ((r * Columns + c) -> Some(inventory.stacks.get(row * inventoryView.columns + column)))
     }))
   }
 
@@ -193,6 +275,25 @@ object View {
     i -> None
   }).toMap)
 }
+
+/* Models for konstructing */
+case class Pattern(stacks: java.util.List[Stack], rows: Int, columns: Int) {
+  def complexity = stacks.asScala.map(_.size).reduceLeft(_ + _)
+  def contains(p: Pattern) =
+    if(p.rows == rows && p.columns == columns && stacks.size == p.stacks.size) {
+      !p.stacks.asScala.zip(stacks.asScala).exists {
+        case (contained, self) =>
+          self.w != contained.w || contained.size > self.size
+      }
+    } else {
+      false
+    }
+}
+
+case class Konstruct(pattern: Pattern, result: Stack)
+
+
+/* Messages */
 
 /* Messages for chat */
 case class Say(player: String, text: String)
@@ -234,12 +335,20 @@ case class RemoveStack(blockId: UUID, slot: Int)
 case class GetStack(blockId: UUID, slot: Int)
 case class GetStackResponse(blockId: UUID, slot: Int, stack: Option[Stack])
 case class DeleteInventory(blockId: UUID)
-case class MoveStack(fromBlockId: UUID, from: Int, toBlockId: UUID, to: Int)
+
+/* Manage konstructing */
+case class MatchPattern(pattern: Pattern)
+case class PatternMatched(result: Stack)
+case class KonstructPattern(pattern: Pattern)
+case class PatternKonstructed(pattern: Pattern, result: Stack)
+case class PatternKonstructedFilter(chain: Seq[ActorRef], message: PatternKonstructed, sender: ActorRef) extends Filter[PatternKonstructed] {
+  def next(chain: Seq[ActorRef]) = copy(chain = chain, sender = sender)
+  def next(chain: Seq[ActorRef], message: PatternKonstructed) = copy(chain = chain, message = message, sender = sender)
+}
 
 /* Manage player */
 case class ConnectView(manager: ActorRef, view: View)
 case class UpdateView(view: View)
-case class MoveViewStack(from: Int, to: Int)
 case class PutViewStack(stack: Stack, to: Int)
 case class RemoveViewStack(from: Int)
 case object CloseInventory

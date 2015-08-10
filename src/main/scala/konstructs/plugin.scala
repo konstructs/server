@@ -10,6 +10,12 @@ import com.typesafe.config.{ Config => TypesafeConfig, ConfigException, ConfigVa
 
 object Plugin {
   val StaticParameters = 2
+  def nullAsEmpty[T](seq: Seq[T]): Seq[T] = if(seq == null) {
+    Seq.empty[T]
+  } else {
+    seq
+  }
+
 }
 
 case class PluginConfigParameterMeta(name: String, configType: Class[_], optional: Boolean, listType: Option[Class[_]] = None)
@@ -83,7 +89,7 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
   val ActorRefType = classOf[ActorRef]
   val SeqType = classOf[Seq[_]]
   val ListType = classOf[java.util.List[_]]
-
+  val ConfigType = classOf[TypesafeConfig]
   val universeProxy = context.actorOf(UniverseProxyActor.props(), "universe-proxy")
 
   private def listType(t: Class[_], seq: Seq[_ <: AnyRef]): Object = t match {
@@ -103,6 +109,9 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
       f
     }
   }
+
+  private def toConfig(s: String, config: TypesafeConfig): TypesafeConfig =
+    config.getConfig(s)
 
   private def keepString(s: String, config: TypesafeConfig): String = config.getString(s)
 
@@ -140,6 +149,12 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
           }
         } catch {
           case _: ConfigException.Missing => Left(null)
+        }
+        case ConfigType =>
+          if(p.listType.isDefined) {
+          Left(opt(listType(p.listType.get, configToSeq(toConfig)(config.getConfig(p.name)))))
+        } else {
+          Left(opt(toConfig(p.name, config)))
         }
       }
     }
