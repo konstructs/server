@@ -101,6 +101,8 @@ object Stack {
 }
 
 case class Inventory(stacks: Array[Stack]) {
+  def isEmpty = !stacks.exists(!_.isEmpty)
+
   def withoutSlot(slot: Int) = {
     val newStacks = stacks.clone()
     newStacks(slot) = Stack.Empty

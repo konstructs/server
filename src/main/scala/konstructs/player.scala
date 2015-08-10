@@ -35,6 +35,12 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       val newData = json.convertTo[Player]
       if(newData.password == password) {
         data = newData
+        if(data.inventory.isEmpty) {
+          val inventoryBlock = Block.createWithId(konstructs.SackActor.BlockId)
+          universe ! CreateInventory(inventoryBlock.id.get, 16)
+          val inventory = Inventory.createEmpty(9).withSlot(0, Stack.fromBlock(inventoryBlock))
+          data = data.copy(inventory = inventory)
+        }
         chunkLoader = context.actorOf(ChunkLoaderActor.props(client, db, Position(data.position)))
         client ! PlayerInfo(pid, nick, self, data.position)
         context.become(sendBelt)
