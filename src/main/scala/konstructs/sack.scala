@@ -12,10 +12,8 @@ class SackActor(universe: ActorRef) extends Actor {
 
   def receive = {
     case i: InteractSecondaryFilter =>
-      println("Filter!")
       i.message match {
         case InteractSecondary(sender, _, _, Some(Block(Some(blockId), BlockId))) =>
-          println("Got stuff")
           sender ! ReceiveStack(Stack.fromBlock(i.message.block.get))
           context.actorOf(SackViewActor.props(sender, universe, blockId))
           i.drop

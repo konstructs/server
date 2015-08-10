@@ -58,7 +58,6 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       }
     case i: InteractSecondary =>
       val filters = secondaryInteractionFilters :+ self
-      println(filters)
       filters.head.forward(InteractSecondaryFilter(filters.tail, i))
     case i: InteractSecondaryFilter =>
       i.message.block.map { block =>
