@@ -1,6 +1,8 @@
 Konstructs Server
 =================
 
+[![Build Status](https://travis-ci.org/konstructs/server.svg?branch=master)](https://travis-ci.org/konstructs/server)
+
 This is a Infiniminer/Minecraft inspired game server. It has four overall goals:
 
 - Scalability
