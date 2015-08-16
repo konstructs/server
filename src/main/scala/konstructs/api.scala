@@ -315,6 +315,14 @@ case class InteractSecondaryFilter(chain: Seq[ActorRef], message: InteractSecond
   def next(chain: Seq[ActorRef]) = copy(chain = chain)
   def next(chain: Seq[ActorRef], message: InteractSecondary) = copy(chain = chain, message = message)
 }
+
+case class InteractTertiary(sender: ActorRef, player: String, pos: Option[Position], block: Option[Block])
+case class InteractTertiaryFilter(chain: Seq[ActorRef], message: InteractTertiary) extends Filter[InteractTertiary] {
+  def next(chain: Seq[ActorRef]) = copy(chain = chain)
+  def next(chain: Seq[ActorRef], message: InteractTertiary) = copy(chain = chain, message = message)
+}
+
+
 case class PutBlock(pos: Position, block: Block)
 case class DestroyBlock(pos: Position)
 case class ReceiveStack(stack: Stack)

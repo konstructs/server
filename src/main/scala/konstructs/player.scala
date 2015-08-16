@@ -104,6 +104,8 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
           case b =>
             universe ! InteractSecondary(self, nick, pos, b)
         }
+      case 3 =>
+        universe ! InteractTertiary(self, nick, pos, getBeltBlock)
     }
   }
 
