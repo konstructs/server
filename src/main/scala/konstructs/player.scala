@@ -87,7 +87,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     block
   }
 
-  def action(pos: Position, button: Int) = {
+  def action(pos: Option[Position], button: Int) = {
     button match {
       case 1 =>
         universe ! InteractPrimary(self, nick, pos, getBeltBlock)
@@ -266,7 +266,7 @@ object PlayerActor {
   case class ActivateBeltItem(activate: Int)
   case class BeltUpdate(items: java.util.List[Stack])
   case class BeltActiveUpdate(active: String)
-  case class Action(pos: Position, button: Int)
+  case class Action(pos: Option[Position], button: Int)
   case class SendInfo(to: ActorRef)
   case class IncreaseChunks(amount: Int)
   case class InventoryUpdate(view: View)

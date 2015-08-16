@@ -40,7 +40,11 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       player.actor ! ActivateBeltItem(ints(0))
     } else if(command.startsWith("M,")) {
       val ints = readData(_.toInt, command.drop(2))
-      player.actor ! Action(konstructs.api.Position(ints(0), ints(1), ints(2)), ints(3))
+      if(ints(0) != 0) {
+        player.actor ! Action(Some(konstructs.api.Position(ints(1), ints(2), ints(3))), ints(4))
+      } else {
+        player.actor ! Action(None, ints(4))
+      }
     } else if(command.startsWith("T,")) {
       val message = command.substring(2)
       player.actor ! konstructs.protocol.Say(message)
@@ -181,7 +185,7 @@ object Client {
   val B = 'B'.toByte
   val V = 'V'.toByte
   val P = 'P'.toByte
-  val Version = 4
+  val Version = 5
   case object Setup
   def props(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef) = Props(classOf[Client], init, universe)
 }

@@ -54,7 +54,9 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       val filters = primaryInteractionFilters :+ self
       filters.head.forward(InteractPrimaryFilter(filters.tail, i))
     case i: InteractPrimaryFilter =>
-      db.tell(DestroyBlock(i.message.pos), i.message.sender)
+      i.message.pos.map { pos =>
+        db.tell(DestroyBlock(pos), i.message.sender)
+      }
       i.message.block map { block =>
         i.message.sender ! ReceiveStack(Stack.fromBlock(block))
       }
@@ -62,8 +64,15 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       val filters = secondaryInteractionFilters :+ self
       filters.head.forward(InteractSecondaryFilter(filters.tail, i))
     case i: InteractSecondaryFilter =>
-      i.message.block.map { block =>
-        db.tell(PutBlock(i.message.pos, block), i.message.sender)
+      i.message.pos match {
+        case Some(pos) =>
+          i.message.block.map { block =>
+            db.tell(PutBlock(pos, block), i.message.sender)
+          }
+        case None =>
+          i.message.block.map { block =>
+            i.message.sender ! ReceiveStack(Stack.fromBlock(block))
+          }
       }
     case p: PutBlock =>
       db.forward(p)
