@@ -36,7 +36,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       if(newData.password == password) {
         data = newData
         if(data.inventory.isEmpty) {
-          val inventoryBlock = Block.createWithId(konstructs.SackActor.BlockId)
+          val inventoryBlock = Block.createWithId(konstructs.ToolSackActor.BlockId)
           universe ! CreateInventory(inventoryBlock.id.get, 16)
           val inventory = Inventory.createEmpty(9).withSlot(0, Stack.fromBlock(inventoryBlock))
           data = data.copy(inventory = inventory)
@@ -50,7 +50,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
         context.stop(self)
       }
     case JsonLoaded(_, None) =>
-      val inventoryBlock = Block.createWithId(konstructs.SackActor.BlockId)
+      val inventoryBlock = Block.createWithId(konstructs.ToolSackActor.BlockId)
       universe ! CreateInventory(inventoryBlock.id.get, 16)
       val inventory = Inventory.createEmpty(9).withSlot(0, Stack.fromBlock(inventoryBlock))
       data = Player(nick, password, startingPosition, 0, inventory)
@@ -108,10 +108,15 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   }
 
   def putInBelt(stack: Stack) {
-    val block = stack.head
     val inventory = data.inventory
-    inventory.accept(block) map { i =>
-      update(i)
+    inventory.accept(stack) match {
+      case Some((i, Stack.Empty)) =>
+        update(i)
+      case Some((i, stack)) =>
+        update(i)
+        println(s"The following stack was destroyed: $stack")
+      case None =>
+        println(s"The following stack was destroyed: $stack")
     }
   }
 
@@ -165,7 +170,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     case i: IncreaseChunks =>
       chunkLoader.forward(i)
     case ConnectView(inventoryActor, view) =>
-      context.become(manageInventory(inventoryActor, view), discardOld = false)
+      context.become(manageInventory(inventoryActor, view))
       client ! InventoryUpdate(addBelt(view))
   }
 
@@ -173,49 +178,83 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   def addBelt(view: View) = view.add(BeltView, data.inventory)
 
-  def manageInventory(inventoryActor: ActorRef, view: View): Receive = {
-    case MoveItem(from, to) =>
-      if(BeltView.contains(from) && BeltView.contains(to)) {
-        moveInBelt(BeltView.translate(from), BeltView.translate(to))
-        client ! InventoryUpdate(addBelt(view))
-      } else if(BeltView.contains(from)) {
-        val slot = BeltView.translate(from)
-        data.inventory.stackOption(slot) map { stack =>
-          update(data.inventory.withoutSlot(slot))
-          inventoryActor ! PutViewStack(stack, to)
-        }
-      } else if(BeltView.contains(to)) {
-        val slot = BeltView.translate(to)
-        if(!data.inventory.stackOption(slot).isDefined) {
-          inventoryActor ! RemoveViewStack(from)
-          context.become(waitForStack(slot), discardOld = false)
-        }
-      } else {
-        inventoryActor ! MoveViewStack(from, to)
-      }
-    case UpdateView(view) =>
-      context.become(manageInventory(inventoryActor, view))
-      client ! InventoryUpdate(addBelt(view))
+  def waitForSelectedStack(inventoryActor: ActorRef, view: View): Receive = {
+    case ReceiveStack(stack) =>
+      context.become(stackSelected(inventoryActor, view, stack))
+      unstashAll()
     case CloseInventory =>
+      context.become(ready)
       inventoryActor ! CloseInventory
-      context.unbecome()
       unstashAll()
     case _ =>
       stash()
   }
 
-  def waitForStack(slot: Int): Receive = {
+  def stackSelected(inventoryActor: ActorRef, view: View, stack: Stack): Receive = {
+    client ! HeldStack(stack)
+
+    val f: Receive = {
+      case SelectItem(index) =>
+        if(BeltView.contains(index)) {
+          val beltIndex = BeltView.translate(index)
+          val oldStack = data.inventory.stacks.get(beltIndex)
+          oldStack.acceptStack(stack) match {
+            case Some((newStack, left)) =>
+              if(left != Stack.Empty) {
+                context.become(stackSelected(inventoryActor, view, left))
+              } else {
+                context.become(manageInventory(inventoryActor, view))
+              }
+              update(data.inventory.withSlot(beltIndex, newStack))
+            case None =>
+              context.become(stackSelected(inventoryActor, view, oldStack))
+              update(data.inventory.withSlot(beltIndex, stack))
+          }
+          client ! InventoryUpdate(addBelt(view))
+        } else {
+          context.become(manageInventory(inventoryActor, view))
+          inventoryActor ! PutViewStack(stack, index)
+        }
+        unstashAll()
+      case UpdateView(view) =>
+        context.become(stackSelected(inventoryActor, view, stack))
+        unstashAll()
+        client ! InventoryUpdate(addBelt(view))
+      case CloseInventory =>
+        context.become(ready)
+        inventoryActor ! CloseInventory
+        unstashAll()
+      case _ =>
+        stash()
+    }
+    f
+  }
+
+  def manageInventory(inventoryActor: ActorRef, view: View): Receive = {
+    case SelectItem(index) =>
+      if(BeltView.contains(index)) {
+        val beltIndex = BeltView.translate(index)
+        val stack = data.inventory.stacks.get(beltIndex)
+        context.become(stackSelected(inventoryActor, view, stack))
+        update(data.inventory.withoutSlot(beltIndex))
+        client ! InventoryUpdate(addBelt(view))
+      } else {
+        context.become(waitForSelectedStack(inventoryActor, view))
+        inventoryActor ! RemoveViewStack(index)
+      }
+    case UpdateView(view) =>
+      context.become(manageInventory(inventoryActor, view))
+      client ! InventoryUpdate(addBelt(view))
     case ReceiveStack(stack) =>
-      update(data.inventory.withSlot(slot, stack))
-      context.unbecome()
-      unstashAll()
+      context.become(stackSelected(inventoryActor, view, stack))
     case CloseInventory =>
-      stash()
-      context.unbecome()
+      context.become(ready)
+      inventoryActor ! CloseInventory
       unstashAll()
     case _ =>
       stash()
   }
+
 }
 
 object PlayerActor {
@@ -225,14 +264,15 @@ object PlayerActor {
   case class PlayerInfo(pid: Int, nick: String, actor: ActorRef, pos: protocol.Position)
   case class PlayerNick(pid: Int, nick: String)
   case class ActivateBeltItem(activate: Int)
-  case class BeltUpdate(items: Array[Stack])
+  case class BeltUpdate(items: java.util.List[Stack])
   case class BeltActiveUpdate(active: String)
   case class Action(pos: Position, button: Int)
   case class SendInfo(to: ActorRef)
   case class IncreaseChunks(amount: Int)
   case class InventoryUpdate(view: View)
   case object Konstruct
-  case class MoveItem(from: Int, to: Int)
+  case class SelectItem(index: Int)
+  case class HeldStack(held: Stack)
 
   def props(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, universe: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, db, universe, store, startingPosition)
 

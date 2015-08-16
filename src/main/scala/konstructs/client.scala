@@ -50,7 +50,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       player.actor ! CloseInventory
     } else if(command.startsWith("R,")) {
       val ints = readData(_.toInt, command.drop(2))
-      player.actor ! MoveItem(ints(0), ints(1))
+      player.actor ! SelectItem(ints(0))
     }
   }
 
@@ -101,6 +101,8 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       sendPlayerLogout(pipe, pid)
     case Said(text) =>
       sendSaid(pipe, text)
+    case HeldStack(stack) =>
+      sendHeldStack(pipe, stack)
     case _: Tcp.ConnectionClosed =>
       player.actor ! PoisonPill
       context.stop(self)
@@ -122,12 +124,17 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     send(pipe, s"P,${p.pid},${p.pos.x},${p.pos.y},${p.pos.z},${p.pos.rx},${p.pos.ry}")
   }
 
-  def sendBelt(pipe: ActorRef, items: Array[Stack]) {
+  def sendBelt(pipe: ActorRef, items: java.util.List[Stack]) {
     for(i <- 0 until items.size) {
-      val stack = items(i)
+      val stack = items.get(i)
       send(pipe, s"G,${i},${stack.size},${stack.w}")
     }
   }
+
+  def sendHeldStack(pipe: ActorRef, stack: Stack) {
+    send(pipe, s"i,${stack.size},${stack.w}")
+  }
+
 
   def sendBeltActive(pipe: ActorRef, active: String) {
     send(pipe, s"A,${active}")
