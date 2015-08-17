@@ -43,11 +43,26 @@ object KonstructingActor {
 
   def parseStack(config: TypesafeConfig): Stack = {
     val blockId = config.getInt("id")
-    Stack.fromBlock(Block(None, blockId))
+    if(blockId == 0) {
+      Stack.Empty
+    } else {
+      val amount = if(config.hasPath("amount")) {
+        config.getInt("amount")
+      } else {
+        1
+      }
+      Stack(((0 until amount).map { i => Block(None, blockId) }).toList.asJava )
+    }
   }
 
   def parsePattern(config: TypesafeConfig): Pattern = {
-    Pattern(List(parseStack(config.getConfig("stack"))).asJava, 1, 1)
+    if(config.hasPath("stack")) {
+      Pattern(List(parseStack(config.getConfig("stack"))).asJava, 1, 1)
+    } else {
+      val rows = config.getInt("rows")
+      val columns = config.getInt("columns")
+      Pattern(config.getConfigList("stacks").asScala.map(parseStack).asJava, rows, columns)
+    }
   }
 
   def parseKonstructs(config: TypesafeConfig): Set[Konstruct] = {
