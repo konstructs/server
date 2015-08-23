@@ -135,8 +135,9 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     }
   }
 
-  def sendHeldStack(pipe: ActorRef, stack: Stack) {
-    send(pipe, s"i,${stack.size},${stack.w}")
+  def sendHeldStack(pipe: ActorRef, stack: Option[Stack]) {
+    val w = stack.map(_.w).getOrElse(-1)
+    send(pipe, s"i,${stack.size},$w")
   }
 
 
