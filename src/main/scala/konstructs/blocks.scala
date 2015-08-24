@@ -68,13 +68,21 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
       stash()
   }
 
+  def storeDb() {
+    storeJson(BlockIdFile, factory.wMapping.toSeq.map {
+      case (k, v) => k.toString -> v
+    }.toMap.toJson)
+  }
+
   def loadBlockDb: Receive = {
     case JsonLoaded(_, Some(json)) =>
       val defined = json.convertTo[Map[String, BlockTypeId]]
       factory = BlockFactory(defined, configuredBlocks)
+      storeDb()
       context.become(ready)
     case JsonLoaded(_, None) =>
       factory = BlockFactory(Map[String, BlockTypeId](), configuredBlocks)
+      storeDb()
       context.become(ready)
     case _ =>
       stash()
@@ -97,9 +105,6 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
       initiator ! UnableToPut(pos, load(pos, w, true))
     case StoreData =>
       storeJson(PositionMappingFile, positionMapping.toMap.toJson)
-      storeJson(BlockIdFile, factory.wMapping.toSeq.map {
-        case (k, v) => k.toString -> v
-      }.toMap.toJson)
     case GetBlockFactory =>
       sender ! factory
   }

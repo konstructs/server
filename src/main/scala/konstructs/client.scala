@@ -136,6 +136,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
 
   def sendBelt(pipe: ActorRef, items: java.util.List[Stack]) {
     for((stack, i) <- items.asScala.zipWithIndex) {
+      println(factory.w(stack))
       send(pipe, s"G,${i},${stack.size},${factory.w(stack)}")
     }
   }
@@ -153,6 +154,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     for((p, stackOption) <- items) {
       stackOption match {
         case Some(stack) =>
+          println(factory.w(stack))
           send(pipe, s"I,${p},${stack.size},${factory.w(stack)}")
         case None =>
           send(pipe, s"I,${p},0,-1")

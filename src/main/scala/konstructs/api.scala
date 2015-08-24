@@ -52,11 +52,15 @@ case class BlockFactory(blockTypeIdMapping: Map[BlockTypeId, Int],
     Block(uuid, t)
   }
 
-  def w(block: Block) =
+  def w(block: Block) = {
+    println(blockTypeIdMapping)
     blockTypeIdMapping(block.`type`)
+  }
 
-  def w(stack: Stack) =
+  def w(stack: Stack) = {
+    println(blockTypeIdMapping)
     blockTypeIdMapping(stack.typeId)
+  }
 
 }
 

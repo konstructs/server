@@ -43,16 +43,12 @@ object KonstructingActor {
 
   def parseStack(config: TypesafeConfig): Stack = {
     val blockId = config.getString("id")
-    if(blockId == 0) {
-      Stack.Empty
+    val amount = if(config.hasPath("amount")) {
+      config.getInt("amount")
     } else {
-      val amount = if(config.hasPath("amount")) {
-        config.getInt("amount")
-      } else {
-        1
-      }
-      Stack(((0 until amount).map { i => Block.create(blockId) }).toList.asJava )
+      1
     }
+    Stack(((0 until amount).map { i => Block.create(blockId) }).toList.asJava )
   }
 
   def parsePattern(config: TypesafeConfig): Pattern = {
