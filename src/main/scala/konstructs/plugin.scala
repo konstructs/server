@@ -92,6 +92,8 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
   val ConfigType = classOf[TypesafeConfig]
   val universeProxy = context.actorOf(UniverseProxyActor.props(), "universe-proxy")
 
+  private def actorName(name: String) = name.replace('/', '-')
+
   private def listType(t: Class[_], seq: Seq[_ <: AnyRef]): Object = t match {
     case SeqType => seq
     case ListType => seq.toList.asJava
@@ -99,6 +101,7 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
   }
 
   private def getOptional(optional: Boolean)(f: => Object): Object = {
+    println(optional)
     if(optional) {
       try {
         f
@@ -148,7 +151,11 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
             Right(Dependencies(config.getString(p.name)))
           }
         } catch {
-          case _: ConfigException.Missing => Left(null)
+          case e: ConfigException.Missing => if(p.optional) {
+            Left(null)
+          } else {
+            throw e
+          }
         }
         case ConfigType =>
           if(p.listType.isDefined) {
@@ -182,7 +189,7 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
         val args = Future.sequence(head.args.map {
           case Right(d) =>
             Future.sequence(d.names.map { dep =>
-              ActorSelection(self, dep).resolveOne
+              ActorSelection(self, actorName(dep)).resolveOne
             }).map { as => listType(d.t, as) }
           case Left(obj) => Future.successful(obj)
         })
@@ -191,7 +198,7 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
         }
         for(a <- args) {
           val props = head.method.invoke(null, a: _*).asInstanceOf[Props]
-          val actor = context.actorOf(props, head.name)
+          val actor = context.actorOf(props, actorName(head.name))
           println(s"Started plugin ${head.name}")
           if(head.name == "universe") {
             println("Universe started, updating proxy")

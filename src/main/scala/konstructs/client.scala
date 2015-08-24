@@ -1,18 +1,23 @@
 package konstructs.protocol
 
+import scala.collection.JavaConverters._
 import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 import akka.io.{ Tcp, TcpPipelineHandler }
 import akka.util.ByteString
 import TcpPipelineHandler.{ Init, WithinActorContext }
 
-import konstructs.{ PlayerActor, UniverseActor, DbActor }
+import konstructs.{ PlayerActor, UniverseActor, DbActor, BlockMetaActor }
 import konstructs.api._
 
-class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef) extends Actor with Stash {
+class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef,
+  blockManager: ActorRef)
+    extends Actor with Stash {
   import DbActor.BlockList
   import UniverseActor.CreatePlayer
   import Client._
   import PlayerActor._
+  import BlockMetaActor.{ ConvertStack, ConvertedStack,
+    ConvertStacks, ConvertedStacks, ConvertView, ConvertedView }
   implicit val bo = java.nio.ByteOrder.BIG_ENDIAN
 
 
@@ -92,10 +97,14 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     case b: SendBlock =>
       sendBlock(pipe, b)
     case BeltUpdate(items) =>
+      blockManager ! ConvertStacks(items.asScala.toSeq)
+    case ConvertedStacks(items) =>
       sendBelt(pipe, items)
     case BeltActiveUpdate(active) =>
       sendBeltActive(pipe, active)
     case InventoryUpdate(view) =>
+      blockManager ! ConvertView(view)
+    case ConvertedView(view) =>
       sendInventory(pipe, view)
     case p: PlayerMovement =>
       sendPlayerMovement(pipe, p)
@@ -105,8 +114,12 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       sendPlayerLogout(pipe, pid)
     case Said(text) =>
       sendSaid(pipe, text)
-    case HeldStack(stack) =>
-      sendHeldStack(pipe, stack)
+    case HeldStack(Some(stack)) =>
+      blockManager ! ConvertStack(stack)
+    case HeldStack(None) =>
+      sendHeldStack(pipe, 0, -1)
+    case ConvertedStack(stack, w) =>
+      sendHeldStack(pipe, stack.size, w)
     case _: Tcp.ConnectionClosed =>
       player.actor ! PoisonPill
       context.stop(self)
@@ -128,16 +141,14 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     send(pipe, s"P,${p.pid},${p.pos.x},${p.pos.y},${p.pos.z},${p.pos.rx},${p.pos.ry}")
   }
 
-  def sendBelt(pipe: ActorRef, items: java.util.List[Stack]) {
-    for(i <- 0 until items.size) {
-      val stack = items.get(i)
-      send(pipe, s"G,${i},${stack.size},${stack.w}")
+  def sendBelt(pipe: ActorRef, items: Seq[ConvertedStack]) {
+    for((stack, i) <- items.zipWithIndex) {
+      send(pipe, s"G,${i},${stack.stack.size},${stack.w}")
     }
   }
 
-  def sendHeldStack(pipe: ActorRef, stack: Option[Stack]) {
-    val w = stack.map(_.w).getOrElse(-1)
-    send(pipe, s"i,${stack.size},$w")
+  def sendHeldStack(pipe: ActorRef, size: Int, w: Int) {
+    send(pipe, s"i,$size,$w")
   }
 
 
@@ -145,11 +156,11 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     send(pipe, s"A,${active}")
   }
 
-  def sendInventory(pipe: ActorRef, view: View) {
-    for((p, stackOption) <- view.items) {
+  def sendInventory(pipe: ActorRef, items: Map[Int, Option[ConvertedStack]]) {
+    for((p, stackOption) <- items) {
       stackOption match {
         case Some(stack) =>
-          send(pipe, s"I,${p},${stack.size},${stack.w}")
+          send(pipe, s"I,${p},${stack.stack.size},${stack.w}")
         case None =>
           send(pipe, s"I,${p},0,-1")
       }
@@ -188,5 +199,7 @@ object Client {
   val P = 'P'.toByte
   val Version = 5
   case object Setup
-  def props(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef) = Props(classOf[Client], init, universe)
+  def props(init: Init[WithinActorContext, ByteString, ByteString],
+    universe: ActorRef, blockManager: ActorRef) =
+    Props(classOf[Client], init, universe, blockManager)
 }

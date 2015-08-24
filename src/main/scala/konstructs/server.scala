@@ -10,7 +10,7 @@ import java.net.InetSocketAddress
 
 import konstructs.plugin.{ PluginConstructor, Config }
 
-class Server(name: String, universe: ActorRef) extends Actor with ActorLogging {
+class Server(name: String, universe: ActorRef, blockManager: ActorRef) extends Actor with ActorLogging {
   import Tcp._
   import context.system
 
@@ -31,7 +31,7 @@ class Server(name: String, universe: ActorRef) extends Actor with ActorLogging {
           new BackpressureBuffer(lowBytes = 100, highBytes = 16*1024, maxBytes = 64*1024))
 
       val connection = sender
-      val handler = context.actorOf(Client.props(init, universe))
+      val handler = context.actorOf(Client.props(init, universe, blockManager))
       val pipeline = context.actorOf(TcpPipelineHandler.props(
       init, connection, handler))
       println(s"$remote connected!")
@@ -41,5 +41,7 @@ class Server(name: String, universe: ActorRef) extends Actor with ActorLogging {
 
 object Server {
   @PluginConstructor
-  def props(name: String, universe: ActorRef) = Props(classOf[Server], name, universe)
+  def props(name: String, universe: ActorRef,
+    @Config(key = "block-manager") blockManager: ActorRef
+  ) = Props(classOf[Server], name, universe, blockManager)
 }

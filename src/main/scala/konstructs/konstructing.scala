@@ -42,7 +42,7 @@ object KonstructingActor {
   import konstructs.plugin.Plugin.nullAsEmpty
 
   def parseStack(config: TypesafeConfig): Stack = {
-    val blockId = config.getInt("id")
+    val blockId = config.getString("id")
     if(blockId == 0) {
       Stack.Empty
     } else {
@@ -51,7 +51,7 @@ object KonstructingActor {
       } else {
         1
       }
-      Stack(((0 until amount).map { i => Block(None, blockId) }).toList.asJava )
+      Stack(((0 until amount).map { i => Block(None, BlockType(BlockTypeId.fromString(blockId))) }).toList.asJava )
     }
   }
 

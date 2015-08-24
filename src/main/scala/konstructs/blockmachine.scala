@@ -5,7 +5,7 @@ import scala.collection.JavaConverters._
 
 import konstructs.api._
 
-case class BlockMachine(alphabet: Map[Char, Int]) {
+case class BlockMachine(alphabet: Map[Char, BlockTypeId]) {
   import BlockMachine._
 
   def interpretJava(program: String, initPos: Position, initDir: Matrix):
@@ -47,7 +47,7 @@ case class BlockMachine(alphabet: Map[Char, Int]) {
           dir = oldDir
         case a =>
           pos = pos + dir.adg
-          blocks += (PutBlock(pos, Block(None, alphabet(a))))
+          blocks += (PutBlock(pos, Block(None, BlockType(alphabet(a)))))
       }
     }
     blocks.toSeq
@@ -78,8 +78,8 @@ object BlockMachine {
                          0,  0,  1,
                          0, -1,  0)
 
-  def fromJavaMap(alphabet: java.util.Map[java.lang.Character, java.lang.Integer]) =
+  def fromJavaMap(alphabet: java.util.Map[java.lang.Character, BlockTypeId]) =
     apply(Map(alphabet.asScala.toSeq.map({
-      case (k, v) => (k.toChar, v.toInt)
+      case (k, v) => (k.toChar, v)
     }) :_*))
 }

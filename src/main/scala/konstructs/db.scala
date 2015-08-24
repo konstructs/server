@@ -2,7 +2,7 @@ package konstructs
 
 import akka.actor.{ Actor, ActorRef, Props }
 
-import konstructs.api._
+import konstructs.api.{ Position }
 
 object Db {
   val ChunkSize = 32
@@ -27,49 +27,54 @@ object ShardPosition {
 
 }
 
-class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
-  jsonStorage: ActorRef)
+class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
     extends Actor {
   import DbActor._
   import Db.ChunkSize
 
-  val blockMeta =
-    context.actorOf(BlockMetaActor.props("block-meta", jsonStorage), "block-meta")
-
   def shardActorId(r: ShardPosition) = s"shard-${r.m}-${r.n}-${r.o}"
+
+  def getShardActor(pos: Position): ActorRef =
+    getShardActor(ShardPosition(pos))
+
+  def getShardActor(chunk: ChunkPosition): ActorRef =
+    getShardActor(ShardPosition(chunk))
 
   def getShardActor(shard: ShardPosition): ActorRef = {
     val rid = shardActorId(shard)
     context.child(rid) match {
       case Some(a) => a
       case None =>
-        context.actorOf(ShardActor.props(self, blockMeta, shard, binaryStorage, generator), rid)
+        context.actorOf(ShardActor.props(self, shard, binaryStorage, generator), rid)
     }
   }
 
-  def sendBlocks(chunk: ChunkPosition, version: Option[Int]) {
-    getShardActor(ShardPosition(chunk)) forward SendBlocks(chunk, version)
-  }
-
   def receive = {
-    case SendBlocks(chunk, version) =>
-      sendBlocks(chunk, version)
-    case b: PutBlock =>
-      getShardActor(ShardPosition(b.pos)) forward b
-    case b: DestroyBlock =>
-      getShardActor(ShardPosition(b.pos)) forward b
-    case g: GetBlock =>
-      getShardActor(ShardPosition(g.pos)) forward g
-    case b: BlockDataUpdate =>
-      universe ! b
+    case p: PutBlock =>
+      getShardActor(p.pos) forward p
+    case r: ReplaceBlock =>
+      getShardActor(r.pos) forward r
+    case r: RemoveBlock =>
+      getShardActor(r.pos) forward r
+    case v: ViewBlock =>
+      getShardActor(v.pos) forward v
+    case s: SendBlocks =>
+      getShardActor(s.chunk) forward s
   }
 }
 
 object DbActor {
-  case class SendBlocks(chunk: ChunkPosition, version: Option[Int])
+  case class SendBlocks(chunk: ChunkPosition)
   case class BlockList(chunk: ChunkPosition, data: ChunkData)
 
-  def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
-    jsonStorage: ActorRef) =
-    Props(classOf[DbActor], universe, generator, binaryStorage, jsonStorage)
+  case class PutBlock(pos: Position, w: Int, initiator: ActorRef)
+  case class UnableToPut(pos: Position, w: Int, initiator: ActorRef)
+  case class ReplaceBlock(pos: Position, w: Int, initiator: ActorRef)
+  case class RemoveBlock(pos: Position, initiator: ActorRef)
+  case class BlockRemoved(pos: Position, w: Int, initiator: ActorRef)
+  case class ViewBlock(pos: Position, initiator: ActorRef)
+  case class BlockViewed(pos: Position, w: Int, intitator: ActorRef)
+
+  def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef) =
+    Props(classOf[DbActor], universe, generator, binaryStorage)
 }
