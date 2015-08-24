@@ -16,7 +16,7 @@ import konstructs.plugin.{ PluginConstructor, Config }
 case class Chunk(data: Array[Byte])
 
 class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
-  configuredBlocks: Seq[BlockType])
+  configuredBlocks: Seq[BlockTypeId])
     extends Actor with Stash with utils.Scheduled with JsonStorage {
   import KonstructsJsonProtocol._
   import BlockMetaActor._
@@ -30,7 +30,6 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
 
   val blockTypeIdMapping = mutable.HashMap[BlockTypeId, Int]()
   val wMapping = mutable.HashMap[Int, BlockTypeId]()
-  val blockTypeMapping = mutable.HashMap[BlockTypeId, BlockType]()
   var positionMapping: mutable.HashMap[String, UUID] = null
 
   def findFreeW: Int = {
@@ -42,15 +41,14 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
     throw new IllegalStateException("No free w to allocate for new block type")
   }
 
-  def addBlockType(t: BlockType) {
-    val w = blockTypeIdMapping.getOrElse(t.id, findFreeW)
+  def addBlockType(t: BlockTypeId) {
+    val w = blockTypeIdMapping.getOrElse(t, findFreeW)
     updateMapping(w, t)
   }
 
-  def updateMapping(w: Int, t: BlockType) {
-    blockTypeIdMapping += t.id -> w
-    wMapping += w -> t.id
-    blockTypeMapping += t.id -> t
+  def updateMapping(w: Int, t: BlockTypeId) {
+    blockTypeIdMapping += t -> w
+    wMapping += w -> t
   }
 
   def load(pos: Position, w: Int, remove: Boolean = false): Block = {
@@ -59,7 +57,7 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
     } else {
       positionMapping.get(str(pos))
     }
-    val t = blockTypeMapping(wMapping(w))
+    val t = wMapping(w)
     Block(uuid, t)
   }
 
@@ -67,7 +65,7 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
     if(block.id.isDefined) {
       positionMapping += str(pos) -> block.id.get
     }
-    blockTypeIdMapping(block.`type`.id)
+    blockTypeIdMapping(block.`type`)
   }
 
   schedule(5000, StoreData)
@@ -165,12 +163,12 @@ object BlockMetaActor {
   case class ConvertView(view: View)
   case class ConvertedView(items: Map[Int, Option[ConvertedStack]])
 
-  def parseBlocks(config: TypesafeConfig): Seq[BlockType] = {
+  def parseBlocks(config: TypesafeConfig): Seq[BlockTypeId] = {
     val blocks = config.root.entrySet.asScala.map { e =>
       e.getKey -> config.getConfig(e.getKey)
     }
     (for((idString, block) <- blocks) yield {
-      BlockType(BlockTypeId.fromString(idString))
+      BlockTypeId.fromString(idString)
     }) toSeq
   }
 

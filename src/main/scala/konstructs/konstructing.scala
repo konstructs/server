@@ -51,7 +51,7 @@ object KonstructingActor {
       } else {
         1
       }
-      Stack(((0 until amount).map { i => Block(None, BlockType(BlockTypeId.fromString(blockId))) }).toList.asJava )
+      Stack(((0 until amount).map { i => Block.create(blockId) }).toList.asJava )
     }
   }
 

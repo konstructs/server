@@ -47,7 +47,7 @@ case class BlockMachine(alphabet: Map[Char, BlockTypeId]) {
           dir = oldDir
         case a =>
           pos = pos + dir.adg
-          blocks += (PutBlock(pos, Block(None, BlockType(alphabet(a)))))
+          blocks += (PutBlock(pos, Block(None, alphabet(a))))
       }
     }
     blocks.toSeq

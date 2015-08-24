@@ -24,18 +24,22 @@ object BlockTypeId {
   }
 }
 
-case class BlockType(id: BlockTypeId)
-
-case class Block(id: Option[UUID], `type`: BlockType) {
+case class Block(id: Option[UUID], `type`: BlockTypeId) {
   def withId = copy(id = Some(UUID.randomUUID))
 }
 
 object Block {
-  def createWithId(t: BlockType): Block = {
+  def createWithId(t: BlockTypeId): Block = {
     apply(Some(UUID.randomUUID), t)
   }
-  def create(t: BlockType): Block = {
+  def createWithId(t: String): Block = {
+   createWithId(BlockTypeId.fromString(t))
+  }
+  def create(t: BlockTypeId): Block = {
     apply(None, t)
+  }
+  def create(t: String): Block = {
+    create(BlockTypeId.fromString(t))
   }
 }
 
@@ -94,7 +98,7 @@ object Position {
 }
 
 case class Stack(blocks: java.util.List[Block]) {
-  def typeId = blocks.asScala.headOption.map(_.`type`.id).getOrElse(BlockTypeId.Vacuum)
+  def typeId = blocks.asScala.headOption.map(_.`type`).getOrElse(BlockTypeId.Vacuum)
   def size = blocks.size
   def room = Stack.MaxSize - size
   def isEmpty = blocks.isEmpty
@@ -112,7 +116,7 @@ case class Stack(blocks: java.util.List[Block]) {
     }
   }
   def acceptsStack(stack: Stack): Boolean = isEmpty || (stack.typeId == typeId && !isFull)
-  def accepts(block: Block): Boolean = isEmpty || (block.`type`.id == typeId && !isFull)
+  def accepts(block: Block): Boolean = isEmpty || (block.`type` == typeId && !isFull)
   def acceptStack(stack: Stack): Option[(Stack, Stack)] = if(acceptsStack(stack)) {
     val r = room
     val newBlocks = blocks.asScala ++ stack.take(r).blocks.asScala
@@ -408,7 +412,6 @@ object KonstructsJsonProtocol extends DefaultJsonProtocol {
     }
   }
   implicit val blockTypeIdFormat = jsonFormat2(BlockTypeId.apply)
-  implicit val blockTypeFormat = jsonFormat1(BlockType)
   implicit val blockFormat = jsonFormat2(Block.apply)
   implicit val stackFormat = jsonFormat1(Stack.apply)
   implicit val inventoryFormat = jsonFormat1(Inventory.apply)
