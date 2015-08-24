@@ -2,6 +2,7 @@ package konstructs.api
 
 import java.util.UUID
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import akka.actor.ActorRef
 import com.google.gson.JsonElement
 import spray.json._
@@ -40,6 +41,54 @@ object Block {
   }
   def create(t: String): Block = {
     create(BlockTypeId.fromString(t))
+  }
+}
+
+case class BlockFactory(blockTypeIdMapping: Map[BlockTypeId, Int],
+  wMapping: Map[Int, BlockTypeId]) {
+
+  def block(uuid: Option[UUID], w: Int): Block = {
+    val t = wMapping(w)
+    Block(uuid, t)
+  }
+
+  def w(block: Block) =
+    blockTypeIdMapping(block.`type`)
+
+  def w(stack: Stack) =
+    blockTypeIdMapping(stack.typeId)
+
+}
+
+object BlockFactory {
+
+    private def findFreeW(wMapping: mutable.HashMap[Int, BlockTypeId]): Int = {
+    for(w <- 0 until 256) {
+      if(!wMapping.contains(w)) {
+        return w
+      }
+    }
+    throw new IllegalStateException("No free w to allocate for new block type")
+  }
+
+  private def addBlockType(blockTypeIdMapping: mutable.HashMap[BlockTypeId, Int],
+    wMapping: mutable.HashMap[Int, BlockTypeId])(t: BlockTypeId) {
+    val w = blockTypeIdMapping.getOrElse(t, findFreeW(wMapping))
+    blockTypeIdMapping += t -> w
+    wMapping += w -> t
+  }
+
+  def apply(defined: Map[String, BlockTypeId], configured: Seq[BlockTypeId]): BlockFactory = {
+    val wMapping = mutable.HashMap[Int, BlockTypeId]()
+    val reverse = mutable.HashMap[BlockTypeId, Int]()
+
+    for((wString, tId) <- defined) {
+      val w = wString.toInt
+      wMapping += w -> tId
+      reverse += tId -> w
+    }
+    configured.map(addBlockType(reverse, wMapping))
+    apply(reverse.toMap, wMapping.toMap)
   }
 }
 
@@ -354,6 +403,10 @@ case class BlockRemoved(pos: Position, block: Block)
 case class ViewBlock(pos: Position)
 case class BlockViewed(pos: Position, block: Block)
 case object BlockDataUpdate
+
+/* Manage blocks */
+case object GetBlockFactory
+
 /* Manage inventories */
 case class CreateInventory(blockId: UUID, size: Int)
 case class GetInventory(blockId: UUID)

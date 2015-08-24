@@ -21,8 +21,6 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
   import KonstructsJsonProtocol._
   import BlockMetaActor._
 
-  println(configuredBlocks)
-
   val PositionMappingFile = "position-mapping"
   val BlockIdFile = "block-id-mapping"
 
@@ -30,26 +28,9 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
 
   val blockTypeIdMapping = mutable.HashMap[BlockTypeId, Int]()
   val wMapping = mutable.HashMap[Int, BlockTypeId]()
+
+  var factory: BlockFactory = null
   var positionMapping: mutable.HashMap[String, UUID] = null
-
-  def findFreeW: Int = {
-    for(w <- 0 until 256) {
-      if(!wMapping.contains(w)) {
-        return w
-      }
-    }
-    throw new IllegalStateException("No free w to allocate for new block type")
-  }
-
-  def addBlockType(t: BlockTypeId) {
-    val w = blockTypeIdMapping.getOrElse(t, findFreeW)
-    updateMapping(w, t)
-  }
-
-  def updateMapping(w: Int, t: BlockTypeId) {
-    blockTypeIdMapping += t -> w
-    wMapping += w -> t
-  }
 
   def load(pos: Position, w: Int, remove: Boolean = false): Block = {
     val uuid = if(remove) {
@@ -57,15 +38,14 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
     } else {
       positionMapping.get(str(pos))
     }
-    val t = wMapping(w)
-    Block(uuid, t)
+    factory.block(uuid, w)
   }
 
   def store(pos: Position, block: Block): Int = {
     if(block.id.isDefined) {
       positionMapping += str(pos) -> block.id.get
     }
-    blockTypeIdMapping(block.`type`)
+    factory.w(block)
   }
 
   schedule(5000, StoreData)
@@ -90,24 +70,14 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
 
   def loadBlockDb: Receive = {
     case JsonLoaded(_, Some(json)) =>
-      val m = json.convertTo[Map[String, BlockTypeId]]
-      for((wString, tId) <- m) {
-        val w = wString.toInt
-        wMapping += w -> tId
-        blockTypeIdMapping += tId -> w
-      }
-      context.become(createDb)
+      val defined = json.convertTo[Map[String, BlockTypeId]]
+      factory = BlockFactory(defined, configuredBlocks)
+      context.become(ready)
     case JsonLoaded(_, None) =>
-      context.become(createDb)
+      factory = BlockFactory(Map[String, BlockTypeId](), configuredBlocks)
+      context.become(ready)
     case _ =>
       stash()
-  }
-
-  def createDb: Receive = {
-    configuredBlocks.map(addBlockType)
-    val r = ready
-    unstashAll()
-    r
   }
 
   def ready: Receive = {
@@ -127,23 +97,11 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
       initiator ! UnableToPut(pos, load(pos, w, true))
     case StoreData =>
       storeJson(PositionMappingFile, positionMapping.toMap.toJson)
-      storeJson(BlockIdFile, wMapping.toSeq.map {
+      storeJson(BlockIdFile, factory.wMapping.toSeq.map {
         case (k, v) => k.toString -> v
       }.toMap.toJson)
-    case ConvertStack(stack: Stack) =>
-      sender ! ConvertedStack(stack, blockTypeIdMapping(stack.typeId))
-    case ConvertStacks(stacks: Seq[Stack]) =>
-      sender ! ConvertedStacks(stacks.map { stack =>
-        ConvertedStack(stack, blockTypeIdMapping(stack.typeId))
-      })
-    case ConvertView(view: View) =>
-      sender ! ConvertedView(for((p, stack) <- view.items) yield {
-        p -> stack.map { s =>
-          ConvertedStack(s, blockTypeIdMapping(s.typeId))
-        }
-      })
-
-
+    case GetBlockFactory =>
+      sender ! factory
   }
 
 }
@@ -155,13 +113,6 @@ object BlockMetaActor {
   case class ReplaceBlockTo(pos: Position, block: Block, db: ActorRef)
   case class RemoveBlockTo(pos: Position, db: ActorRef)
   case class ViewBlockTo(pos: Position, db: ActorRef)
-
-  case class ConvertStack(stack: Stack)
-  case class ConvertStacks(stacks: Seq[Stack])
-  case class ConvertedStack(stack: Stack, w: Int)
-  case class ConvertedStacks(stacks: Seq[ConvertedStack])
-  case class ConvertView(view: View)
-  case class ConvertedView(items: Map[Int, Option[ConvertedStack]])
 
   def parseBlocks(config: TypesafeConfig): Seq[BlockTypeId] = {
     val blocks = config.root.entrySet.asScala.map { e =>

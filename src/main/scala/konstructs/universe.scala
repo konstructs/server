@@ -35,7 +35,7 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
     nextPid = nextPid + 1
   }
 
-  def receive = {
+  def receive: Receive = {
     case CreatePlayer(nick, password) =>
       player(nick, password)
     case m: PlayerActor.PlayerMovement =>
@@ -104,6 +104,8 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       konstructing.forward(m)
     case k: KonstructPattern =>
       konstructing.forward(k)
+    case GetBlockFactory =>
+      blockManager.forward(GetBlockFactory)
   }
 }
 

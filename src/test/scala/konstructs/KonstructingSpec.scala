@@ -6,9 +6,9 @@ import konstructs.api._
 
 class KonstructingSpec extends WordSpec with Matchers {
 
-  val One = BlockType(BlockTypeId("test", "1"))
-  val Two = BlockType(BlockTypeId("test", "2"))
-  val Three = BlockType(BlockTypeId("test", "3"))
+  val One = BlockTypeId("test", "1")
+  val Two = BlockTypeId("test", "2")
+  val Three = BlockTypeId("test", "3")
 
   "A Inventory" should {
     "produce a 1x1 pattern for a 1x1 inventory" in {
