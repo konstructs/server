@@ -92,18 +92,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       case 1 =>
         universe ! InteractPrimary(self, nick, pos, getBeltBlock)
       case 2 =>
-        getBeltBlock match {
-          case None =>
-            if(data.active < 6) {
-              val m = material(random.nextInt(material.size))
-              val stack = Stack.fromSeq(for(i <- 0 until Stack.MaxSize) yield { Block(None, m) })
-              update(data.inventory.withSlot(data.active, stack))
-            } else {
-              universe ! InteractSecondary(self, nick, pos, None)
-            }
-          case b =>
-            universe ! InteractSecondary(self, nick, pos, b)
-        }
+        universe ! InteractSecondary(self, nick, pos, getBeltBlock)
       case 3 =>
         universe ! InteractTertiary(self, nick, pos, getBeltBlock)
     }
