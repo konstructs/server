@@ -1,6 +1,8 @@
 Konstructs Server
 =================
 
+[![Join the chat at https://gitter.im/konstructs/server](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/konstructs/server?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 [![Build Status](https://travis-ci.org/konstructs/server.svg?branch=master)](https://travis-ci.org/konstructs/server)
 
 This is a Infiniminer/Minecraft inspired game server. It has four overall goals:
