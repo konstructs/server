@@ -2,6 +2,14 @@ language: scala
 scala:
   - 2.10.4
 
+notifications:
+  webhooks:
+    urls:
+      - https://webhooks.gitter.im/e/d7d25eec49bfe73a4f9b
+    on_success: always  # options: [always|never|change] default: always
+    on_failure: always  # options: [always|never|change] default: always
+    on_start: always    # options: [always|never|change] default: always
+
 after_success:
   - sbt assembly
   - ./bintray
