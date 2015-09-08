@@ -5,11 +5,16 @@ ARTIFACT=target/scala-*/konstructs-server-assembly-*.jar
 API_URL=https://api.bintray.com
 API_AUTH=-unsg:$bintray_api_key
 
+gitter_message() {
+	curl -d message="$@" https://webhooks.gitter.im/e/a1dee4e2744d901a2315
+}
+
 # Upload master to bintray
 if [ "x$TRAVIS_BRANCH" == "xmaster" ] && [ "x$TRAVIS_PULL_REQUEST" == "xfalse" ]; then
 	curl -X DELETE $API_AUTH $API_URL/packages/konstructs/jars/server/versions/dev
 	curl -T $ARTIFACT $API_AUTH $API_URL/content/konstructs/jars/server/dev/konstructs-server-build-dev.jar
 	curl -X POST -unsg:$bintray_api_key $API_URL/content/konstructs/jars/server/dev/publish
+	gitter_message "Published dev build, dev server will be restarted with the build."
 	echo | nc play.konstructs.org 44711
 fi
 
@@ -18,6 +23,7 @@ if [ $TRAVIS_TAG ]; then
 	# Release downloadable JAR
 	curl -T $ARTIFACT $API_AUTH $API_URL/content/konstructs/jars/server/$TRAVIS_TAG/konstructs-server-build-$TRAVIS_TAG.jar
 	curl -X POST -unsg:$bintray_api_key $API_URL/content/konstructs/jars/server/$TRAVIS_TAG/publish
+	gitter_message "Released version $TRAVIS_TAG"
 	# Release to maven repository
 	mkdir -p ~/.bintray
 	cat <<END > ~/.bintray/.credentials
