@@ -18,6 +18,9 @@ object Block {
   def createWithId(w: Int): Block = {
     apply(Some(UUID.randomUUID), w)
   }
+  def create(w: Int): Block = {
+    apply(None, w)
+  }
 }
 
 trait Filter[T] {
