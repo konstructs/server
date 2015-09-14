@@ -12,6 +12,9 @@ import konstructs.Db
 
 /* Data structures */
 
+case class BlockType(faces: java.util.List[Int], isPlant: Boolean, isObstacle: Boolean,
+  isTransparent: Boolean)
+
 case class BlockTypeId(namespace: String, name: String)
 
 object BlockTypeId {
@@ -45,7 +48,7 @@ object Block {
 }
 
 case class BlockFactory(blockTypeIdMapping: Map[BlockTypeId, Int],
-  wMapping: Map[Int, BlockTypeId]) {
+  wMapping: Map[Int, BlockTypeId], blockTypes: Map[BlockTypeId, BlockType]) {
 
   def block(uuid: Option[UUID], w: Int): Block = {
     val t = wMapping(w)
@@ -53,15 +56,16 @@ case class BlockFactory(blockTypeIdMapping: Map[BlockTypeId, Int],
   }
 
   def w(block: Block) = {
-    println(blockTypeIdMapping)
     blockTypeIdMapping(block.`type`)
   }
 
   def w(stack: Stack) = {
-    println(blockTypeIdMapping)
     blockTypeIdMapping(stack.typeId)
   }
 
+  def blockType(id: BlockTypeId): BlockType = {
+    blockTypes(id)
+  }
 }
 
 object BlockFactory {
@@ -76,23 +80,27 @@ object BlockFactory {
   }
 
   private def addBlockType(blockTypeIdMapping: mutable.HashMap[BlockTypeId, Int],
-    wMapping: mutable.HashMap[Int, BlockTypeId])(t: BlockTypeId) {
-    val w = blockTypeIdMapping.getOrElse(t, findFreeW(wMapping))
-    blockTypeIdMapping += t -> w
-    wMapping += w -> t
+    wMapping: mutable.HashMap[Int, BlockTypeId],
+    blockTypeMapping: mutable.HashMap[BlockTypeId, BlockType]): PartialFunction[(BlockTypeId, BlockType), Unit] = {
+    case (t, bt) =>
+      val w = blockTypeIdMapping.getOrElse(t, findFreeW(wMapping))
+      blockTypeIdMapping += t -> w
+      wMapping += w -> t
+      blockTypeMapping += t -> bt
   }
 
-  def apply(defined: Map[String, BlockTypeId], configured: Seq[BlockTypeId]): BlockFactory = {
+  def apply(defined: Map[String, BlockTypeId], configured: Seq[(BlockTypeId, BlockType)]): BlockFactory = {
     val wMapping = mutable.HashMap[Int, BlockTypeId]()
     val reverse = mutable.HashMap[BlockTypeId, Int]()
+    val tMapping = mutable.HashMap[BlockTypeId, BlockType]()
 
     for((wString, tId) <- defined) {
       val w = wString.toInt
       wMapping += w -> tId
       reverse += tId -> w
     }
-    configured.map(addBlockType(reverse, wMapping))
-    apply(reverse.toMap, wMapping.toMap)
+    configured.map(addBlockType(reverse, wMapping, tMapping))
+    apply(reverse.toMap, wMapping.toMap, tMapping.toMap)
   }
 }
 
@@ -410,6 +418,8 @@ case object BlockDataUpdate
 
 /* Manage blocks */
 case object GetBlockFactory
+case object GetTextures
+case class Textures(textures: Array[Byte])
 
 /* Manage inventories */
 case class CreateInventory(blockId: UUID, size: Int)

@@ -101,7 +101,6 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
   }
 
   private def getOptional(optional: Boolean)(f: => Object): Object = {
-    println(optional)
     if(optional) {
       try {
         f

@@ -1,7 +1,7 @@
 package konstructs
 
 import scala.collection.JavaConverters._
-import akka.actor.{ Actor, ActorRef, Props }
+import akka.actor.{ Actor, ActorRef, Props, Stash }
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 import konstructs.api._
 
@@ -9,11 +9,11 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
   inventoryManager: ActorRef, konstructing: ActorRef, blockManager: ActorRef,
   chatFilters: Seq[ActorRef],
   blockListeners: Seq[ActorRef], primaryInteractionFilters: Seq[ActorRef],
-  secondaryInteractionFilters: Seq[ActorRef], tertiaryInteractionFilters: Seq[ActorRef]) extends Actor {
+  secondaryInteractionFilters: Seq[ActorRef], tertiaryInteractionFilters: Seq[ActorRef]) extends Actor with Stash {
   import UniverseActor._
 
-  val generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage))
-  val db = context.actorOf(DbActor.props(self, generator, binaryStorage))
+  var generator: ActorRef = null
+  var db: ActorRef = null
 
   private var nextPid = 0
 
@@ -35,7 +35,19 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
     nextPid = nextPid + 1
   }
 
-  def receive: Receive = {
+  blockManager ! GetBlockFactory
+
+  def receive = {
+    case factory: BlockFactory =>
+      generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage, factory))
+      db = context.actorOf(DbActor.props(self, generator, binaryStorage))
+      context.become(ready)
+      unstashAll()
+    case _ =>
+      stash()
+  }
+
+  def ready: Receive = {
     case CreatePlayer(nick, password) =>
       player(nick, password)
     case m: PlayerActor.PlayerMovement =>
@@ -106,6 +118,8 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       konstructing.forward(k)
     case GetBlockFactory =>
       blockManager.forward(GetBlockFactory)
+    case GetTextures =>
+      blockManager.forward(GetTextures)
   }
 }
 

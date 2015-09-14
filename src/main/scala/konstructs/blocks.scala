@@ -1,7 +1,10 @@
 package konstructs
 
 import java.util.UUID
-
+import java.awt.image.BufferedImage
+import java.awt.Graphics
+import java.io.ByteArrayOutputStream
+import javax.imageio.ImageIO
 import scala.collection.mutable
 import scala.collection.JavaConverters._
 
@@ -16,7 +19,7 @@ import konstructs.plugin.{ PluginConstructor, Config }
 case class Chunk(data: Array[Byte])
 
 class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
-  configuredBlocks: Seq[BlockTypeId])
+  configuredBlocks: Seq[(BlockTypeId, BlockType)], textures: Array[Byte])
     extends Actor with Stash with utils.Scheduled with JsonStorage {
   import KonstructsJsonProtocol._
   import BlockMetaActor._
@@ -80,10 +83,12 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
       factory = BlockFactory(defined, configuredBlocks)
       storeDb()
       context.become(ready)
+      unstashAll()
     case JsonLoaded(_, None) =>
-      factory = BlockFactory(Map[String, BlockTypeId](), configuredBlocks)
+      factory = BlockFactory(Map[String, BlockTypeId]("0" -> BlockTypeId("org/konstructs", "vacuum")), configuredBlocks)
       storeDb()
       context.become(ready)
+      unstashAll()
     case _ =>
       stash()
   }
@@ -107,11 +112,15 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
       storeJson(PositionMappingFile, positionMapping.toMap.toJson)
     case GetBlockFactory =>
       sender ! factory
+    case GetTextures =>
+      sender ! Textures(textures)
   }
 
 }
 
 object BlockMetaActor {
+  val NumTextures = 16
+  val TextureSize = 16
   case object StoreData
 
   case class PutBlockTo(pos: Position, block: Block, db: ActorRef)
@@ -119,18 +128,93 @@ object BlockMetaActor {
   case class RemoveBlockTo(pos: Position, db: ActorRef)
   case class ViewBlockTo(pos: Position, db: ActorRef)
 
-  def parseBlocks(config: TypesafeConfig): Seq[BlockTypeId] = {
+  def textureFilename(idString: String): String =
+    s"/textures/$idString.png"
+
+  def loadTexture(idString: String): BufferedImage = {
+    val textureFile = getClass.getResource(textureFilename(idString))
+    if(textureFile == null) throw new IllegalStateException(s"No resource for texture: ${textureFilename(idString)}")
+    ImageIO.read(textureFile)
+  }
+
+  def insertTexture(i: Int, texture: BufferedImage, g: Graphics) {
+    val x = (i % NumTextures) * TextureSize
+    val y = (NumTextures - (i / NumTextures) - 1) * TextureSize
+    g.drawImage(texture, x, y, null)
+  }
+
+  def blockType(idString: String, config: TypesafeConfig, texturePosition: Int): (BlockTypeId, BlockType) = {
+    val typeId = BlockTypeId.fromString(idString)
+    val isObstacle = if(config.hasPath("obstacle")) {
+      config.getBoolean("obstacle")
+    } else {
+      true
+    }
+    val isPlant = if(config.hasPath("plant")) {
+      config.getBoolean("plant")
+    } else {
+      false
+    }
+    val blockType = if(config.hasPath("faces")) {
+      val faces = config.getIntList("faces")
+      if(faces.size != 6) throw new IllegalStateException("There must be exactly 6 faces")
+      BlockType(faces.asScala.map(_ + texturePosition).asJava, isPlant, isObstacle, false)
+    } else {
+      /* Default is to assume only one texture for all faces */
+      BlockType(List(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition).asJava, isPlant, isObstacle, false)
+    }
+    typeId -> blockType
+  }
+
+  def isTransparent(texture: BufferedImage): Boolean = {
+    for(
+      x <- 0 until texture.getWidth;
+      y <- 0 until texture.getHeight) {
+      if(0xFF00FF == (texture.getRGB(x, y) & 0x00FFFFFF)) return true
+    }
+    return false
+  }
+
+  def parseBlocks(config: TypesafeConfig): (Seq[(BlockTypeId, BlockType)], Array[Byte]) = {
     val blocks = config.root.entrySet.asScala.map { e =>
       e.getKey -> config.getConfig(e.getKey)
     }
-    (for((idString, block) <- blocks) yield {
-      BlockTypeId.fromString(idString)
+    var texturePosition = 0
+    val textures = new BufferedImage(
+      NumTextures * TextureSize,
+      NumTextures * TextureSize,
+      BufferedImage.TYPE_INT_RGB)
+    val texturesGraphics = textures.getGraphics()
+    val blockSeq = (for((idString, block) <- blocks) yield {
+      val t = blockType(idString, block, texturePosition)
+      val maxIndex = t._2.faces.asScala.max + 1
+      val numTextures = maxIndex - t._2.faces.asScala.min
+      val img = loadTexture(idString)
+      var transparent = false
+      for(i <- 0 until numTextures) {
+        val texture = img.getSubimage(i * TextureSize, 0, TextureSize, TextureSize)
+        if(isTransparent(texture)) transparent = true
+        insertTexture(texturePosition + i, texture, texturesGraphics)
+      }
+      texturePosition = maxIndex
+      t._1 -> t._2.copy(isTransparent = transparent)
     }) toSeq
+    val texturesBinary = new ByteArrayOutputStream()
+
+    ImageIO.write(textures, "png", texturesBinary)
+
+    import java.io.File
+    ImageIO.write(textures, "png", new File("textures.png"))
+    (blockSeq, texturesBinary.toByteArray)
   }
 
   @PluginConstructor
   def props(name: String, universe: ActorRef,
     @Config(key = "json-storage") jsonStorage: ActorRef,
-    @Config(key = "blocks") blockConfig: TypesafeConfig): Props =
-    Props(classOf[BlockMetaActor], name, jsonStorage, parseBlocks(blockConfig))
+    @Config(key = "blocks") blockConfig: TypesafeConfig): Props = {
+    print("Loading block data... ")
+    val (blocks, textures) = parseBlocks(blockConfig)
+    println("done!")
+    Props(classOf[BlockMetaActor], name, jsonStorage, blocks, textures)
+  }
 }
