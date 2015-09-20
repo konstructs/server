@@ -42,17 +42,13 @@ object KonstructingActor {
   import konstructs.plugin.Plugin.nullAsEmpty
 
   def parseStack(config: TypesafeConfig): Stack = {
-    val blockId = config.getInt("id")
-    if(blockId == 0) {
-      Stack.Empty
+    val blockId = config.getString("id")
+    val amount = if(config.hasPath("amount")) {
+      config.getInt("amount")
     } else {
-      val amount = if(config.hasPath("amount")) {
-        config.getInt("amount")
-      } else {
-        1
-      }
-      Stack(((0 until amount).map { i => Block(None, blockId) }).toList.asJava )
+      1
     }
+    Stack(((0 until amount).map { i => Block.create(blockId) }).toList.asJava )
   }
 
   def parsePattern(config: TypesafeConfig): Pattern = {

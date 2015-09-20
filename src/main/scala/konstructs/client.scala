@@ -1,20 +1,23 @@
 package konstructs.protocol
 
+import scala.collection.JavaConverters._
 import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 import akka.io.{ Tcp, TcpPipelineHandler }
 import akka.util.ByteString
 import TcpPipelineHandler.{ Init, WithinActorContext }
 
-import konstructs.{ PlayerActor, UniverseActor, DbActor }
+import konstructs.{ PlayerActor, UniverseActor, DbActor, BlockMetaActor }
 import konstructs.api._
 
-class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef) extends Actor with Stash {
+class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef,
+  factory: BlockFactory, textures: Array[Byte])
+    extends Actor with Stash {
   import DbActor.BlockList
   import UniverseActor.CreatePlayer
   import Client._
   import PlayerActor._
-  implicit val bo = java.nio.ByteOrder.BIG_ENDIAN
 
+  implicit val bo = java.nio.ByteOrder.BIG_ENDIAN
 
   private def readData[T](conv: String => T, data: String): List[T] = {
     val comma = data.indexOf(',')
@@ -78,6 +81,8 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     case p: PlayerInfo =>
       send(pipe, s"U,${p.pid},${p.pos.x},${p.pos.y},${p.pos.z},${p.pos.rx},${p.pos.ry}")
       sendPlayerNick(pipe, p.pid, p.nick)
+      sendBlockTypes(pipe)
+      sendTextures(pipe)
       unstashAll()
       context.become(ready(pipe, p))
     case init.Event(data) =>
@@ -96,7 +101,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     case BeltActiveUpdate(active) =>
       sendBeltActive(pipe, active)
     case InventoryUpdate(view) =>
-      sendInventory(pipe, view)
+      sendInventory(pipe, view.items)
     case p: PlayerMovement =>
       sendPlayerMovement(pipe, p)
     case PlayerNick(pid, nick) =>
@@ -105,8 +110,10 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       sendPlayerLogout(pipe, pid)
     case Said(text) =>
       sendSaid(pipe, text)
-    case HeldStack(stack) =>
-      sendHeldStack(pipe, stack)
+    case HeldStack(Some(stack)) =>
+      sendHeldStack(pipe, stack.size, factory.w(stack))
+    case HeldStack(None) =>
+      sendHeldStack(pipe, 0, -1)
     case _: Tcp.ConnectionClosed =>
       player.actor ! PoisonPill
       context.stop(self)
@@ -129,15 +136,13 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
   }
 
   def sendBelt(pipe: ActorRef, items: java.util.List[Stack]) {
-    for(i <- 0 until items.size) {
-      val stack = items.get(i)
-      send(pipe, s"G,${i},${stack.size},${stack.w}")
+    for((stack, i) <- items.asScala.zipWithIndex) {
+      send(pipe, s"G,${i},${stack.size},${factory.w(stack)}")
     }
   }
 
-  def sendHeldStack(pipe: ActorRef, stack: Option[Stack]) {
-    val w = stack.map(_.w).getOrElse(-1)
-    send(pipe, s"i,${stack.size},$w")
+  def sendHeldStack(pipe: ActorRef, size: Int, w: Int) {
+    send(pipe, s"i,$size,$w")
   }
 
 
@@ -145,11 +150,11 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     send(pipe, s"A,${active}")
   }
 
-  def sendInventory(pipe: ActorRef, view: View) {
-    for((p, stackOption) <- view.items) {
+  def sendInventory(pipe: ActorRef, items: Map[Int, Option[Stack]]) {
+    for((p, stackOption) <- items) {
       stackOption match {
         case Some(stack) =>
-          send(pipe, s"I,${p},${stack.size},${stack.w}")
+          send(pipe, s"I,${p},${stack.size},${factory.w(stack)}")
         case None =>
           send(pipe, s"I,${p},0,-1")
       }
@@ -172,6 +177,34 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     send(pipe, data)
   }
 
+  def sendTextures(pipe: ActorRef) {
+    val data = ByteString
+      .newBuilder
+      .putByte(M)
+      .putBytes(textures)
+      .result
+    send(pipe, data)
+  }
+
+  def sendBlockTypes(pipe: ActorRef) {
+    val types = factory.blockTypes.map {
+      case (id, t) => factory.blockTypeIdMapping(id) -> t
+    }
+    for((w, t) <- types) {
+      sendBlockType(pipe, w, t)
+    }
+  }
+
+  def booleanToInt(b: Boolean): Int = if(b) 1 else 0
+
+  def sendBlockType(pipe: ActorRef, w: Int, t: BlockType) {
+    val isPlant = booleanToInt(t.isPlant)
+    val isObstacle = booleanToInt(t.isObstacle)
+    val isTransparent = booleanToInt(t.isTransparent)
+    val faces = t.faces.asScala
+    send(pipe, s"W,$w,$isPlant,$isObstacle,$isTransparent,${faces(0)},${faces(1)},${faces(2)},${faces(3)},${faces(4)},${faces(5)}")
+  }
+
   def send(pipe: ActorRef, msg: ByteString) {
     pipe ! init.Command(msg)
   }
@@ -186,7 +219,10 @@ object Client {
   val B = 'B'.toByte
   val V = 'V'.toByte
   val P = 'P'.toByte
+  val M = 'M'.toByte
   val Version = 5
   case object Setup
-  def props(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef) = Props(classOf[Client], init, universe)
+  def props(init: Init[WithinActorContext, ByteString, ByteString],
+    universe: ActorRef, factory: BlockFactory, textures: Array[Byte]) =
+    Props(classOf[Client], init, universe, factory, textures)
 }

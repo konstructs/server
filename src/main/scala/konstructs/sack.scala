@@ -23,7 +23,7 @@ class ToolSackActor(universe: ActorRef) extends Actor {
 }
 
 object ToolSackActor {
-  val BlockId = 32
+  val BlockId = BlockTypeId("org/konstructs", "tool-sack")
   val SackView = InventoryView(4, 2, 4, 4)
   val KonstructingView = InventoryView(10,3,2,2)
   val ResultView = InventoryView(11,7,1,1)

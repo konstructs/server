@@ -2,6 +2,7 @@ package konstructs.api
 
 import java.util.UUID
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import akka.actor.ActorRef
 import com.google.gson.JsonElement
 import spray.json._
@@ -10,16 +11,96 @@ import konstructs.protocol
 import konstructs.Db
 
 /* Data structures */
-case class Block(id: Option[UUID], w: Int) {
+
+case class BlockType(faces: java.util.List[Int], isPlant: Boolean, isObstacle: Boolean,
+  isTransparent: Boolean)
+
+case class BlockTypeId(namespace: String, name: String)
+
+object BlockTypeId {
+  val Vacuum = BlockTypeId("org/konstructs", "vacuum")
+
+  def fromString(idString: String): BlockTypeId = {
+    val lastSlash = idString.lastIndexOf('/')
+    val ns = idString.take(lastSlash)
+    val name = idString.drop(lastSlash + 1)
+    apply(ns, name)
+  }
+}
+
+case class Block(id: Option[UUID], `type`: BlockTypeId) {
   def withId = copy(id = Some(UUID.randomUUID))
 }
 
 object Block {
-  def createWithId(w: Int): Block = {
-    apply(Some(UUID.randomUUID), w)
+  def createWithId(t: BlockTypeId): Block = {
+    apply(Some(UUID.randomUUID), t)
   }
-  def create(w: Int): Block = {
-    apply(None, w)
+  def createWithId(t: String): Block = {
+   createWithId(BlockTypeId.fromString(t))
+  }
+  def create(t: BlockTypeId): Block = {
+    apply(None, t)
+  }
+  def create(t: String): Block = {
+    create(BlockTypeId.fromString(t))
+  }
+}
+
+case class BlockFactory(blockTypeIdMapping: Map[BlockTypeId, Int],
+  wMapping: Map[Int, BlockTypeId], blockTypes: Map[BlockTypeId, BlockType]) {
+
+  def block(uuid: Option[UUID], w: Int): Block = {
+    val t = wMapping(w)
+    Block(uuid, t)
+  }
+
+  def w(block: Block) = {
+    blockTypeIdMapping(block.`type`)
+  }
+
+  def w(stack: Stack) = {
+    blockTypeIdMapping(stack.typeId)
+  }
+
+  def blockType(id: BlockTypeId): BlockType = {
+    blockTypes(id)
+  }
+}
+
+object BlockFactory {
+
+    private def findFreeW(wMapping: mutable.HashMap[Int, BlockTypeId]): Int = {
+    for(w <- 0 until 256) {
+      if(!wMapping.contains(w)) {
+        return w
+      }
+    }
+    throw new IllegalStateException("No free w to allocate for new block type")
+  }
+
+  private def addBlockType(blockTypeIdMapping: mutable.HashMap[BlockTypeId, Int],
+    wMapping: mutable.HashMap[Int, BlockTypeId],
+    blockTypeMapping: mutable.HashMap[BlockTypeId, BlockType]): PartialFunction[(BlockTypeId, BlockType), Unit] = {
+    case (t, bt) =>
+      val w = blockTypeIdMapping.getOrElse(t, findFreeW(wMapping))
+      blockTypeIdMapping += t -> w
+      wMapping += w -> t
+      blockTypeMapping += t -> bt
+  }
+
+  def apply(defined: Map[String, BlockTypeId], configured: Seq[(BlockTypeId, BlockType)]): BlockFactory = {
+    val wMapping = mutable.HashMap[Int, BlockTypeId]()
+    val reverse = mutable.HashMap[BlockTypeId, Int]()
+    val tMapping = mutable.HashMap[BlockTypeId, BlockType]()
+
+    for((wString, tId) <- defined) {
+      val w = wString.toInt
+      wMapping += w -> tId
+      reverse += tId -> w
+    }
+    configured.map(addBlockType(reverse, wMapping, tMapping))
+    apply(reverse.toMap, wMapping.toMap, tMapping.toMap)
   }
 }
 
@@ -78,7 +159,7 @@ object Position {
 }
 
 case class Stack(blocks: java.util.List[Block]) {
-  def w = blocks.asScala.headOption.map(_.w).getOrElse(0)
+  def typeId = blocks.asScala.headOption.map(_.`type`).getOrElse(BlockTypeId.Vacuum)
   def size = blocks.size
   def room = Stack.MaxSize - size
   def isEmpty = blocks.isEmpty
@@ -95,8 +176,8 @@ case class Stack(blocks: java.util.List[Block]) {
       Stack.Empty
     }
   }
-  def acceptsStack(stack: Stack): Boolean = isEmpty || (stack.w == w && !isFull)
-  def accepts(block: Block): Boolean = isEmpty || (block.w == w && !isFull)
+  def acceptsStack(stack: Stack): Boolean = isEmpty || (stack.typeId == typeId && !isFull)
+  def accepts(block: Block): Boolean = isEmpty || (block.`type` == typeId && !isFull)
   def acceptStack(stack: Stack): Option[(Stack, Stack)] = if(acceptsStack(stack)) {
     val r = room
     val newBlocks = blocks.asScala ++ stack.take(r).blocks.asScala
@@ -286,7 +367,7 @@ case class Pattern(stacks: java.util.List[Stack], rows: Int, columns: Int) {
     if(p.rows == rows && p.columns == columns && stacks.size == p.stacks.size) {
       !p.stacks.asScala.zip(stacks.asScala).exists {
         case (contained, self) =>
-          self.w != contained.w || contained.size > self.size
+          self.typeId != contained.typeId || contained.size > self.size
       }
     } else {
       false
@@ -294,7 +375,6 @@ case class Pattern(stacks: java.util.List[Stack], rows: Int, columns: Int) {
 }
 
 case class Konstruct(pattern: Pattern, result: Stack)
-
 
 /* Messages */
 
@@ -325,17 +405,21 @@ case class InteractTertiaryFilter(chain: Seq[ActorRef], message: InteractTertiar
   def next(chain: Seq[ActorRef], message: InteractTertiary) = copy(chain = chain, message = message)
 }
 
-
+/* World mutation and viewing */
 case class PutBlock(pos: Position, block: Block)
-case class DestroyBlock(pos: Position)
-case class ReceiveStack(stack: Stack)
-case class GetBlock(pos: Position)
-case class GetBlockResponse(pos: Position, block: Block)
-case class BlockDataUpdate(pos: Position, oldW: Int, newW: Int)
+case class UnableToPut(pos: Position, block: Block)
+case class ReplaceBlock(pos: Position, block: Block)
+case class RemoveBlock(pos: Position)
+case class DiscardBlock(pos: Position)
+case class BlockRemoved(pos: Position, block: Block)
+case class ViewBlock(pos: Position)
+case class BlockViewed(pos: Position, block: Block)
+case object BlockDataUpdate
 
-/* Manage block IDs */
-case class GetOrCreateBlockId(pos: Position)
-case class GetOrCreateBlockIdResponse(pos: Position, id: UUID)
+/* Manage blocks */
+case object GetBlockFactory
+case object GetTextures
+case class Textures(textures: Array[Byte])
 
 /* Manage inventories */
 case class CreateInventory(blockId: UUID, size: Int)
@@ -346,6 +430,7 @@ case class RemoveStack(blockId: UUID, slot: Int)
 case class GetStack(blockId: UUID, slot: Int)
 case class GetStackResponse(blockId: UUID, slot: Int, stack: Option[Stack])
 case class DeleteInventory(blockId: UUID)
+case class ReceiveStack(stack: Stack)
 
 /* Manage konstructing */
 case class MatchPattern(pattern: Pattern)
@@ -393,6 +478,7 @@ object KonstructsJsonProtocol extends DefaultJsonProtocol {
       case x => deserializationError("Expected List as JsArray, but got " + x)
     }
   }
+  implicit val blockTypeIdFormat = jsonFormat2(BlockTypeId.apply)
   implicit val blockFormat = jsonFormat2(Block.apply)
   implicit val stackFormat = jsonFormat1(Stack.apply)
   implicit val inventoryFormat = jsonFormat1(Inventory.apply)

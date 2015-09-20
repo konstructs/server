@@ -7,8 +7,8 @@ import konstructs.api._
 
 case class FlatWorld(sizeX: Int, sizeZ: Int)
 
-class FlatWorldActor(name: String, end: Position, val jsonStorage: ActorRef,
-                     val binaryStorage: ActorRef)
+class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
+  val jsonStorage: ActorRef, val binaryStorage: ActorRef)
     extends Actor with Stash with JsonStorage with BinaryStorage {
   import World._
   import GeneratorActor.Generated
@@ -67,6 +67,12 @@ class FlatWorldActor(name: String, end: Position, val jsonStorage: ActorRef,
       stash()
   }
 
+  private def w(ns: String, name: String) =
+    factory.blockTypeIdMapping(BlockTypeId(ns, name)).toByte
+
+  private val Konstructs = "org/konstructs"
+  private val Flowers = Seq("flower-yellow", "flower-red", "flower-purple", "sunflower",
+    "flower-white", "flower-blue")
   private def blockSeq(chunk: ChunkPosition, map: HeightMap): Seq[Byte] = {
     for(
       z <- 0 until ChunkSize;
@@ -77,38 +83,38 @@ class FlatWorldActor(name: String, end: Position, val jsonStorage: ActorRef,
       val height = map(global) + 32
       if(global.y < height) {
         if(global.y < 10) {
-          16.toByte
+          w(Konstructs, "water")
         } else if(global.y < 12 ) {
-          2.toByte
+          w(Konstructs, "sand")
         } else if(global.y == height - 1) {
           if(global.y + random.nextInt(10) - 5 < 64)
-            1.toByte
+            w(Konstructs, "grass-dirt")
           else {
             if(global.y + random.nextInt(4) - 2 < 128) {
-              9.toByte
+              w(Konstructs, "snow-dirt")
             } else {
-              14.toByte
+              w(Konstructs, "snow")
             }
           }
         } else if(global.y > height - 10) {
           if(global.y >= 128) {
-            14.toByte
+            w(Konstructs, "snow")
           } else {
-            7.toByte
+            w(Konstructs, "dirt")
           }
         } else {
-          6.toByte
+          w(Konstructs, "stone")
         }
       } else if (global.y < 10) {
-        16.toByte
+        w(Konstructs, "water")
       } else if(global.y < height + 1 && global.y < 40 && global.y > 12 && random.nextInt(25) == 1) {
         if(random.nextInt(8) == 1) { // One in 8 grass is a random flower
-          (18 + random.nextInt(4)).toByte
+          w(Konstructs, Flowers(random.nextInt(Flowers.size)))
         } else {
-          17.toByte
+          w(Konstructs, "grass")
         }
       } else {
-        0.toByte
+        w(Konstructs, "vacuum")
       }
     }
   }
@@ -124,8 +130,9 @@ class FlatWorldActor(name: String, end: Position, val jsonStorage: ActorRef,
 }
 
 object FlatWorldActor {
-  def props(name: String, end: Position, jsonStorage: ActorRef, binaryStorage: ActorRef) =
-    Props(classOf[FlatWorldActor], name, end, jsonStorage, binaryStorage)
+  def props(name: String, end: Position, factory: BlockFactory,
+    jsonStorage: ActorRef, binaryStorage: ActorRef) =
+    Props(classOf[FlatWorldActor], name, end, factory, jsonStorage, binaryStorage)
 }
 
 object World {

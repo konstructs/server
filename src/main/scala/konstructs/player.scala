@@ -18,6 +18,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
   import PlayerActor._
   import Db.ChunkSize
   import KonstructsJsonProtocol._
+  import DbActor.BlockList
 
   val ns = "players"
 
@@ -36,7 +37,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       if(newData.password == password) {
         data = newData
         if(data.inventory.isEmpty) {
-          val inventoryBlock = Block.createWithId(konstructs.ToolSackActor.BlockId)
+          val inventoryBlock = Block.createWithId(ToolSackActor.BlockId)
           universe ! CreateInventory(inventoryBlock.id.get, 16)
           val inventory = Inventory.createEmpty(9).withSlot(0, Stack.fromBlock(inventoryBlock))
           data = data.copy(inventory = inventory)
@@ -50,7 +51,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
         context.stop(self)
       }
     case JsonLoaded(_, None) =>
-      val inventoryBlock = Block.createWithId(konstructs.ToolSackActor.BlockId)
+      val inventoryBlock = Block.createWithId(ToolSackActor.BlockId)
       universe ! CreateInventory(inventoryBlock.id.get, 16)
       val inventory = Inventory.createEmpty(9).withSlot(0, Stack.fromBlock(inventoryBlock))
       data = Player(nick, password, startingPosition, 0, inventory)
@@ -75,7 +76,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
 
   val random = new scala.util.Random
 
-  val material = Set(2,3,4,5,6,8,10,11,12,13).toVector
+  val material = Set(BlockTypeId("org/konstructs", "sand"),BlockTypeId("org/konstructs", "stone-brick"),BlockTypeId("org/konstructs", "brick"),BlockTypeId("org/konstructs", "wood"),BlockTypeId("org/konstructs", "stone"),BlockTypeId("org/konstructs", "plnaks"),BlockTypeId("org/konstructs", "glass"),BlockTypeId("org/konstructs", "cobble"),BlockTypeId("org/konstructs", "white-stone"),BlockTypeId("org/konstructs", "framed-stone")).toVector
 
   def getBeltBlock: Option[Block] = {
     val inventory = data.inventory
@@ -133,14 +134,15 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     case p: protocol.Position =>
       update(p)
       universe ! PlayerMovement(pid, data.position)
-    case b: BlockDataUpdate =>
-      val chunk = ChunkPosition(b.pos)
-      client ! protocol.SendBlock(chunk.p, chunk.q, b.pos.x, b.pos.y, b.pos.z, b.newW)
     case ActivateBeltItem(newActive) if(newActive >= 0 && newActive < 9) =>
       data = data.copy(active = newActive)
       sender ! BeltActiveUpdate(data.active.toString)
     case Action(pos, button) =>
       action(pos, button)
+    case BlockRemoved(_, block) =>
+      putInBelt(Stack.fromBlock(block))
+    case UnableToPut(_, block) =>
+      putInBelt(Stack.fromBlock(block))
     case ReceiveStack(stack) =>
       putInBelt(stack)
     case p: PlayerMovement =>
@@ -163,6 +165,8 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
     case ConnectView(inventoryActor, view) =>
       context.become(manageInventory(inventoryActor, view))
       client ! InventoryUpdate(addBelt(view))
+    case bl: BlockList =>
+      chunkLoader ! bl
   }
 
   val BeltView = InventoryView(0,0,1,9)
@@ -320,7 +324,7 @@ class ChunkLoaderActor(client: ActorRef, db: ActorRef, position: Position) exten
   def sendChunks() {
     val toSend = chunksToSend.take(maxChunksToSend)
     for(chunk <- toSend) {
-      db ! SendBlocks(chunk, None)
+      db ! SendBlocks(chunk)
       maxChunksToSend -= 1
     }
     requestedChunks ++= toSend

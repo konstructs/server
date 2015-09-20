@@ -4,13 +4,13 @@ import akka.actor.{ Actor, ActorRef, Props }
 
 import konstructs.api._
 
-class GeneratorActor(jsonStorage: ActorRef, binaryStorage: ActorRef) extends Actor {
+class GeneratorActor(jsonStorage: ActorRef, binaryStorage: ActorRef, factory: BlockFactory) extends Actor {
   import GeneratorActor._
 
   val worlds = Seq[WorldEntry](
     WorldEntry(
       Box(Position(-1536, 0, -1536), Position(1536, 512, 1536)),
-      context.actorOf(FlatWorldActor.props("Terra", Position(3072, 1024, 3072), jsonStorage, binaryStorage))
+      context.actorOf(FlatWorldActor.props("Terra", Position(3072, 1024, 3072), factory, jsonStorage, binaryStorage))
     )
   )
 
@@ -33,5 +33,6 @@ object GeneratorActor {
   case class Generated(position: ChunkPosition, blocks: Array[Byte])
 
   case class WorldEntry(box: Box, actor: ActorRef)
-  def props(jsonStorage: ActorRef, binaryStorage: ActorRef) = Props(classOf[GeneratorActor], jsonStorage, binaryStorage)
+  def props(jsonStorage: ActorRef, binaryStorage: ActorRef, factory: BlockFactory) =
+    Props(classOf[GeneratorActor], jsonStorage, binaryStorage, factory)
 }

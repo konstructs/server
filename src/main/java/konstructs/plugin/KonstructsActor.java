@@ -3,10 +3,10 @@ package konstructs.plugin;
 import akka.actor.ActorRef;
 import akka.actor.UntypedActorWithStash;
 import konstructs.api.BlockDataUpdate;
-import konstructs.api.GetBlockResponse;
 import konstructs.api.PutBlock;
-import konstructs.api.GetBlock;
-import konstructs.api.DestroyBlock;
+import konstructs.api.ViewBlock;
+import konstructs.api.BlockViewed;
+import konstructs.api.DiscardBlock;
 import konstructs.api.Position;
 import konstructs.api.ReceiveStack;
 import konstructs.api.Block;
@@ -27,9 +27,9 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      */
     public void onReceive(Object message) {
 
-        if (message instanceof GetBlockResponse) {
-            GetBlockResponse blockPosition = (GetBlockResponse)message;
-            onGetBlockResponse(blockPosition);
+        if (message instanceof BlockViewed) {
+            BlockViewed blockPosition = (BlockViewed)message;
+            onBlockViewed(blockPosition);
             return;
         }
 
@@ -56,10 +56,10 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
     }
 
     /**
-     * This function is called when we receive a GetBlockResponse message.
+     * This function is called when we receive a BlockViewed message.
      */
-    public void onGetBlockResponse(GetBlockResponse blockPosition) {
-        System.out.println("called onGetBlockResponse: not implemented");
+    public void onBlockViewed(BlockViewed blockPosition) {
+        System.out.println("called onBlockViewed: not implemented");
     }
 
     /**
@@ -107,25 +107,25 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      * Ask the server for a block
      * @param   p   The position
      */
-    public void getBlock(Position p) {
-        universe.tell(new GetBlock(p), getSelf());
+    public void viewBlock(Position p) {
+        universe.tell(new ViewBlock(p), getSelf());
     }
 
     /**
-     * Destroy a block.
+     * Discard a block.
      * @param   p   The position
      */
-    public void destroyBlock(Position p) {
-        universe.tell(new DestroyBlock(p), getSelf());
+    public void discardBlock(Position p) {
+        universe.tell(new DiscardBlock(p), getSelf());
     }
 
     /**
-     * Destroy a collection of blocks.
+     * Discard a collection of blocks.
      * @param   blocks      A collection of blocks.
      */
-    public void destroyBlocks(Collection<PutBlock> blocks) {
+    public void discardBlocks(Collection<PutBlock> blocks) {
         for (PutBlock b : blocks) {
-            destroyBlock(b.pos());
+            discardBlock(b.pos());
         }
     }
 

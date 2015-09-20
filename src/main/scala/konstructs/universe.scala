@@ -1,18 +1,19 @@
 package konstructs
 
 import scala.collection.JavaConverters._
-import akka.actor.{ Actor, ActorRef, Props }
+import akka.actor.{ Actor, ActorRef, Props, Stash }
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 import konstructs.api._
 
 class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef,
-  inventoryManager: ActorRef, konstructing: ActorRef, chatFilters: Seq[ActorRef],
+  inventoryManager: ActorRef, konstructing: ActorRef, blockManager: ActorRef,
+  chatFilters: Seq[ActorRef],
   blockListeners: Seq[ActorRef], primaryInteractionFilters: Seq[ActorRef],
-  secondaryInteractionFilters: Seq[ActorRef], tertiaryInteractionFilters: Seq[ActorRef]) extends Actor {
+  secondaryInteractionFilters: Seq[ActorRef], tertiaryInteractionFilters: Seq[ActorRef]) extends Actor with Stash {
   import UniverseActor._
 
-  val generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage))
-  val db = context.actorOf(DbActor.props(self, generator, binaryStorage, jsonStorage))
+  var generator: ActorRef = null
+  var db: ActorRef = null
 
   private var nextPid = 0
 
@@ -34,15 +35,25 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
     nextPid = nextPid + 1
   }
 
+  blockManager ! GetBlockFactory
+
   def receive = {
+    case factory: BlockFactory =>
+      generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage, factory))
+      db = context.actorOf(DbActor.props(self, generator, binaryStorage))
+      context.become(ready)
+      unstashAll()
+    case _ =>
+      stash()
+  }
+
+  def ready: Receive = {
     case CreatePlayer(nick, password) =>
       player(nick, password)
     case m: PlayerActor.PlayerMovement =>
       allPlayers(except = Some(m.pid)).foreach(_ ! m)
     case l: PlayerActor.PlayerLogout =>
       allPlayers(except = Some(l.pid)).foreach(_ ! l)
-    case b: BlockDataUpdate =>
-      allPlayers() ++ blockListeners foreach(_ ! b)
     case s: Say =>
       val filters = chatFilters :+ self
       filters.head.forward(SayFilter(filters.tail, s))
@@ -55,7 +66,7 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       filters.head.forward(InteractPrimaryFilter(filters.tail, i))
     case i: InteractPrimaryFilter =>
       i.message.pos.map { pos =>
-        db.tell(DestroyBlock(pos), i.message.sender)
+        blockManager.tell(BlockMetaActor.RemoveBlockTo(pos, db), i.message.sender)
       }
       i.message.block map { block =>
         i.message.sender ! ReceiveStack(Stack.fromBlock(block))
@@ -67,7 +78,7 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       i.message.pos match {
         case Some(pos) =>
           i.message.block.map { block =>
-            db.tell(PutBlock(pos, block), i.message.sender)
+            blockManager.tell(BlockMetaActor.PutBlockTo(pos, block, db), i.message.sender)
           }
         case None =>
           i.message.block.map { block =>
@@ -81,12 +92,14 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       i.message.block map { block =>
         i.message.sender ! ReceiveStack(Stack.fromBlock(block))
       }
-    case p: PutBlock =>
-      db.forward(p)
-    case d: DestroyBlock =>
-      db.forward(d)
-    case g: GetBlock =>
-      db.forward(g)
+    case PutBlock(pos, block) =>
+      blockManager.forward(BlockMetaActor.PutBlockTo(pos, block, db))
+    case RemoveBlock(pos) =>
+      blockManager.forward(BlockMetaActor.RemoveBlockTo(pos, db))
+    case ReplaceBlock(pos, block) =>
+      blockManager.forward(BlockMetaActor.ReplaceBlockTo(pos, block, db))
+    case ViewBlock(pos) =>
+      blockManager.forward(BlockMetaActor.ViewBlockTo(pos, db))
     case c: CreateInventory =>
       inventoryManager.forward(c)
     case g: GetInventory =>
@@ -103,6 +116,10 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       konstructing.forward(m)
     case k: KonstructPattern =>
       konstructing.forward(k)
+    case GetBlockFactory =>
+      blockManager.forward(GetBlockFactory)
+    case GetTextures =>
+      blockManager.forward(GetTextures)
   }
 }
 
@@ -117,6 +134,7 @@ object UniverseActor {
     @Config(key = "json-storage") jsonStorage: ActorRef,
     @Config(key = "inventory-manager") inventoryManager: ActorRef,
     @Config(key = "konstructing") konstructing: ActorRef,
+    @Config(key = "block-manager") blockManager: ActorRef,
     @ListConfig(key = "chat-filters", elementType = classOf[ActorRef], optional = true) chatFilters: Seq[ActorRef],
     @ListConfig(key = "block-listeners", elementType = classOf[ActorRef], optional = true) blockListeners: Seq[ActorRef],
     @ListConfig(key = "primary-interaction-listeners", elementType = classOf[ActorRef], optional = true) primaryListeners: Seq[ActorRef],
@@ -124,7 +142,7 @@ object UniverseActor {
     @ListConfig(key = "tertiary-interaction-listeners", elementType = classOf[ActorRef], optional = true) tertiaryListeners: Seq[ActorRef]
   ): Props =
     Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, inventoryManager,
-      konstructing, nullAsEmpty(chatFilters), nullAsEmpty(blockListeners),
+      konstructing, blockManager, nullAsEmpty(chatFilters), nullAsEmpty(blockListeners),
       nullAsEmpty(primaryListeners), nullAsEmpty(secondaryListeners),
       nullAsEmpty(tertiaryListeners))
 

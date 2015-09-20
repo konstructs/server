@@ -3,9 +3,7 @@ package konstructs
 import scala.collection.mutable
 
 import akka.actor.{ Actor, Stash, ActorRef, Props }
-import konstructs.api._
-
-import konstructs.api._
+import konstructs.api.{ BinaryLoaded, Position }
 
 case class OpaqueFaces(pn: Boolean, pp: Boolean, qn: Boolean, qp: Boolean, kn: Boolean, kp: Boolean) {
   import OpaqueFaces._
@@ -174,7 +172,7 @@ object ChunkData {
 
 }
 
-class ShardActor(db: ActorRef, blockMeta: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef, chunkGenerator: ActorRef)
+class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef, chunkGenerator: ActorRef)
     extends Actor with Stash with utils.Scheduled with BinaryStorage {
   import ShardActor._
   import GeneratorActor._
@@ -223,7 +221,7 @@ class ShardActor(db: ActorRef, blockMeta: ActorRef, shard: ShardPosition, val bi
     }
   }
 
-  def updateChunk(pos: Position)(update: Byte => Byte) {
+  def updateChunk(sender: ActorRef, pos: Position)(update: Byte => Byte) {
     val chunk = ChunkPosition(pos)
     loadChunk(chunk).map { c =>
       dirty = dirty + chunk
@@ -232,38 +230,44 @@ class ShardActor(db: ActorRef, blockMeta: ActorRef, shard: ShardPosition, val bi
       val oldBlock = blockBuffer(i)
       val block = update(oldBlock)
       blockBuffer(i) = block
-      chunks(index(chunk)) = Some(ChunkData(blockBuffer, compressionBuffer))
+      val data = ChunkData(blockBuffer, compressionBuffer)
+      chunks(index(chunk)) = Some(data)
+      sender ! BlockList(chunk, data)
     }
   }
 
   def receive() = {
-    case SendBlocks(chunk, _) =>
+    case SendBlocks(chunk) =>
       val s = sender
       loadChunk(chunk).map { c =>
         s ! BlockList(chunk, c)
       }
-    case PutBlock(p, b) =>
+    case PutBlock(p, w, initiator) =>
       val s = sender
-      updateChunk(p) { old =>
+      updateChunk(initiator, p) { old =>
         if(old == 0) {
-          blockMeta ! PutBlockId(p, b, old, db)
-          b.w.toByte
+          w.toByte
         } else {
-          s ! ReceiveStack(Stack.fromBlock(b))
+          s ! UnableToPut(p, w, initiator)
           old
         }
       }
-    case GetBlock(p) =>
+    case ViewBlock(p, initiator) =>
       val s = sender
-      readChunk(p) { block =>
-        blockMeta ! GetBlockId(p, block.toInt, s)
+      readChunk(p) { w =>
+        s ! BlockViewed(p, w.toInt, initiator)
       }
-    case DestroyBlock(p) =>
+    case RemoveBlock(p, initiator) =>
       val s = sender
-      updateChunk(p) { old =>
-        blockMeta ! ReceiveBlockId(p, old, s)
-        db ! BlockDataUpdate(p, old.toInt, 0)
+      updateChunk(initiator, p) { w =>
+        s ! BlockRemoved(p, w, initiator)
         0
+      }
+    case ReplaceBlock(p, w, initiator) =>
+      val s = sender
+      updateChunk(initiator, p) { oldW =>
+        s ! BlockRemoved(p, oldW, initiator)
+        w.toByte
       }
     case BinaryLoaded(id, dataOption) =>
       val chunk = chunkFromId(id)
@@ -271,7 +275,7 @@ class ShardActor(db: ActorRef, blockMeta: ActorRef, shard: ShardPosition, val bi
         case Some(data) =>
           chunks(index(chunk)) = Some(ChunkData(data))
           unstashAll()
-        case _ =>
+        case None =>
           chunkGenerator ! Generate(chunk)
       }
     case Generated(position, data) =>
@@ -299,7 +303,7 @@ object ShardActor {
     lp + lq * Db.ShardSize + lk * Db.ShardSize * Db.ShardSize
   }
 
-  def props(db: ActorRef, blockMeta: ActorRef, shard: ShardPosition,
+  def props(db: ActorRef, shard: ShardPosition,
     binaryStorage: ActorRef, chunkGenerator: ActorRef) =
-    Props(classOf[ShardActor], db, blockMeta, shard, binaryStorage, chunkGenerator)
+    Props(classOf[ShardActor], db, shard, binaryStorage, chunkGenerator)
 }
