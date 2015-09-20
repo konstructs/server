@@ -121,6 +121,7 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
 object BlockMetaActor {
   val NumTextures = 16
   val TextureSize = 16
+
   case object StoreData
 
   case class PutBlockTo(pos: Position, block: Block, db: ActorRef)
@@ -150,18 +151,22 @@ object BlockMetaActor {
     } else {
       true
     }
-    val isPlant = if(config.hasPath("plant")) {
-      config.getBoolean("plant")
+    val shape = if(config.hasPath("shape")) {
+      val s = config.getString("shape")
+      if(s != BlockType.ShapeBlock && s != BlockType.ShapePlant) {
+        throw new IllegalStateException(s"Block shape must be ${BlockType.ShapeBlock} or ${BlockType.ShapePlant}")
+      }
+      s
     } else {
-      false
+      BlockType.ShapeBlock
     }
     val blockType = if(config.hasPath("faces")) {
       val faces = config.getIntList("faces")
       if(faces.size != 6) throw new IllegalStateException("There must be exactly 6 faces")
-      BlockType(faces.asScala.map(_ + texturePosition).asJava, isPlant, isObstacle, false)
+      BlockType(faces.asScala.map(_ + texturePosition).asJava, shape, isObstacle, false)
     } else {
       /* Default is to assume only one texture for all faces */
-      BlockType(List(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition).asJava, isPlant, isObstacle, false)
+      BlockType(List(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition).asJava, shape, isObstacle, false)
     }
     typeId -> blockType
   }

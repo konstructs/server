@@ -198,11 +198,10 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
   def booleanToInt(b: Boolean): Int = if(b) 1 else 0
 
   def sendBlockType(pipe: ActorRef, w: Int, t: BlockType) {
-    val isPlant = booleanToInt(t.isPlant)
     val isObstacle = booleanToInt(t.isObstacle)
     val isTransparent = booleanToInt(t.isTransparent)
     val faces = t.faces.asScala
-    send(pipe, s"W,$w,$isPlant,$isObstacle,$isTransparent,${faces(0)},${faces(1)},${faces(2)},${faces(3)},${faces(4)},${faces(5)}")
+    send(pipe, s"W,$w,${t.shape},$isObstacle,$isTransparent,${faces(0)},${faces(1)},${faces(2)},${faces(3)},${faces(4)},${faces(5)}")
   }
 
   def send(pipe: ActorRef, msg: ByteString) {
