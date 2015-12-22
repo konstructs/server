@@ -24,9 +24,9 @@ class ToolSackActor(universe: ActorRef) extends Actor {
 
 object ToolSackActor {
   val BlockId = BlockTypeId("org/konstructs", "tool-sack")
-  val SackView = InventoryView(4, 2, 4, 4)
-  val KonstructingView = InventoryView(10,3,2,2)
-  val ResultView = InventoryView(11,7,1,1)
+  val SackView = InventoryView(2, 4, 4, 4)
+  val KonstructingView = InventoryView(7,5,2,2)
+  val ResultView = InventoryView(8,9,1,1)
 
   @PluginConstructor
   def props(name: String, universe: ActorRef) = Props(classOf[ToolSackActor], universe)
