@@ -169,7 +169,7 @@ class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db
       chunkLoader ! bl
   }
 
-  val BeltView = InventoryView(0,0,1,9)
+  val BeltView = InventoryView(0,4,1,9)
 
   def addBelt(view: View) = view.add(BeltView, data.inventory)
 

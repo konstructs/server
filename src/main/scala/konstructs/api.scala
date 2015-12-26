@@ -352,17 +352,19 @@ case class View(items: Map[Int, Option[Stack]]) {
     ) yield {
       val r = row + inventoryView.rowOffset
       val c = column + inventoryView.columnOffset
-      ((r * Columns + c) -> Some(inventory.stacks.get(row * inventoryView.columns + column)))
+      r * Columns + c -> Some(inventory.stacks.get(row * inventoryView.columns + column))
     }))
   }
 
 }
 
 object View {
-  val Columns = 16
-  val Empty = View((for(i <- 0 until 256) yield {
-    i -> None
-  }).toMap)
+  val Columns = 17
+  val Rows = 14
+  val Empty = View((
+    for(i <- 0 until Columns * Rows) yield {
+      i -> None
+    }).toMap)
 }
 
 /* Models for konstructing */
