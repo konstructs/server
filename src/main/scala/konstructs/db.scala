@@ -60,6 +60,8 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
       getShardActor(v.pos) forward v
     case s: SendBlocks =>
       getShardActor(s.chunk) forward s
+    case b: BlockList =>
+      universe ! b
   }
 }
 
