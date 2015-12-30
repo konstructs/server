@@ -232,7 +232,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       blockBuffer(i) = block
       val data = ChunkData(blockBuffer, compressionBuffer)
       chunks(index(chunk)) = Some(data)
-      sender ! BlockList(chunk, data)
+      db ! BlockList(chunk, data)
     }
   }
 
