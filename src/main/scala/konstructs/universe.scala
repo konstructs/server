@@ -12,7 +12,7 @@ class UniverseActor(
                      konstructing: ActorRef,
                      blockManager: ActorRef,
                      chatFilters: Seq[ActorRef],
-                     blockListeners: Seq[ActorRef],
+                     blockUpdateEvents: Seq[ActorRef],
                      primaryInteractionFilters: Seq[ActorRef],
                      secondaryInteractionFilters: Seq[ActorRef],
                      tertiaryInteractionFilters: Seq[ActorRef]
@@ -79,7 +79,8 @@ class UniverseActor(
       filters.head.forward(InteractPrimaryFilter(filters.tail, i))
     case i: InteractPrimaryFilter =>
       i.message.pos.foreach { pos =>
-        blockManager.tell(BlockMetaActor.RemoveBlockTo(pos, db), i.message.sender)
+        db.tell(DbActor.RemoveBlock(pos, i.message.sender), blockManager)
+        blockUpdateEvents.foreach(e => e ! EventBlockRemoved(pos))
       }
       i.message.block foreach { block =>
         i.message.sender ! ReceiveStack(Stack.fromBlock(block))
@@ -92,6 +93,7 @@ class UniverseActor(
         case Some(pos) =>
           i.message.block.foreach { block =>
             blockManager.tell(BlockMetaActor.PutBlockTo(pos, block, db), i.message.sender)
+            blockUpdateEvents.foreach(e => e ! EventBlockUpdated(pos, block))
           }
         case None =>
           i.message.block.foreach { block =>
@@ -107,12 +109,15 @@ class UniverseActor(
       }
     case PutBlock(pos, block) =>
       blockManager.forward(BlockMetaActor.PutBlockTo(pos, block, db))
+      blockUpdateEvents.foreach(e => e ! EventBlockUpdated(pos, block))
     case RemoveBlock(pos) =>
-      blockManager.forward(BlockMetaActor.RemoveBlockTo(pos, db))
+      db.tell(DbActor.RemoveBlock(pos, sender), blockManager)
+      blockUpdateEvents.foreach(e => e ! EventBlockRemoved(pos))
     case ReplaceBlock(pos, block) =>
       blockManager.forward(BlockMetaActor.ReplaceBlockTo(pos, block, db))
+      blockUpdateEvents.foreach(e => e ! EventBlockUpdated(pos, block))
     case ViewBlock(pos) =>
-      blockManager.forward(BlockMetaActor.ViewBlockTo(pos, db))
+      db.forward(DbActor.ViewBlock(pos, sender), blockManager)
     case c: CreateInventory =>
       inventoryManager.forward(c)
     case g: GetInventory =>
@@ -158,11 +163,12 @@ object UniverseActor {
                optional = true
              ) chatFilters: Seq[ActorRef],
 
+
              @ListConfig(
-               key = "block-listeners",
+               key = "block-update-events",
                elementType = classOf[ActorRef],
                optional = true
-             ) blockListeners: Seq[ActorRef],
+             ) blockUpdateEvents: Seq[ActorRef],
 
              @ListConfig(
                key = "primary-interaction-listeners",
@@ -191,7 +197,7 @@ object UniverseActor {
                              konstructing,
                              blockManager,
                              nullAsEmpty(chatFilters),
-                             nullAsEmpty(blockListeners),
+                             nullAsEmpty(blockUpdateEvents),
                              nullAsEmpty(primaryListeners),
                              nullAsEmpty(secondaryListeners),
                              nullAsEmpty(tertiaryListeners)
