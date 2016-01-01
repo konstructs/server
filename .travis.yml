@@ -11,5 +11,5 @@ notifications:
     on_start: always    # options: [always|never|change] default: always
 
 script:
-  - sbt test assembly
+  - sbt test assembly doc
   - ./bintray
