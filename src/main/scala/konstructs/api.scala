@@ -421,7 +421,6 @@ case class DiscardBlock(pos: Position)
 case class BlockRemoved(pos: Position, block: Block)
 case class ViewBlock(pos: Position)
 case class BlockViewed(pos: Position, block: Block)
-case object BlockDataUpdate
 
 /* Manage blocks */
 case object GetBlockFactory
