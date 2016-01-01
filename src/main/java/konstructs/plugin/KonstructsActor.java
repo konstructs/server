@@ -2,7 +2,6 @@ package konstructs.plugin;
 
 import akka.actor.ActorRef;
 import akka.actor.UntypedActorWithStash;
-import konstructs.api.BlockDataUpdate;
 import konstructs.api.PutBlock;
 import konstructs.api.ViewBlock;
 import konstructs.api.BlockViewed;
@@ -33,12 +32,6 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
             return;
         }
 
-        if (message instanceof BlockDataUpdate) {
-            BlockDataUpdate blockUpdate = (BlockDataUpdate)message;
-            onBlockDataUpdate(blockUpdate);
-            return;
-        }
-
         if (message instanceof ReceiveStack) {
             ReceiveStack receiveBlock = (ReceiveStack)message;
             onReceiveStack(receiveBlock);
@@ -60,13 +53,6 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      */
     public void onBlockViewed(BlockViewed blockPosition) {
         System.out.println("called onBlockViewed: not implemented");
-    }
-
-    /**
-     * This function is called when we receive a BlockDataUpdate message.
-     */
-    public void onBlockDataUpdate(BlockDataUpdate blockUpdate) {
-        System.out.println("called onBlockDataUpdate: not implemented");
     }
 
     /**
