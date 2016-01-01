@@ -40,19 +40,70 @@ object PluginConfigMeta {
 case class PluginMeta(configs: Seq[PluginConfigMeta])
 
 object PluginMeta {
+  private def validationError(m: Method) {
+    println(s"Error validating: $m")
+  }
+
+
+  private def validateReturnType(m: Method): Boolean =
+    if(m.getReturnType == classOf[Props]) {
+      return true
+    } else {
+      validationError(m)
+      println(s"The return type must be: ${classOf[Props]}")
+      return false
+    }
+
+  private def validateStatic(m: Method): Boolean = {
+    if(Modifier.isStatic(m.getModifiers)) {
+      return true
+    } else {
+      validationError(m)
+      println("The method must be static")
+      return false
+    }
+  }
+
+  private def validateFirstArgString(m: Method): Boolean = {
+    if(m.getParameterTypes()(0) == classOf[String]) {
+      return true
+    } else {
+      validationError(m)
+      println(s"The first argument must be: ${classOf[String]}")
+      return false
+    }
+  }
+
+  private def validateSecondArgActorRef(m: Method): Boolean = {
+    if(m.getParameterTypes()(1) == classOf[ActorRef]) {
+      return true
+    } else {
+      validationError(m)
+      println(s"The second argument must be: ${classOf[ActorRef]}")
+      return false
+    }
+  }
 
   private def allParametersAreAnnotated(m: Method): Boolean =
-    m.getParameterAnnotations.filter(_.exists { a => a.isInstanceOf[Config] || a.isInstanceOf[ListConfig] }).size == m.getParameterTypes.size - Plugin.StaticParameters
+    if(m.getParameterAnnotations.filter(_.exists { a => a.isInstanceOf[Config] || a.isInstanceOf[ListConfig] }).size == m.getParameterTypes.size - Plugin.StaticParameters) {
+      return true
+    } else {
+      validationError(m)
+      println(s"Only the first two arguments, name and universe, are left without an @Config annotation.")
+      println("All other arguments must be annotated.")
+      return false
+    }
 
   def apply(className: String): PluginMeta = {
     val clazz = Class.forName(className)
+
     val configs = clazz
       .getMethods
-      .filter(_.getReturnType == classOf[Props])
-      .filter { m => Modifier.isStatic(m.getModifiers) }
-      .filter(_.getParameterTypes()(0) == classOf[String])
-      .filter(_.getParameterTypes()(1) == classOf[ActorRef])
       .filter(_.getAnnotations.exists(_.isInstanceOf[PluginConstructor]))
+      .filter(validateReturnType)
+      .filter(validateStatic)
+      .filter(validateFirstArgString)
+      .filter(validateSecondArgActorRef)
       .filter(allParametersAreAnnotated)
       .map(PluginConfigMeta.apply)
     apply(configs)
@@ -178,7 +229,10 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
         case e: ConfigException.Missing =>
       }
     }
-    println(s"Valid configurations: ${meta.configs}")
+    if(!meta.configs.isEmpty)
+      println(s"Valid configurations: ${meta.configs}")
+    else
+      println(s"No valid configurations exists")
     throw new Exception(s"No valid plugin constructor found for $name")
   }
 
