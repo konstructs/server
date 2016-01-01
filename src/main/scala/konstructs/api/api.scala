@@ -426,6 +426,12 @@ case class BlockViewed(pos: Position, block: Block)
 case class EventBlockRemoved(pos: Position)
 case class EventBlockUpdated(pos: Position, block: Block)
 
+/* World queries */
+
+case class BoxQuery(from: Position, to: Position)
+case class BoxQueryResult(query: BoxQuery, result: Seq[Seq[Seq[BlockTypeId]]])
+case class BoxQueryRawResult(query: BoxQuery, result: Seq[Seq[Seq[Int]]])
+
 /* Manage blocks */
 case object GetBlockFactory
 case object GetTextures

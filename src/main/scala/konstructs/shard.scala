@@ -3,7 +3,8 @@ package konstructs
 import scala.collection.mutable
 
 import akka.actor.{ Actor, Stash, ActorRef, Props }
-import konstructs.api.{ BinaryLoaded, Position }
+
+import konstructs.api.{ BoxQuery, BoxQueryRawResult, BinaryLoaded, Position }
 import konstructs.utils.compress
 
 case class OpaqueFaces(pn: Boolean, pp: Boolean, qn: Boolean, qp: Boolean, kn: Boolean, kp: Boolean) {
@@ -213,6 +214,27 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     }
   }
 
+  def runQuery(query: BoxQuery, sender: ActorRef) = {
+    val chunk = ChunkPosition(query.from)
+    loadChunk(chunk).map { c =>
+      c.unpackTo(blockBuffer)
+      val fx = query.from.x - chunk.p * Db.ChunkSize
+      val fy = query.from.y - chunk.k * Db.ChunkSize
+      val fz = query.from.z - chunk.q * Db.ChunkSize
+      val tx = query.to.x - chunk.p * Db.ChunkSize
+      val ty = query.to.y - chunk.k * Db.ChunkSize
+      val tz = query.to.z - chunk.q * Db.ChunkSize
+      val result = for(x <- fx until tx) yield {
+        for(y <- fy until ty) yield {
+          for(z <- fz until tz) yield {
+            blockBuffer(ChunkData.index(x, y, z)).toInt
+          }
+        }
+      }
+      sender ! BoxQueryRawResult(query, result)
+    }
+  }
+
   def readChunk(pos: Position)(read: Byte => Unit) = {
     val chunk = ChunkPosition(pos)
     loadChunk(chunk).map { c =>
@@ -269,6 +291,8 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         s ! BlockRemoved(p, oldW, initiator)
         w.toByte
       }
+    case q: BoxQuery =>
+      runQuery(q, sender)
     case BinaryLoaded(id, dataOption) =>
       val chunk = chunkFromId(id)
       dataOption match {
