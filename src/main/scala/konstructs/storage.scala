@@ -1,12 +1,12 @@
 package konstructs
 
 import java.io.File
-import scala.util.{ Try, Success, Failure }
+import scala.util.Try
 import akka.actor.{ Actor, ActorRef, Props }
 import spray.json._
 import org.apache.commons.io.FileUtils
 import konstructs.plugin.{ PluginConstructor, Config }
-import com.google.gson.{ Gson, JsonElement, JsonParser }
+import com.google.gson.{ Gson, JsonParser }
 
 class BinaryStorageActor(name: String, directory: File) extends Actor {
   import konstructs.api.{ StoreBinary, LoadBinary, BinaryLoaded }

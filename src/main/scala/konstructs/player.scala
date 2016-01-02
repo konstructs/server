@@ -1,7 +1,5 @@
 package konstructs
 
-import java.util.UUID
-
 import konstructs.plugin.toolsack.ToolSackActor
 
 import scala.math.{ max, Ordering }
@@ -18,7 +16,6 @@ case class Player(nick: String, password: String, position: protocol.Position,
 
 class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, universe: ActorRef, override val jsonStorage: ActorRef, startingPosition: protocol.Position) extends Actor with Stash with utils.Scheduled with JsonStorage {
   import PlayerActor._
-  import Db.ChunkSize
   import KonstructsJsonProtocol._
   import DbActor.BlockList
 

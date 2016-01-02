@@ -1,10 +1,7 @@
 package konstructs
 
-import akka.actor.{ ActorSystem, Props }
-import akka.io.IO
+import akka.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
-
-import konstructs.protocol.Server
 import konstructs.plugin.PluginLoaderActor
 
 object Main extends App {

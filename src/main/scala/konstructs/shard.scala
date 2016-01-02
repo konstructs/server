@@ -179,7 +179,6 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
   import GeneratorActor._
   import DbActor._
   import Db._
-  import BlockMetaActor._
 
   val ns = "chunks"
 

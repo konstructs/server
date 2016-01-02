@@ -1,6 +1,5 @@
 package konstructs
 
-import scala.collection.JavaConverters._
 import akka.actor.{ Actor, ActorRef, Props, Stash }
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 import konstructs.api._
