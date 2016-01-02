@@ -2,11 +2,10 @@ package konstructs.protocol
 
 import scala.collection.JavaConverters._
 import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
-import akka.io.{ Tcp, TcpPipelineHandler }
+import akka.io.Tcp
+import akka.io.TcpPipelineHandler.{Init, WithinActorContext}
 import akka.util.ByteString
-import TcpPipelineHandler.{ Init, WithinActorContext }
-
-import konstructs.{ PlayerActor, UniverseActor, DbActor, BlockMetaActor }
+import konstructs.{ PlayerActor, UniverseActor, DbActor }
 import konstructs.api._
 
 class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef,

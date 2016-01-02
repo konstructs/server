@@ -1,14 +1,9 @@
 package konstructs.protocol
 
-import akka.actor.{ Actor,  ActorRef, Props, ActorLogging, Stash }
+import akka.actor.{ Actor, ActorRef, Props, ActorLogging, Stash }
 import akka.io._
-import akka.util.ByteString
-
-import TcpPipelineHandler.{ Init }
-
 import java.net.InetSocketAddress
-
-import konstructs.plugin.{ PluginConstructor, Config }
+import konstructs.plugin.PluginConstructor
 import konstructs.api.{ BlockFactory, GetBlockFactory, GetTextures, Textures }
 
 class Server(name: String, universe: ActorRef)
