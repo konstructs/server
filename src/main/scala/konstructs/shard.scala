@@ -4,6 +4,7 @@ import scala.collection.mutable
 
 import akka.actor.{ Actor, Stash, ActorRef, Props }
 import konstructs.api.{ BinaryLoaded, Position }
+import konstructs.utils.compress
 
 case class OpaqueFaces(pn: Boolean, pp: Boolean, qn: Boolean, qp: Boolean, kn: Boolean, kp: Boolean) {
   import OpaqueFaces._
