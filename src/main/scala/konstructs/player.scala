@@ -2,6 +2,8 @@ package konstructs
 
 import java.util.UUID
 
+import konstructs.plugin.toolsack.ToolSackActor
+
 import scala.math.{ max, Ordering }
 import scala.util.Sorting
 

@@ -1,8 +1,8 @@
-package konstructs
+package konstructs.plugin.toolsack
 
 import akka.actor.{ Actor, Props, ActorRef }
-
 import konstructs.plugin.PluginConstructor
+import konstructs.KonstructingViewActor
 import konstructs.api._
 
 class ToolSackActor(universe: ActorRef) extends Actor {
