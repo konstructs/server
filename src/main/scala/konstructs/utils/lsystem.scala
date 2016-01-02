@@ -1,4 +1,4 @@
-package konstructs
+package konstructs.utils
 
 import scala.util.{ Sorting, Random }
 import scala.math.Ordering

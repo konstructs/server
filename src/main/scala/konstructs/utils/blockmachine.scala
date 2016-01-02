@@ -1,8 +1,8 @@
-package konstructs
+package konstructs.utils
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
-
+import konstructs.Matrix
 import konstructs.api._
 
 case class BlockMachine(alphabet: Map[Char, BlockTypeId]) {
