@@ -4,11 +4,20 @@ import akka.actor.{ Actor, ActorRef, Props, Stash }
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 import konstructs.api._
 
-class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef,
-  inventoryManager: ActorRef, konstructing: ActorRef, blockManager: ActorRef,
-  chatFilters: Seq[ActorRef],
-  blockListeners: Seq[ActorRef], primaryInteractionFilters: Seq[ActorRef],
-  secondaryInteractionFilters: Seq[ActorRef], tertiaryInteractionFilters: Seq[ActorRef]) extends Actor with Stash {
+class UniverseActor(
+                     name: String,
+                     jsonStorage: ActorRef,
+                     binaryStorage: ActorRef,
+                     inventoryManager: ActorRef,
+                     konstructing: ActorRef,
+                     blockManager: ActorRef,
+                     chatFilters: Seq[ActorRef],
+                     blockListeners: Seq[ActorRef],
+                     primaryInteractionFilters: Seq[ActorRef],
+                     secondaryInteractionFilters: Seq[ActorRef],
+                     tertiaryInteractionFilters: Seq[ActorRef]
+                   ) extends Actor with Stash {
+
   import UniverseActor._
 
   var generator: ActorRef = null
