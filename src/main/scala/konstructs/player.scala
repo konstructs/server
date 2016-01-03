@@ -14,7 +14,17 @@ import konstructs.api._
 case class Player(nick: String, password: String, position: protocol.Position,
   active: Int, inventory: Inventory)
 
-class PlayerActor(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, universe: ActorRef, override val jsonStorage: ActorRef, startingPosition: protocol.Position) extends Actor with Stash with utils.Scheduled with JsonStorage {
+class PlayerActor(
+                   pid: Int,
+                   nick: String,
+                   password: String,
+                   client: ActorRef,
+                   db: ActorRef,
+                   universe: ActorRef,
+                   override val jsonStorage: ActorRef,
+                   startingPosition: protocol.Position
+                 ) extends Actor with Stash with utils.Scheduled with JsonStorage {
+
   import PlayerActor._
   import KonstructsJsonProtocol._
   import DbActor.BlockList
