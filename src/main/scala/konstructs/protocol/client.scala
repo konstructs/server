@@ -65,7 +65,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
       val command = data.decodeString("ascii")
       if (command.startsWith(s"V,$Version,")) {
         val strings = readData(s => s, command.drop(4))
-
+        println(s"Player ${strings(0)} connected with protocol version $Version")
         universe ! CreatePlayer(strings(0), strings(1))
         context.become(waitForPlayer(sender))
       } else {
