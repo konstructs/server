@@ -78,10 +78,10 @@ class UniverseActor(
       val filters = primaryInteractionFilters :+ self
       filters.head.forward(InteractPrimaryFilter(filters.tail, i))
     case i: InteractPrimaryFilter =>
-      i.message.pos.map { pos =>
+      i.message.pos.foreach { pos =>
         blockManager.tell(BlockMetaActor.RemoveBlockTo(pos, db), i.message.sender)
       }
-      i.message.block map { block =>
+      i.message.block foreach { block =>
         i.message.sender ! ReceiveStack(Stack.fromBlock(block))
       }
     case i: InteractSecondary =>
@@ -90,11 +90,11 @@ class UniverseActor(
     case i: InteractSecondaryFilter =>
       i.message.pos match {
         case Some(pos) =>
-          i.message.block.map { block =>
+          i.message.block.foreach { block =>
             blockManager.tell(BlockMetaActor.PutBlockTo(pos, block, db), i.message.sender)
           }
         case None =>
-          i.message.block.map { block =>
+          i.message.block.foreach { block =>
             i.message.sender ! ReceiveStack(Stack.fromBlock(block))
           }
       }
@@ -102,7 +102,7 @@ class UniverseActor(
       val filters = tertiaryInteractionFilters :+ self
       filters.head.forward(InteractTertiaryFilter(filters.tail, i))
     case i: InteractTertiaryFilter =>
-      i.message.block map { block =>
+      i.message.block foreach { block =>
         i.message.sender ! ReceiveStack(Stack.fromBlock(block))
       }
     case PutBlock(pos, block) =>
