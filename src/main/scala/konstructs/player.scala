@@ -2,7 +2,7 @@ package konstructs
 
 import konstructs.plugin.toolsack.ToolSackActor
 
-import scala.math.{ max, Ordering }
+import scala.math.Ordering
 import scala.util.Sorting
 
 import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
