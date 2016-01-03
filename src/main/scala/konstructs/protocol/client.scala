@@ -8,12 +8,12 @@ import akka.util.ByteString
 import konstructs.{ PlayerActor, UniverseActor, DbActor }
 import konstructs.api._
 
-class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef,
-  factory: BlockFactory, textures: Array[Byte])
+class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef,
+                  factory: BlockFactory, textures: Array[Byte])
     extends Actor with Stash {
   import DbActor.BlockList
   import UniverseActor.CreatePlayer
-  import Client._
+  import ClientActor._
   import PlayerActor._
 
   implicit val bo = java.nio.ByteOrder.BIG_ENDIAN
@@ -213,7 +213,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
   }
 }
 
-object Client {
+object ClientActor {
   val C = 'C'.toByte
   val B = 'B'.toByte
   val V = 'V'.toByte
@@ -223,5 +223,5 @@ object Client {
   case object Setup
   def props(init: Init[WithinActorContext, ByteString, ByteString],
     universe: ActorRef, factory: BlockFactory, textures: Array[Byte]) =
-    Props(classOf[Client], init, universe, factory, textures)
+    Props(classOf[ClientActor], init, universe, factory, textures)
 }

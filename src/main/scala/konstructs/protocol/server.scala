@@ -46,7 +46,7 @@ class Server(name: String, universe: ActorRef)
           new BackpressureBuffer(lowBytes = 100, highBytes = 16*1024, maxBytes = 64*1024))
 
       val connection = sender
-      val handler = context.actorOf(Client.props(init, universe, factory, textures))
+      val handler = context.actorOf(ClientActor.props(init, universe, factory, textures))
       val pipeline = context.actorOf(TcpPipelineHandler.props(
       init, connection, handler))
       println(s"$remote connected!")
