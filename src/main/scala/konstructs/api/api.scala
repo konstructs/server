@@ -422,6 +422,10 @@ case class BlockRemoved(pos: Position, block: Block)
 case class ViewBlock(pos: Position)
 case class BlockViewed(pos: Position, block: Block)
 
+/* Events */
+case class EventBlockRemoved(pos: Position)
+case class EventBlockUpdated(pos: Position, block: Block)
+
 /* Manage blocks */
 case object GetBlockFactory
 case object GetTextures
