@@ -64,9 +64,10 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     case init.Event(data) =>
       val command = data.decodeString("ascii")
       if (command.startsWith(s"V,$Version,")) {
-        val strings = readData(s => s, command.drop(4))
-        println(s"Player ${strings(0)} connected with protocol version $Version")
-        universe ! CreatePlayer(strings(0), strings(1))
+        val strings = readData(s => s, command.drop(2))
+        val auth = Authenticate(strings(0) toInt, strings(1), strings(2))
+        println(s"Player ${auth.name} connected with protocol version ${auth.version}")
+        universe ! CreatePlayer(auth.name, auth.token)
         context.become(waitForPlayer(sender))
       } else {
         sendSaid(sender, s"This server only supports protocol version $Version")
