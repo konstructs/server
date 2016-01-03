@@ -18,9 +18,13 @@ import konstructs.plugin.{ PluginConstructor, Config }
 
 case class Chunk(data: Array[Byte])
 
-class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
-  configuredBlocks: Seq[(BlockTypeId, BlockType)], textures: Array[Byte])
-    extends Actor with Stash with utils.Scheduled with JsonStorage {
+class BlockMetaActor(
+                      val ns: String,
+                      val jsonStorage: ActorRef,
+                      configuredBlocks: Seq[(BlockTypeId, BlockType)],
+                      textures: Array[Byte]
+                    ) extends Actor with Stash with utils.Scheduled with JsonStorage {
+
   import KonstructsJsonProtocol._
   import BlockMetaActor._
 
