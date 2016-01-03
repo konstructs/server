@@ -56,6 +56,7 @@ class PlayerActor(
         context.become(sendBelt)
         unstashAll()
       } else {
+        println(s"Stop player and client actors for ${newData.nick}, incorrect password provided.");
         client ! PoisonPill
         context.stop(self)
       }
