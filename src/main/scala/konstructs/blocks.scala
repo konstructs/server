@@ -218,9 +218,11 @@ object BlockMetaActor {
   }
 
   @PluginConstructor
-  def props(name: String, universe: ActorRef,
-    @Config(key = "json-storage") jsonStorage: ActorRef,
-    @Config(key = "blocks") blockConfig: TypesafeConfig): Props = {
+  def props(
+             name: String, universe: ActorRef,
+             @Config(key = "json-storage") jsonStorage: ActorRef,
+             @Config(key = "blocks") blockConfig: TypesafeConfig
+           ): Props = {
     print("Loading block data... ")
     val (blocks, textures) = parseBlocks(blockConfig)
     println("done!")
