@@ -2,13 +2,8 @@ package konstructs.plugin;
 
 import akka.actor.ActorRef;
 import akka.actor.UntypedActorWithStash;
-import konstructs.api.PutBlock;
-import konstructs.api.ViewBlock;
-import konstructs.api.BlockViewed;
-import konstructs.api.DiscardBlock;
-import konstructs.api.Position;
-import konstructs.api.ReceiveStack;
-import konstructs.api.Block;
+import konstructs.api.*;
+
 import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 import scala.concurrent.duration.Duration;
@@ -36,6 +31,16 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
             ReceiveStack receiveBlock = (ReceiveStack)message;
             onReceiveStack(receiveBlock);
             return;
+        }
+
+        if (message instanceof EventBlockRemoved) {
+            EventBlockRemoved removedBlock = (EventBlockRemoved)message;
+            onEventBlockRemoved(removedBlock);
+        }
+
+        if (message instanceof EventBlockUpdated) {
+            EventBlockUpdated updatedBlock = (EventBlockUpdated)message;
+            onEventBlockUpdated(updatedBlock);
         }
 
     }
@@ -113,6 +118,22 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
         for (PutBlock b : blocks) {
             discardBlock(b.pos());
         }
+    }
+
+    /**
+     * Called when a block is removed.
+     * @param block     The block
+     */
+    public void onEventBlockRemoved(EventBlockRemoved block) {
+        System.out.println("called onEventBlockRemoved: not implemented");
+    }
+
+    /**
+     * Called when a block is updated/created
+     * @param block     The block
+     */
+    public void onEventBlockUpdated(EventBlockUpdated block) {
+        System.out.println("called onEventBlockUpdated: not implemented");
     }
 
     /**
