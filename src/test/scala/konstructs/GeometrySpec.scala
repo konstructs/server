@@ -120,6 +120,12 @@ class GeometrySpec extends WordSpec with Matchers {
       )
 
     }
+
+    "throw exception if end is bigger than start" in {
+      intercept[IllegalArgumentException] {
+        Box(Position(0, 0, -67), Position(0, 0, -69))
+      }
+    }
   }
 
 }

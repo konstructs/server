@@ -18,6 +18,8 @@ case class Matrix(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int, g: Int, h: Int
 }
 
 case class Box(start: Position, end: Position) {
+  if(start.x > end.x || start.y > end.y || start.z > end.z)
+    throw new IllegalArgumentException("Start must be smaller than end in all dimensions")
 
   def contains(p: Position): Boolean =
     p.x >= start.x && p.x < end.x && p.y >= start.y && p.y < end.y && p.z >= start.z && p.z < end.z
