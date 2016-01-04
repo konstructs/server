@@ -105,6 +105,7 @@ class BlockMetaActor(
       db ! DbActor.ViewBlock(pos, sender)
     case ReplaceBlockTo(pos, block, db) =>
       db ! DbActor.ReplaceBlock(pos, store(pos, block), sender)
+      blockUpdateEvents.foreach(e => e ! EventBlockUpdated(pos, block))
     case PutBlockTo(pos, block, db) =>
       db ! DbActor.PutBlock(pos, store(pos, block), sender)
       blockUpdateEvents.foreach(e => e ! EventBlockUpdated(pos, block))
