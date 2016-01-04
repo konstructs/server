@@ -4,6 +4,7 @@ import scala.util.Random
 import akka.actor.{ Actor, ActorRef, Props, Stash }
 import spray.json._
 import konstructs.api._
+import konstructs.utils._
 
 case class FlatWorld(sizeX: Int, sizeZ: Int)
 

@@ -1,15 +1,23 @@
 package konstructs
 
-import scala.collection.JavaConverters._
 import akka.actor.{ Actor, ActorRef, Props, Stash }
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 import konstructs.api._
 
-class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef,
-  inventoryManager: ActorRef, konstructing: ActorRef, blockManager: ActorRef,
-  chatFilters: Seq[ActorRef],
-  blockListeners: Seq[ActorRef], primaryInteractionFilters: Seq[ActorRef],
-  secondaryInteractionFilters: Seq[ActorRef], tertiaryInteractionFilters: Seq[ActorRef]) extends Actor with Stash {
+class UniverseActor(
+                     name: String,
+                     jsonStorage: ActorRef,
+                     binaryStorage: ActorRef,
+                     inventoryManager: ActorRef,
+                     konstructing: ActorRef,
+                     blockManager: ActorRef,
+                     chatFilters: Seq[ActorRef],
+                     blockListeners: Seq[ActorRef],
+                     primaryInteractionFilters: Seq[ActorRef],
+                     secondaryInteractionFilters: Seq[ActorRef],
+                     tertiaryInteractionFilters: Seq[ActorRef]
+                   ) extends Actor with Stash {
+
   import UniverseActor._
 
   var generator: ActorRef = null
@@ -29,7 +37,10 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
   }
 
   def player(nick: String, password: String) {
-    val player = context.actorOf(PlayerActor.props(nextPid, nick, password, sender, db, self, jsonStorage, protocol.Position(0,512f,0,0,0)), playerActorId(nextPid))
+    val player = context.actorOf(
+      PlayerActor.props(nextPid, nick, password, sender, db, self, jsonStorage, protocol.Position(0,512f,0,0,0)),
+      playerActorId(nextPid)
+    )
     allPlayers(except = Some(nextPid)).foreach(_ ! PlayerActor.SendInfo(player))
     allPlayers(except = Some(nextPid)).foreach(player ! PlayerActor.SendInfo(_))
     nextPid = nextPid + 1
@@ -67,10 +78,10 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       val filters = primaryInteractionFilters :+ self
       filters.head.forward(InteractPrimaryFilter(filters.tail, i))
     case i: InteractPrimaryFilter =>
-      i.message.pos.map { pos =>
+      i.message.pos.foreach { pos =>
         blockManager.tell(BlockMetaActor.RemoveBlockTo(pos, db), i.message.sender)
       }
-      i.message.block map { block =>
+      i.message.block foreach { block =>
         i.message.sender ! ReceiveStack(Stack.fromBlock(block))
       }
     case i: InteractSecondary =>
@@ -79,11 +90,11 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
     case i: InteractSecondaryFilter =>
       i.message.pos match {
         case Some(pos) =>
-          i.message.block.map { block =>
+          i.message.block.foreach { block =>
             blockManager.tell(BlockMetaActor.PutBlockTo(pos, block, db), i.message.sender)
           }
         case None =>
-          i.message.block.map { block =>
+          i.message.block.foreach { block =>
             i.message.sender ! ReceiveStack(Stack.fromBlock(block))
           }
       }
@@ -91,7 +102,7 @@ class UniverseActor(name: String, jsonStorage: ActorRef, binaryStorage: ActorRef
       val filters = tertiaryInteractionFilters :+ self
       filters.head.forward(InteractTertiaryFilter(filters.tail, i))
     case i: InteractTertiaryFilter =>
-      i.message.block map { block =>
+      i.message.block foreach { block =>
         i.message.sender ! ReceiveStack(Stack.fromBlock(block))
       }
     case PutBlock(pos, block) =>
@@ -131,21 +142,58 @@ object UniverseActor {
   import konstructs.plugin.Plugin.nullAsEmpty
 
   @PluginConstructor
-  def props(name: String, notUsed: ActorRef,
-    @Config(key = "binary-storage") binaryStorage: ActorRef,
-    @Config(key = "json-storage") jsonStorage: ActorRef,
-    @Config(key = "inventory-manager") inventoryManager: ActorRef,
-    @Config(key = "konstructing") konstructing: ActorRef,
-    @Config(key = "block-manager") blockManager: ActorRef,
-    @ListConfig(key = "chat-filters", elementType = classOf[ActorRef], optional = true) chatFilters: Seq[ActorRef],
-    @ListConfig(key = "block-listeners", elementType = classOf[ActorRef], optional = true) blockListeners: Seq[ActorRef],
-    @ListConfig(key = "primary-interaction-listeners", elementType = classOf[ActorRef], optional = true) primaryListeners: Seq[ActorRef],
-    @ListConfig(key = "secondary-interaction-listeners", elementType = classOf[ActorRef], optional = true) secondaryListeners: Seq[ActorRef],
-    @ListConfig(key = "tertiary-interaction-listeners", elementType = classOf[ActorRef], optional = true) tertiaryListeners: Seq[ActorRef]
-  ): Props =
-    Props(classOf[UniverseActor], name, jsonStorage, binaryStorage, inventoryManager,
-      konstructing, blockManager, nullAsEmpty(chatFilters), nullAsEmpty(blockListeners),
-      nullAsEmpty(primaryListeners), nullAsEmpty(secondaryListeners),
-      nullAsEmpty(tertiaryListeners))
+  def props(
+             name: String,
+             notUsed: ActorRef,
 
+             @Config(key = "binary-storage") binaryStorage: ActorRef,
+             @Config(key = "json-storage") jsonStorage: ActorRef,
+             @Config(key = "inventory-manager") inventoryManager: ActorRef,
+             @Config(key = "konstructing") konstructing: ActorRef,
+             @Config(key = "block-manager") blockManager: ActorRef,
+
+             @ListConfig(
+               key = "chat-filters",
+               elementType = classOf[ActorRef],
+               optional = true
+             ) chatFilters: Seq[ActorRef],
+
+             @ListConfig(
+               key = "block-listeners",
+               elementType = classOf[ActorRef],
+               optional = true
+             ) blockListeners: Seq[ActorRef],
+
+             @ListConfig(
+               key = "primary-interaction-listeners",
+               elementType = classOf[ActorRef],
+               optional = true
+             ) primaryListeners: Seq[ActorRef],
+
+             @ListConfig(
+               key = "secondary-interaction-listeners",
+               elementType = classOf[ActorRef],
+               optional = true
+             ) secondaryListeners: Seq[ActorRef],
+
+             @ListConfig(
+               key = "tertiary-interaction-listeners",
+               elementType = classOf[ActorRef],
+               optional = true
+             ) tertiaryListeners: Seq[ActorRef]
+
+           ): Props = Props(
+                             classOf[UniverseActor],
+                             name,
+                             jsonStorage,
+                             binaryStorage,
+                             inventoryManager,
+                             konstructing,
+                             blockManager,
+                             nullAsEmpty(chatFilters),
+                             nullAsEmpty(blockListeners),
+                             nullAsEmpty(primaryListeners),
+                             nullAsEmpty(secondaryListeners),
+                             nullAsEmpty(tertiaryListeners)
+                           )
 }

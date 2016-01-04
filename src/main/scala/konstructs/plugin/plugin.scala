@@ -1,11 +1,11 @@
 package konstructs.plugin
 
-import java.lang.reflect.{ Method, Type, Modifier }
+import java.lang.reflect.{ Method, Modifier }
 import java.io.File
 import scala.concurrent.Future
-import scala.collection.JavaConverters._
+
 import akka.util.Timeout
-import akka.actor.{ Props, ActorSystem, ActorRef, Actor, ActorSelection, Stash }
+import akka.actor.{ Props, ActorRef, Actor, ActorSelection, Stash }
 import com.typesafe.config.{ Config => TypesafeConfig, ConfigException, ConfigValueType }
 
 object Plugin {

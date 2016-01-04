@@ -1,14 +1,9 @@
 package konstructs.protocol
 
-import akka.actor.{ Actor,  ActorRef, Props, ActorLogging, Stash }
+import akka.actor.{ Actor, ActorRef, Props, ActorLogging, Stash }
 import akka.io._
-import akka.util.ByteString
-
-import TcpPipelineHandler.{ Init }
-
 import java.net.InetSocketAddress
-
-import konstructs.plugin.{ PluginConstructor, Config }
+import konstructs.plugin.PluginConstructor
 import konstructs.api.{ BlockFactory, GetBlockFactory, GetTextures, Textures }
 
 class Server(name: String, universe: ActorRef)
@@ -51,7 +46,7 @@ class Server(name: String, universe: ActorRef)
           new BackpressureBuffer(lowBytes = 100, highBytes = 16*1024, maxBytes = 64*1024))
 
       val connection = sender
-      val handler = context.actorOf(Client.props(init, universe, factory, textures))
+      val handler = context.actorOf(ClientActor.props(init, universe, factory, textures))
       val pipeline = context.actorOf(TcpPipelineHandler.props(
       init, connection, handler))
       println(s"$remote connected!")

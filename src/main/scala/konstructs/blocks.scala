@@ -5,6 +5,8 @@ import java.awt.image.BufferedImage
 import java.awt.Graphics
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
+import konstructs.plugin.Plugin._
+
 import scala.collection.mutable
 import scala.collection.JavaConverters._
 
@@ -14,13 +16,18 @@ import akka.actor.{ Actor, Props, ActorRef, Stash }
 import spray.json._
 
 import konstructs.api._
-import konstructs.plugin.{ PluginConstructor, Config }
+import konstructs.plugin.{ListConfig, PluginConstructor, Config}
 
 case class Chunk(data: Array[Byte])
 
-class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
-  configuredBlocks: Seq[(BlockTypeId, BlockType)], textures: Array[Byte])
-    extends Actor with Stash with utils.Scheduled with JsonStorage {
+class BlockMetaActor(
+                      val ns: String,
+                      val jsonStorage: ActorRef,
+                      configuredBlocks: Seq[(BlockTypeId, BlockType)],
+                      textures: Array[Byte],
+                      blockUpdateEvents: Seq[ActorRef]
+                    ) extends Actor with Stash with utils.Scheduled with JsonStorage {
+
   import KonstructsJsonProtocol._
   import BlockMetaActor._
 
@@ -98,10 +105,13 @@ class BlockMetaActor(val ns: String, val jsonStorage: ActorRef,
       db ! DbActor.ViewBlock(pos, sender)
     case ReplaceBlockTo(pos, block, db) =>
       db ! DbActor.ReplaceBlock(pos, store(pos, block), sender)
+      blockUpdateEvents.foreach(e => e ! EventBlockUpdated(pos, block))
     case PutBlockTo(pos, block, db) =>
       db ! DbActor.PutBlock(pos, store(pos, block), sender)
+      blockUpdateEvents.foreach(e => e ! EventBlockUpdated(pos, block))
     case RemoveBlockTo(pos, db) =>
       db ! DbActor.RemoveBlock(pos, sender)
+      blockUpdateEvents.foreach(e => e ! EventBlockRemoved(pos))
     case DbActor.BlockViewed(pos, w, initiator) =>
       initiator ! BlockViewed(pos, load(pos, w))
     case DbActor.BlockRemoved(pos, w, initiator) =>
@@ -214,12 +224,28 @@ object BlockMetaActor {
   }
 
   @PluginConstructor
-  def props(name: String, universe: ActorRef,
-    @Config(key = "json-storage") jsonStorage: ActorRef,
-    @Config(key = "blocks") blockConfig: TypesafeConfig): Props = {
+  def props(
+             name: String, universe: ActorRef,
+             @Config(key = "json-storage") jsonStorage: ActorRef,
+             @Config(key = "blocks") blockConfig: TypesafeConfig,
+
+             @ListConfig(
+               key = "block-update-events",
+               elementType = classOf[ActorRef],
+               optional = true
+             ) blockUpdateEvents: Seq[ActorRef]
+
+           ): Props = {
     print("Loading block data... ")
     val (blocks, textures) = parseBlocks(blockConfig)
     println("done!")
-    Props(classOf[BlockMetaActor], name, jsonStorage, blocks, textures)
+    Props(
+      classOf[BlockMetaActor],
+      name,
+      jsonStorage,
+      blocks,
+      textures,
+      nullAsEmpty(blockUpdateEvents)
+    )
   }
 }

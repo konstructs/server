@@ -2,7 +2,7 @@ package konstructs
 
 import akka.actor.{ Actor, ActorRef, Props }
 
-import konstructs.api.{ Position }
+import konstructs.api.Position
 
 object Db {
   val ChunkSize = 32
@@ -30,7 +30,6 @@ object ShardPosition {
 class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
     extends Actor {
   import DbActor._
-  import Db.ChunkSize
 
   def shardActorId(r: ShardPosition) = s"shard-${r.m}-${r.n}-${r.o}"
 

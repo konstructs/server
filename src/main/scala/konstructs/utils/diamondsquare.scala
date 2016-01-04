@@ -1,7 +1,6 @@
-package konstructs
+package konstructs.utils
 
 import java.io.{ DataInputStream, ByteArrayInputStream, DataOutputStream, ByteArrayOutputStream }
-import scala.util.Try
 import com.sksamuel.scrimage.Image
 import konstructs.api._
 

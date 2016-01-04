@@ -2,19 +2,18 @@ package konstructs.protocol
 
 import scala.collection.JavaConverters._
 import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
-import akka.io.{ Tcp, TcpPipelineHandler }
+import akka.io.Tcp
+import akka.io.TcpPipelineHandler.{Init, WithinActorContext}
 import akka.util.ByteString
-import TcpPipelineHandler.{ Init, WithinActorContext }
-
-import konstructs.{ PlayerActor, UniverseActor, DbActor, BlockMetaActor }
+import konstructs.{ PlayerActor, UniverseActor, DbActor }
 import konstructs.api._
 
-class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef,
-  factory: BlockFactory, textures: Array[Byte])
+class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef,
+                  factory: BlockFactory, textures: Array[Byte])
     extends Actor with Stash {
   import DbActor.BlockList
   import UniverseActor.CreatePlayer
-  import Client._
+  import ClientActor._
   import PlayerActor._
 
   implicit val bo = java.nio.ByteOrder.BIG_ENDIAN
@@ -65,9 +64,10 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
     case init.Event(data) =>
       val command = data.decodeString("ascii")
       if (command.startsWith(s"V,$Version,")) {
-        val strings = readData(s => s, command.drop(4))
-
-        universe ! CreatePlayer(strings(0), strings(1))
+        val strings = readData(s => s, command.drop(2))
+        val auth = Authenticate(strings(0) toInt, strings(1), strings(2))
+        println(s"Player ${auth.name} connected with protocol version ${auth.version}")
+        universe ! CreatePlayer(auth.name, auth.token)
         context.become(waitForPlayer(sender))
       } else {
         sendSaid(sender, s"This server only supports protocol version $Version")
@@ -213,7 +213,7 @@ class Client(init: Init[WithinActorContext, ByteString, ByteString], universe: A
   }
 }
 
-object Client {
+object ClientActor {
   val C = 'C'.toByte
   val B = 'B'.toByte
   val V = 'V'.toByte
@@ -223,5 +223,5 @@ object Client {
   case object Setup
   def props(init: Init[WithinActorContext, ByteString, ByteString],
     universe: ActorRef, factory: BlockFactory, textures: Array[Byte]) =
-    Props(classOf[Client], init, universe, factory, textures)
+    Props(classOf[ClientActor], init, universe, factory, textures)
 }

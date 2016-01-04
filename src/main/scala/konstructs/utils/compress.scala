@@ -1,4 +1,4 @@
-package konstructs
+package konstructs.utils
 
 import java.util.zip.{ Inflater, Deflater }
 
