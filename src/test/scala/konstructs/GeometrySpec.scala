@@ -58,6 +58,68 @@ class GeometrySpec extends WordSpec with Matchers {
       Box(Position(-32, 0, -32), Position(32, 1, 32)).contains(ChunkPosition(0, 0, 0)) shouldEqual true
     }
 
+    "single block query (boundary)" in {
+      Box(Position(0, 0, 31), Position(0, 0, 32)).chunked shouldEqual Set(
+        Box(Position(0, 0, 31), Position(0, 0, 32))
+      )
+    }
+
+    "match two block query (boundary)" in {
+      Box(Position(0, 0, 31), Position(0, 0, 33)).chunked shouldEqual Set(
+        Box(Position(0, 0, 31), Position(0, 0, 32)),
+        Box(Position(0, 0, 32), Position(0, 0, 33))
+      )
+    }
+
+    "match single block query (negative boundary)" in {
+      Box(Position(0, 0, -33), Position(0, 0, -32)).chunked shouldEqual Set(
+        Box(Position(0, 0, -33), Position(0, 0, -32))
+      )
+    }
+
+    "match two block query (negative boundary)" in {
+      Box(Position(0, 0, -33), Position(0, 0, -31)).chunked shouldEqual Set(
+        Box(Position(0, 0, -33), Position(0, 0, -32)),
+        Box(Position(0, 0, -32), Position(0, 0, -31))
+      )
+    }
+
+    "split in two chunks (one dimension)" in {
+      Box(Position(0, 0, 1), Position(0, 0, 33)).chunked shouldEqual Set(
+        Box(Position(0, 0, 1), Position(0, 0, 32)),
+        Box(Position(0, 0, 32), Position(0, 0, 33))
+      )
+    }
+
+    "split in three chunks (one dimension)" in {
+      Box(Position(0, 0, -1), Position(0, 0, 33)).chunked shouldEqual Set(
+        Box(Position(0, 0, -1), Position(0, 0, 0)),
+        Box(Position(0, 0, 0), Position(0, 0, 32)),
+        Box(Position(0, 0, 32), Position(0, 0, 33))
+      )
+    }
+
+    "split in four chunks (two dimensions)" in {
+      Box(Position(0, 1, 1), Position(0, 33,33)).chunked shouldEqual Set(
+        Box(Position(0,1,1),Position(0,32,32)),
+        Box(Position(0,1,32),Position(0,32,33)),
+        Box(Position(0,32,1),Position(0,33,32)),
+        Box(Position(0,32,32),Position(0,33,33)))
+    }
+
+    "within one chunk" in {
+      Box(Position(1, 1, 1), Position(12, 12, 12)).chunked shouldEqual Set(
+        Box(Position(1, 1, 1),Position(12, 12, 12)))
+    }
+
+    "negative only (one dimension)" in {
+      Box(Position(0, 0, -67), Position(0, 0, -1)).chunked shouldEqual Set(
+        Box(Position(0, 0, -67), Position(0, 0, -64)),
+        Box(Position(0, 0, -64), Position(0, 0, -32)),
+        Box(Position(0, 0, -32), Position(0, 0, -1))
+      )
+
+    }
   }
 
 }
