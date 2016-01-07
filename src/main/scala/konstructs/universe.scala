@@ -51,7 +51,7 @@ class UniverseActor(
   def receive = {
     case factory: BlockFactory =>
       generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage, factory))
-      db = context.actorOf(DbActor.props(self, generator, binaryStorage))
+      db = context.actorOf(DbActor.props(self, generator, binaryStorage, factory))
       context.become(ready)
       unstashAll()
     case _ =>
@@ -134,6 +134,8 @@ class UniverseActor(
       konstructing.forward(m)
     case k: KonstructPattern =>
       konstructing.forward(k)
+    case q: BoxQuery =>
+      db forward q
     case GetBlockFactory =>
       blockManager.forward(GetBlockFactory)
     case GetTextures =>

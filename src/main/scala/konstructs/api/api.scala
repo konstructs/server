@@ -8,7 +8,7 @@ import com.google.gson.JsonElement
 import spray.json._
 import konstructs.ChunkPosition
 import konstructs.protocol
-import konstructs.Db
+import konstructs.{ Db, Box }
 
 /* Data structures */
 
@@ -383,6 +383,31 @@ case class Pattern(stacks: java.util.List[Stack], rows: Int, columns: Int) {
 
 case class Konstruct(pattern: Pattern, result: Stack)
 
+/* Models for query results */
+
+case class Placed[T](position: Position, block: T)
+
+case class BoxData[T](box: Box, data: Array[T]) {
+
+  def get(pos: Position): T =
+    data(box.index(pos))
+
+  def get(x: Int, y: Int, z: Int): T =
+    data(box.index(x, y, z))
+
+  def toPlaced: Array[Placed[T]] = {
+    (for(
+      x <- box.start.x until box.end.x;
+      y <- box.start.y until box.end.y;
+      z <- box.start.z until box.end.z) yield {
+      val p = Position(x, y, z)
+      val w = data(box.index(p))
+      Placed(p, w)
+    }).toArray
+  }
+
+}
+
 /* Messages */
 
 /* Messages for chat */
@@ -427,10 +452,9 @@ case class EventBlockRemoved(pos: Position)
 case class EventBlockUpdated(pos: Position, block: Block)
 
 /* World queries */
-
-case class BoxQuery(from: Position, to: Position)
-case class BoxQueryResult(query: BoxQuery, result: Seq[Seq[Seq[BlockTypeId]]])
-case class BoxQueryRawResult(query: BoxQuery, result: Seq[Seq[Seq[Int]]])
+case class BoxQuery(box: Box)
+case class BoxQueryResult(result: BoxData[BlockTypeId])
+case class BoxQueryRawResult(result: BoxData[Int])
 
 /* Manage blocks */
 case object GetBlockFactory

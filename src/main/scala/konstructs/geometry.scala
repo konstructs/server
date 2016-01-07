@@ -21,6 +21,10 @@ case class Box(start: Position, end: Position) {
   if(start.x > end.x || start.y > end.y || start.z > end.z)
     throw new IllegalArgumentException("Start must be smaller than end in all dimensions")
 
+  private val xSize = end.x - start.x
+  private val ySize = end.y - start.y
+  private val zSize = end.z - start.z
+
   def contains(p: Position): Boolean =
     p.x >= start.x && p.x < end.x && p.y >= start.y && p.y < end.y && p.z >= start.z && p.z < end.z
 
@@ -51,6 +55,14 @@ case class Box(start: Position, end: Position) {
       e.start != e.end // Remove all empty queries
     } toSet
   }
+
+  def index(x: Int, y: Int, z: Int): Int =
+    x + y * ySize + z * ySize * zSize
+
+  def index(pos: Position): Int =
+    index(pos.x - start.x, pos.y - start.y, pos.z - start.z)
+
+  def blocks = xSize * ySize * zSize
 }
 
 case class ChunkPosition(p: Int, q: Int, k: Int) {

@@ -4,7 +4,7 @@ import scala.collection.mutable
 
 import akka.actor.{ Actor, Stash, ActorRef, Props }
 
-import konstructs.api.{ BoxQuery, BoxQueryRawResult, BinaryLoaded, Position }
+import konstructs.api.{ BoxQuery, BoxQueryRawResult, BoxData, BinaryLoaded, Position }
 import konstructs.utils.compress
 
 case class OpaqueFaces(pn: Boolean, pp: Boolean, qn: Boolean, qp: Boolean, kn: Boolean, kp: Boolean) {
@@ -215,23 +215,25 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
   }
 
   def runQuery(query: BoxQuery, sender: ActorRef) = {
-    val chunk = ChunkPosition(query.from)
+    val box = query.box
+    val chunk = ChunkPosition(box.start)
     loadChunk(chunk).map { c =>
       c.unpackTo(blockBuffer)
-      val fx = query.from.x - chunk.p * Db.ChunkSize
-      val fy = query.from.y - chunk.k * Db.ChunkSize
-      val fz = query.from.z - chunk.q * Db.ChunkSize
-      val tx = query.to.x - chunk.p * Db.ChunkSize
-      val ty = query.to.y - chunk.k * Db.ChunkSize
-      val tz = query.to.z - chunk.q * Db.ChunkSize
-      val result = for(x <- fx until tx) yield {
-        for(y <- fy until ty) yield {
-          for(z <- fz until tz) yield {
-            blockBuffer(ChunkData.index(x, y, z)).toInt
-          }
-        }
+      val data = new Array[Int](box.blocks)
+      val fx = box.start.x - chunk.p * Db.ChunkSize
+      val fy = box.start.y - chunk.k * Db.ChunkSize
+      val fz = box.start.z - chunk.q * Db.ChunkSize
+      val tx = box.end.x - chunk.p * Db.ChunkSize
+      val ty = box.end.y - chunk.k * Db.ChunkSize
+      val tz = box.end.z - chunk.q * Db.ChunkSize
+      for(
+        x <- fx until tx;
+        y <- fy until ty;
+        z <- fz until tz) {
+        data(box.index(Position(chunk, x, y, z))) =
+          blockBuffer(ChunkData.index(x, y, z)).toInt
       }
-      sender ! BoxQueryRawResult(query, result)
+      sender ! BoxQueryRawResult(BoxData(box, data))
     }
   }
 

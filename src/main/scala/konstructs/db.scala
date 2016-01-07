@@ -2,7 +2,7 @@ package konstructs
 
 import akka.actor.{ Actor, ActorRef, Props }
 
-import konstructs.api.Position
+import konstructs.api._
 
 object Db {
   val ChunkSize = 32
@@ -27,7 +27,8 @@ object ShardPosition {
 
 }
 
-class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
+class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
+  blockFactory: BlockFactory)
     extends Actor {
   import DbActor._
 
@@ -59,6 +60,12 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef)
       getShardActor(v.pos) forward v
     case s: SendBlocks =>
       getShardActor(s.chunk) forward s
+    case q: BoxQuery =>
+      val chunkBoxes = q.box.chunked
+      val resultActor = context.actorOf(BoxQueryResultActor.props(sender, q, chunkBoxes, blockFactory))
+      chunkBoxes.foreach { box =>
+        getShardActor(box.start).tell(BoxQuery(box), resultActor)
+      }
     case b: BlockList =>
       universe ! b
   }
@@ -76,6 +83,36 @@ object DbActor {
   case class ViewBlock(pos: Position, initiator: ActorRef)
   case class BlockViewed(pos: Position, w: Int, intitator: ActorRef)
 
-  def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef) =
-    Props(classOf[DbActor], universe, generator, binaryStorage)
+  def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
+    blockFactory: BlockFactory) =
+    Props(classOf[DbActor], universe, generator, binaryStorage, blockFactory)
+}
+
+class BoxQueryResultActor(initiator: ActorRef, blockFactory: BlockFactory,
+  query: BoxQuery, boxes: Set[Box])
+    extends Actor {
+  var receivedBoxes: Set[BoxData[Int]] = Set()
+
+  def receive = {
+    case r: BoxQueryRawResult =>
+      println(s"Got result: ${r.result.box}")
+      receivedBoxes += r.result
+      if(receivedBoxes.map(_.box) == boxes) {
+        val data = new Array[BlockTypeId](query.box.blocks)
+        for(subData <- receivedBoxes) {
+          for(p <- subData.toPlaced) {
+            data(query.box.index(p.position)) = blockFactory.wMapping(p.block)
+          }
+        }
+        initiator ! BoxQueryResult(BoxData(query.box, data))
+        context.stop(self)
+      }
+  }
+
+}
+
+object BoxQueryResultActor {
+  def props(initiator: ActorRef, query: BoxQuery, boxes: Set[Box],
+    blockFactory: BlockFactory) =
+    Props(classOf[BoxQueryResultActor], initiator, blockFactory, query, boxes)
 }
