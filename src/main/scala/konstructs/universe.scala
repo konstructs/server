@@ -117,7 +117,7 @@ class UniverseActor(
       blockManager.forward(BlockMetaActor.ReplaceBlockTo(pos, block, db))
       blockUpdateEvents.foreach(e => e ! EventBlockUpdated(pos, block))
     case ViewBlock(pos) =>
-      db.forward(DbActor.ViewBlock(pos, sender), blockManager)
+      db.tell(DbActor.ViewBlock(pos, sender), blockManager)
     case c: CreateInventory =>
       inventoryManager.forward(c)
     case g: GetInventory =>

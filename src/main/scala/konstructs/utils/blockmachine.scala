@@ -9,19 +9,19 @@ case class BlockMachine(alphabet: Map[Char, BlockTypeId]) {
   import BlockMachine._
 
   def interpretJava(program: String, initPos: Position, initDir: Matrix):
-      java.util.Collection[PutBlock] =
+      java.util.Collection[Placed[Block]] =
     interpret(program, initPos, initDir).asJavaCollection
 
   def interpretJava(program: String, initPos: Position):
-      java.util.Collection[PutBlock] =
+      java.util.Collection[Placed[Block]] =
     interpretJava(program, initPos, Upwards)
 
 
   def interpret(program: String, initPos: Position, initDir: Matrix = Upwards):
-      Seq[PutBlock] = {
+      Seq[Placed[Block]] = {
 
     val stack: mutable.Stack[(Position, Matrix)] = mutable.Stack()
-    val blocks: mutable.ListBuffer[PutBlock] = mutable.ListBuffer()
+    val blocks: mutable.ListBuffer[Placed[Block]] = mutable.ListBuffer()
     var pos = initPos
     var dir = initDir
 
@@ -46,8 +46,8 @@ case class BlockMachine(alphabet: Map[Char, BlockTypeId]) {
           pos = oldPos
           dir = oldDir
         case a =>
+          blocks += Placed(pos, Block(None, alphabet(a)))
           pos = pos + dir.adg
-          blocks += (PutBlock(pos, Block(None, alphabet(a))))
       }
     }
     blocks.toSeq

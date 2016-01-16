@@ -57,7 +57,7 @@ case class Box(start: Position, end: Position) {
   }
 
   def index(x: Int, y: Int, z: Int): Int =
-    x + y * ySize + z * ySize * zSize
+    x * ySize * zSize + y * zSize + z
 
   def index(pos: Position): Int =
     index(pos.x - start.x, pos.y - start.y, pos.z - start.z)

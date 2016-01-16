@@ -219,21 +219,16 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     val chunk = ChunkPosition(box.start)
     loadChunk(chunk).map { c =>
       c.unpackTo(blockBuffer)
-      val data = new Array[Int](box.blocks)
-      val fx = box.start.x - chunk.p * Db.ChunkSize
-      val fy = box.start.y - chunk.k * Db.ChunkSize
-      val fz = box.start.z - chunk.q * Db.ChunkSize
-      val tx = box.end.x - chunk.p * Db.ChunkSize
-      val ty = box.end.y - chunk.k * Db.ChunkSize
-      val tz = box.end.z - chunk.q * Db.ChunkSize
+      val data = new Array[Int](box.blocks + 1)
       for(
-        x <- fx until tx;
-        y <- fy until ty;
-        z <- fz until tz) {
-        data(box.index(Position(chunk, x, y, z))) =
-          blockBuffer(ChunkData.index(x, y, z)).toInt
+        x <- box.start.x until box.end.x;
+        y <- box.start.y until box.end.y;
+        z <- box.start.z until box.end.z) {
+        val p = Position(x, y, z)
+        data(box.index(p)) =
+          blockBuffer(ChunkData.index(chunk, p)).toInt
       }
-      sender ! BoxQueryRawResult(BoxData(box, data))
+      sender ! BoxQueryRawResult(BoxData(box, java.util.Arrays.asList(data:_*)))
     }
   }
 

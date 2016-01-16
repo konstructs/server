@@ -387,23 +387,23 @@ case class Konstruct(pattern: Pattern, result: Stack)
 
 case class Placed[T](position: Position, block: T)
 
-case class BoxData[T](box: Box, data: Array[T]) {
+case class BoxData[T](box: Box, data: java.util.List[T]) {
 
   def get(pos: Position): T =
-    data(box.index(pos))
+    data.get(box.index(pos))
 
   def get(x: Int, y: Int, z: Int): T =
-    data(box.index(x, y, z))
+    data.get(box.index(x, y, z))
 
-  def toPlaced: Array[Placed[T]] = {
+  def toPlaced: java.util.List[Placed[T]] = {
     (for(
       x <- box.start.x until box.end.x;
       y <- box.start.y until box.end.y;
       z <- box.start.z until box.end.z) yield {
       val p = Position(x, y, z)
-      val w = data(box.index(p))
+      val w = data.get(box.index(p))
       Placed(p, w)
-    }).toArray
+    }).toList.asJava
   }
 
 }

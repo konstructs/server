@@ -1,8 +1,11 @@
 package konstructs
 
+import scala.collection.JavaConverters._
+
 import akka.actor.{ Actor, ActorRef, Props }
 
-import konstructs.api._
+import konstructs.api.{ Position, BlockFactory, BoxQuery, BoxData, BlockTypeId,
+                        BoxQueryRawResult, BoxQueryResult }
 
 object Db {
   val ChunkSize = 32
@@ -50,13 +53,13 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
   }
 
   def receive = {
-    case p: PutBlock =>
+    case p: DbActor.PutBlock =>
       getShardActor(p.pos) forward p
-    case r: ReplaceBlock =>
+    case r: DbActor.ReplaceBlock =>
       getShardActor(r.pos) forward r
-    case r: RemoveBlock =>
+    case r: DbActor.RemoveBlock =>
       getShardActor(r.pos) forward r
-    case v: ViewBlock =>
+    case v: DbActor.ViewBlock =>
       getShardActor(v.pos) forward v
     case s: SendBlocks =>
       getShardActor(s.chunk) forward s
@@ -95,16 +98,15 @@ class BoxQueryResultActor(initiator: ActorRef, blockFactory: BlockFactory,
 
   def receive = {
     case r: BoxQueryRawResult =>
-      println(s"Got result: ${r.result.box}")
       receivedBoxes += r.result
       if(receivedBoxes.map(_.box) == boxes) {
         val data = new Array[BlockTypeId](query.box.blocks)
         for(subData <- receivedBoxes) {
-          for(p <- subData.toPlaced) {
+          for(p <- subData.toPlaced.asScala) {
             data(query.box.index(p.position)) = blockFactory.wMapping(p.block)
           }
         }
-        initiator ! BoxQueryResult(BoxData(query.box, data))
+        initiator ! BoxQueryResult(BoxData(query.box, java.util.Arrays.asList(data:_*)))
         context.stop(self)
       }
   }

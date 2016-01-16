@@ -126,6 +126,45 @@ class GeometrySpec extends WordSpec with Matchers {
         Box(Position(0, 0, -67), Position(0, 0, -69))
       }
     }
+
+    "return a correct box size" in {
+      Box(Position(0, 0, 0), Position(1, 1, 1)).blocks shouldEqual 1
+      Box(Position(0, 0, 0), Position(2, 2, 2)).blocks shouldEqual 8
+      Box(Position(-1, -1, -1), Position(1, 1, 1)).blocks shouldEqual 8
+    }
+
+    "return a correct internal indexes (1 block box)" in {
+      val box = Box(Position(0, 0, 0), Position(1, 1, 1))
+      box.index(Position(0, 0, 0)) shouldEqual 0
+    }
+
+    "return a correct internal indexes (4 block box, no z)" in {
+      val box = Box(Position(0, 0, 0), Position(2, 2, 1))
+      box.index(Position(0, 0, 0)) shouldEqual 0
+      box.index(Position(1, 1, 0)) shouldEqual 3
+    }
+
+    "return a correct internal indexes (8 block box)" in {
+      val box = Box(Position(0, 0, 0), Position(2, 2, 2))
+      box.index(Position(0, 0, 0)) shouldEqual 0
+      box.index(Position(1, 1, 0)) shouldEqual 6
+      box.index(Position(1, 1, 1)) shouldEqual 7
+    }
+
+    "return a correct internal indexes (45 block box)" in {
+      val box = Box(Position(0, 0, 0), Position(3, 3, 5))
+      box.index(Position(0, 0, 0)) shouldEqual 0
+      box.index(Position(1, 1, 0)) shouldEqual 20
+      box.index(Position(2, 2, 4)) shouldEqual 44
+    }
+
+    "return a correct internal indexes (8 block box away from center)" in {
+      val box = Box(Position(1, 1, 1), Position(3, 3, 3))
+      box.index(Position(1, 1, 1)) shouldEqual 0
+      box.index(Position(2, 2, 1)) shouldEqual 6
+      box.index(Position(2, 2, 2)) shouldEqual 7
+    }
+
   }
 
 }
