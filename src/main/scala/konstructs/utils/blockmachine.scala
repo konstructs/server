@@ -9,19 +9,19 @@ case class BlockMachine(alphabet: Map[Char, BlockTypeId]) {
   import BlockMachine._
 
   def interpretJava(program: String, initPos: Position, initDir: Matrix):
-      java.util.Collection[Placed[Block]] =
-    interpret(program, initPos, initDir).asJavaCollection
+      java.util.Map[Position, BlockTypeId] =
+    interpret(program, initPos, initDir).asJava
 
   def interpretJava(program: String, initPos: Position):
-      java.util.Collection[Placed[Block]] =
+      java.util.Map[Position, BlockTypeId] =
     interpretJava(program, initPos, Upwards)
 
 
   def interpret(program: String, initPos: Position, initDir: Matrix = Upwards):
-      Seq[Placed[Block]] = {
+      mutable.Map[Position, BlockTypeId] = {
 
     val stack: mutable.Stack[(Position, Matrix)] = mutable.Stack()
-    val blocks: mutable.ListBuffer[Placed[Block]] = mutable.ListBuffer()
+    val blocks: mutable.Map[Position, BlockTypeId] = mutable.HashMap()
     var pos = initPos
     var dir = initDir
 
@@ -46,11 +46,11 @@ case class BlockMachine(alphabet: Map[Char, BlockTypeId]) {
           pos = oldPos
           dir = oldDir
         case a =>
-          blocks += Placed(pos, Block(None, alphabet(a)))
+          blocks += pos -> alphabet.getOrElse(a, BlockTypeId.Vacuum)
           pos = pos + dir.adg
       }
     }
-    blocks.toSeq
+    blocks
   }
 
 }
@@ -78,6 +78,8 @@ object BlockMachine {
                          0,  0,  1,
                          0, -1,  0)
 
+  val VacuumMachine = BlockMachine(Map())
+  def vacuumMachine = VacuumMachine
   def fromJavaMap(alphabet: java.util.Map[java.lang.Character, BlockTypeId]) =
     apply(Map(alphabet.asScala.toSeq.map({
       case (k, v) => (k.toChar, v)

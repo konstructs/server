@@ -100,8 +100,6 @@ class BlockMetaActor(
   }
 
   def ready: Receive = {
-    case ReplaceBlockTo(pos, block, db) =>
-      db ! DbActor.ReplaceBlock(pos, store(pos, block), sender)
     case PutBlockTo(pos, block, db) =>
       db ! DbActor.PutBlock(pos, store(pos, block), sender)
     case DbActor.BlockViewed(pos, w, initiator) =>
@@ -127,7 +125,6 @@ object BlockMetaActor {
   case object StoreData
 
   case class PutBlockTo(pos: Position, block: Block, db: ActorRef)
-  case class ReplaceBlockTo(pos: Position, block: Block, db: ActorRef)
 
   def textureFilename(idString: String): String =
     s"/textures/$idString.png"

@@ -1,13 +1,14 @@
 package konstructs.plugin;
 
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import scala.concurrent.duration.Duration;
+
 import akka.actor.ActorRef;
 import akka.actor.UntypedActorWithStash;
 import konstructs.api.*;
 import konstructs.Box;
-
-import java.util.Collection;
-import java.util.concurrent.TimeUnit;
-import scala.concurrent.duration.Duration;
 
 public abstract class KonstructsActor extends UntypedActorWithStash {
 
@@ -83,13 +84,20 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
     }
 
     /**
-     * Write a collection of blocks to the world.
+     * Write a collection of blocks to the world replacing any existing blocks
      * @param   blocks      A collection of blocks.
      */
-    public void putBlocks(Collection<Placed<Block>> blocks) {
-        for (Placed<Block> b : blocks) {
-            putBlock(new PutBlock(b.position(), b.block()));
-        }
+    public void replaceBlocks(Map<Position, BlockTypeId> blocks) {
+        replaceBlocks(blocks, BlockFilterFactory.empty());
+    }
+
+    /**
+     * Write a collection of blocks to the world.
+     * @param   blocks      A collection of blocks.
+     * @param   filter      Filter that defines what type of block that can be replaced
+     */
+    public void replaceBlocks(Map<Position, BlockTypeId> blocks, BlockFilter filter) {
+        universe.tell(new ReplaceBlocks(filter, blocks), getSelf());
     }
 
     /**
@@ -115,35 +123,6 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      */
     public void viewBlock(Position p) {
         universe.tell(new ViewBlock(p), getSelf());
-    }
-
-    /**
-     * Discard a block.
-     * @param   p   The position
-     */
-    public void discardBlock(Position p) {
-        universe.tell(new RemoveBlock(p), getSelf());
-    }
-
-    /**
-     * Discard a collection of placed blocks.
-     * (This method on use the position, not the block)
-     * @param   blocks      A collection of blocks.
-     */
-    public void discardBlocks(Collection<Placed<Block>> blocks) {
-        for (Placed<Block> b : blocks) {
-            discardBlock(b.position());
-        }
-    }
-
-    /**
-     * Discard a collection of block positions.
-     * @param   blocks      A collection of blocks.
-     */
-    public void discardPositions(Collection<Position> positions) {
-        for (Position p : positions) {
-            discardBlock(p);
-        }
     }
 
     /** Query for a box of blocks

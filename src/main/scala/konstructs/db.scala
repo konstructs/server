@@ -1,11 +1,11 @@
 package konstructs
 
 import scala.collection.JavaConverters._
-
+import scala.collection.mutable
 import akka.actor.{ Actor, ActorRef, Props }
 
 import konstructs.api.{ Position, BlockFactory, BoxQuery, BoxData, BlockTypeId,
-                        BoxQueryRawResult, BoxQueryResult }
+                        BoxQueryRawResult, BoxQueryResult, ReplaceBlocks }
 
 object Db {
   val ChunkSize = 32
@@ -48,15 +48,13 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
     context.child(rid) match {
       case Some(a) => a
       case None =>
-        context.actorOf(ShardActor.props(self, shard, binaryStorage, generator), rid)
+        context.actorOf(ShardActor.props(self, shard, binaryStorage, generator, blockFactory), rid)
     }
   }
 
   def receive = {
     case p: DbActor.PutBlock =>
       getShardActor(p.pos) forward p
-    case r: DbActor.ReplaceBlock =>
-      getShardActor(r.pos) forward r
     case r: DbActor.RemoveBlock =>
       getShardActor(r.pos) forward r
     case v: DbActor.ViewBlock =>
@@ -69,6 +67,10 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
       chunkBoxes.foreach { box =>
         getShardActor(box.start).tell(BoxQuery(box), resultActor)
       }
+    case ReplaceBlocks(filter, blocks) =>
+      for((chunk, blocks) <- splitList[BlockTypeId](blocks)) {
+        getShardActor(chunk) forward ShardActor.ReplaceBlocks(chunk, filter, blocks)
+      }
     case b: BlockList =>
       universe ! b
   }
@@ -80,11 +82,26 @@ object DbActor {
 
   case class PutBlock(pos: Position, w: Int, initiator: ActorRef)
   case class UnableToPut(pos: Position, w: Int, initiator: ActorRef)
-  case class ReplaceBlock(pos: Position, w: Int, initiator: ActorRef)
   case class RemoveBlock(pos: Position, initiator: ActorRef)
   case class BlockRemoved(pos: Position, w: Int, initiator: ActorRef)
   case class ViewBlock(pos: Position, initiator: ActorRef)
   case class BlockViewed(pos: Position, w: Int, intitator: ActorRef)
+
+  def splitList[T](placed: java.util.Map[Position, T]):
+      Map[ChunkPosition, Map[Position, T]] = {
+    val shards = mutable.HashMap[ChunkPosition, mutable.Map[Position, T]]()
+
+    for((position, i) <- placed.asScala) {
+      val pos = ChunkPosition(position)
+      val map: mutable.Map[Position, T] =
+        shards.getOrElse(pos, mutable.HashMap[Position, T]())
+      map += position -> i
+      shards += pos -> map
+    }
+    (shards.map { case (k, v) =>
+      k -> v.toMap
+    }).toMap
+  }
 
   def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
     blockFactory: BlockFactory) =
@@ -102,8 +119,8 @@ class BoxQueryResultActor(initiator: ActorRef, blockFactory: BlockFactory,
       if(receivedBoxes.map(_.box) == boxes) {
         val data = new Array[BlockTypeId](query.box.blocks)
         for(subData <- receivedBoxes) {
-          for(p <- subData.toPlaced.asScala) {
-            data(query.box.index(p.position)) = blockFactory.wMapping(p.block)
+          for((position, typeId)  <- subData.toPlaced.asScala) {
+            data(query.box.index(position)) = blockFactory.wMapping(typeId)
           }
         }
         initiator ! BoxQueryResult(BoxData(query.box, java.util.Arrays.asList(data:_*)))
