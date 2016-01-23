@@ -1,5 +1,6 @@
 package konstructs.utils
 
+import scala.annotation.tailrec
 import scala.util.{ Sorting, Random }
 import scala.math.Ordering
 import scala.collection.JavaConverters._
@@ -51,20 +52,21 @@ case class LSystem(rules: Seq[ProductionRule]) {
       production.startsWith(r.predecessor)
     } headOption
 
-  def iterate(production: String): String = {
+  @tailrec
+  private def iterate(current: String, production: String): String = {
     if(production != "") {
       longestMatch(production) match {
-        case Some(rule) => rule.successor + iterate(production.drop(rule.predecessor.size))
-        case None => production.head + iterate(production.tail)
+        case Some(rule) => iterate(current + rule.successor, production.drop(rule.predecessor.size))
+        case None =>  iterate(current + production.head.toString, production.tail)
       }
     } else {
-      ""
+      current
     }
   }
 
   def iterate(init: String, iterations: Int): String = {
     if(iterations > 0) {
-      iterate(iterate(init), iterations - 1)
+      iterate(iterate("", init), iterations - 1)
     } else {
       init
     }
