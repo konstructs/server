@@ -8,7 +8,7 @@ import com.google.gson.JsonElement
 import spray.json._
 import konstructs.ChunkPosition
 import konstructs.protocol
-import konstructs.Db
+import konstructs.{ Db, Box }
 
 /* Data structures */
 
@@ -383,6 +383,73 @@ case class Pattern(stacks: java.util.List[Stack], rows: Int, columns: Int) {
 
 case class Konstruct(pattern: Pattern, result: Stack)
 
+/* Models for query results */
+
+case class BoxData[T](box: Box, data: java.util.List[T]) {
+
+  def get(pos: Position): T =
+    data.get(box.index(pos))
+
+  def get(x: Int, y: Int, z: Int): T =
+    data.get(box.index(x, y, z))
+
+  def toPlaced: java.util.Map[Position, T] = {
+    (for(
+      x <- box.start.x until box.end.x;
+      y <- box.start.y until box.end.y;
+      z <- box.start.z until box.end.z) yield {
+      val p = Position(x, y, z)
+      val w = data.get(box.index(p))
+      p -> w
+    }).toMap.asJava
+  }
+
+}
+
+sealed trait BlockFilter {
+  def matches(blockTypeId: BlockTypeId, blockType: BlockType): Boolean
+  def or(filter: BlockFilter): BlockFilter =
+    BlockFilterOr(this, filter)
+}
+
+case class BlockFilterOr(f1: BlockFilter, f2: BlockFilter) extends BlockFilter {
+  def matches(blockTypeId: BlockTypeId, blockType: BlockType) =
+    f1.matches(blockTypeId, blockType) || f2.matches(blockTypeId, blockType)
+}
+
+case class BlockFilterNode(namespace: Option[String], name: Option[String],
+  shape: Option[String], transparent: Option[Boolean], obstacle: Option[Boolean])
+    extends BlockFilter {
+  def withNamespace(namespace: String) = copy(namespace = Some(namespace))
+  def withName(name: String) = copy(name = Some(name))
+  def withBlockTypeId(blockTypeId: BlockTypeId) =
+    withNamespace(blockTypeId.namespace)
+      .withName(blockTypeId.name)
+  def withShape(shape: String) = copy(shape = Some(shape))
+  def withTransparent(transparent: Boolean) = copy(transparent = Some(transparent))
+  def withObstacle(obstacle: Boolean) = copy(obstacle = Some(obstacle))
+  def matches(blockTypeId: BlockTypeId, blockType: BlockType): Boolean = {
+    (!namespace.isDefined || namespace.get == blockTypeId.namespace) &&
+    (!name.isDefined || name.get == blockTypeId.name) &&
+    (!shape.isDefined || shape.get == blockType.shape) &&
+    (!transparent.isDefined || transparent.get == blockType.isTransparent) &&
+    (!obstacle.isDefined || obstacle.get == blockType.isObstacle)
+  }
+}
+
+object BlockFilterFactory {
+  val Empty = BlockFilterNode(None, None, None, None, None)
+  val Vacuum = withBlockTypeId(BlockTypeId.Vacuum)
+  def vacuum = Vacuum
+  def empty = Empty
+  def withNamespace(namespace: String) = Empty.withNamespace(namespace)
+  def withName(name: String) = Empty.withName(name)
+  def withBlockTypeId(blockTypeId: BlockTypeId) = Empty.withBlockTypeId(blockTypeId)
+  def withShape(shape: String) = Empty.withShape(shape)
+  def withTransparent(transparent: Boolean) = Empty.withTransparent(transparent)
+  def withObstacle(obstacle: Boolean) = Empty.withObstacle(obstacle)
+}
+
 /* Messages */
 
 /* Messages for chat */
@@ -415,7 +482,7 @@ case class InteractTertiaryFilter(chain: Seq[ActorRef], message: InteractTertiar
 /* World mutation and viewing */
 case class PutBlock(pos: Position, block: Block)
 case class UnableToPut(pos: Position, block: Block)
-case class ReplaceBlock(pos: Position, block: Block)
+case class ReplaceBlocks(filter: BlockFilter, blocks: java.util.Map[Position, BlockTypeId])
 case class RemoveBlock(pos: Position)
 case class DiscardBlock(pos: Position)
 case class BlockRemoved(pos: Position, block: Block)
@@ -425,6 +492,11 @@ case class BlockViewed(pos: Position, block: Block)
 /* Events */
 case class EventBlockRemoved(pos: Position)
 case class EventBlockUpdated(pos: Position, block: Block)
+
+/* World queries */
+case class BoxQuery(box: Box)
+case class BoxQueryResult(result: BoxData[BlockTypeId])
+case class BoxQueryRawResult(result: BoxData[Int])
 
 /* Manage blocks */
 case object GetBlockFactory

@@ -18,6 +18,12 @@ case class Matrix(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int, g: Int, h: Int
 }
 
 case class Box(start: Position, end: Position) {
+  if(start.x > end.x || start.y > end.y || start.z > end.z)
+    throw new IllegalArgumentException("Start must be smaller than end in all dimensions")
+
+  private val xSize = end.x - start.x
+  private val ySize = end.y - start.y
+  private val zSize = end.z - start.z
 
   def contains(p: Position): Boolean =
     p.x >= start.x && p.x < end.x && p.y >= start.y && p.y < end.y && p.z >= start.z && p.z < end.z
@@ -28,6 +34,35 @@ case class Box(start: Position, end: Position) {
   def translate(chunk: ChunkPosition): ChunkPosition = {
     ChunkPosition(Position(chunk, 0, 0, 0) - start)
   }
+
+  def chunked: Set[Box] = {
+    val startChunk = ChunkPosition(start)
+    val endChunk = ChunkPosition(end)
+
+    val xrange = startChunk.p to endChunk.p
+    val yrange = startChunk.k to endChunk.k
+    val zrange = startChunk.q to endChunk.q
+
+    (for (xi <- xrange; yi <- yrange; zi <- zrange) yield {
+      val xs = if(xi == startChunk.p) start.x else xi * Db.ChunkSize
+      val xe = if(xi == endChunk.p) end.x else xi * Db.ChunkSize + Db.ChunkSize
+      val ys = if(yi == startChunk.k) start.y else yi * Db.ChunkSize
+      val ye = if(yi == endChunk.k) end.y else yi * Db.ChunkSize + Db.ChunkSize
+      val zs = if(zi == startChunk.q) start.z else zi * Db.ChunkSize
+      val ze = if(zi == endChunk.q) end.z else zi * Db.ChunkSize + Db.ChunkSize
+      Box(Position(xs, ys, zs), Position(xe, ye, ze))
+    }).filter { e =>
+      e.start != e.end // Remove all empty queries
+    } toSet
+  }
+
+  def index(x: Int, y: Int, z: Int): Int =
+    x * ySize * zSize + y * zSize + z
+
+  def index(pos: Position): Int =
+    index(pos.x - start.x, pos.y - start.y, pos.z - start.z)
+
+  def blocks = xSize * ySize * zSize
 }
 
 case class ChunkPosition(p: Int, q: Int, k: Int) {

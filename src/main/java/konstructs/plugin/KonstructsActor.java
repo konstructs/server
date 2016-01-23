@@ -1,12 +1,15 @@
 package konstructs.plugin;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import scala.concurrent.duration.Duration;
+
 import akka.actor.ActorRef;
 import akka.actor.UntypedActorWithStash;
 import konstructs.api.*;
-
-import java.util.Collection;
-import java.util.concurrent.TimeUnit;
-import scala.concurrent.duration.Duration;
+import konstructs.Box;
 
 public abstract class KonstructsActor extends UntypedActorWithStash {
 
@@ -36,13 +39,20 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
         if (message instanceof EventBlockRemoved) {
             EventBlockRemoved removedBlock = (EventBlockRemoved)message;
             onEventBlockRemoved(removedBlock);
+            return;
         }
 
         if (message instanceof EventBlockUpdated) {
             EventBlockUpdated updatedBlock = (EventBlockUpdated)message;
             onEventBlockUpdated(updatedBlock);
+            return;
         }
 
+        if (message instanceof BoxQueryResult) {
+            BoxQueryResult result = (BoxQueryResult)message;
+            onBoxQueryResult(result);
+            return;
+        }
     }
 
     /**
@@ -64,17 +74,52 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      * This function is called when we receive a ReceiveStack message.
      */
     public void onReceiveStack(ReceiveStack receiveBlock) {
-        System.out.println("called ReceiveStack: not implemented");
+        System.out.println("called onReceiveStack: not implemented");
+    }
+
+    /**
+     * This function is called when we receive a BoxQueryResut
+     */
+    public void onBoxQueryResult(BoxQueryResult result) {
+        System.out.println("called onBoxQueryResult: not implemented");
+    }
+
+    /**
+     * Write a block to the world replacing any existing block
+     * @param   position   The position at which the block will be written
+     * @param   block      A collection of blocks.
+     */
+    public void replaceBlock(Position position, BlockTypeId block) {
+        replaceBlock(position, block, BlockFilterFactory.empty());
+    }
+
+    /**
+     * Write a block to the world
+     * @param   position   The position at which the block will be written
+     * @param   block      A collection of blocks.
+     * @param   filter     Filter that defines what type of block that can be replaced
+     */
+    public void replaceBlock(Position position, BlockTypeId block, BlockFilter filter) {
+        Map<Position, BlockTypeId> blocks = new HashMap<Position, BlockTypeId>();
+        blocks.put(position, block);
+        replaceBlocks(blocks, filter);
+    }
+
+    /**
+     * Write a collection of blocks to the world replacing any existing blocks
+     * @param   blocks      A collection of blocks.
+     */
+    public void replaceBlocks(Map<Position, BlockTypeId> blocks) {
+        replaceBlocks(blocks, BlockFilterFactory.empty());
     }
 
     /**
      * Write a collection of blocks to the world.
      * @param   blocks      A collection of blocks.
+     * @param   filter      Filter that defines what type of block that can be replaced
      */
-    public void putBlocks(Collection<PutBlock> blocks) {
-        for (PutBlock b : blocks) {
-            putBlock(b);
-        }
+    public void replaceBlocks(Map<Position, BlockTypeId> blocks, BlockFilter filter) {
+        universe.tell(new ReplaceBlocks(filter, blocks), getSelf());
     }
 
     /**
@@ -102,22 +147,12 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
         universe.tell(new ViewBlock(p), getSelf());
     }
 
-    /**
-     * Discard a block.
-     * @param   p   The position
+    /** Query for a box of blocks
+     *  @param start Starting corner of box
+     *  @param end End corner of box
      */
-    public void discardBlock(Position p) {
-        universe.tell(new DiscardBlock(p), getSelf());
-    }
-
-    /**
-     * Discard a collection of blocks.
-     * @param   blocks      A collection of blocks.
-     */
-    public void discardBlocks(Collection<PutBlock> blocks) {
-        for (PutBlock b : blocks) {
-            discardBlock(b.pos());
-        }
+    public void boxQuery(Position start, Position end) {
+        universe.tell(new BoxQuery(new Box(start, end)), getSelf());
     }
 
     /**

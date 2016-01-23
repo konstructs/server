@@ -3,7 +3,9 @@ package konstructs
 import scala.collection.mutable
 
 import akka.actor.{ Actor, Stash, ActorRef, Props }
-import konstructs.api.{ BinaryLoaded, Position }
+
+import konstructs.api.{ BoxQuery, BoxQueryRawResult, BoxData, BinaryLoaded, Position,
+                        BlockTypeId, BlockFilter, BlockFactory }
 import konstructs.utils.compress
 
 case class OpaqueFaces(pn: Boolean, pp: Boolean, qn: Boolean, qp: Boolean, kn: Boolean, kp: Boolean) {
@@ -173,7 +175,8 @@ object ChunkData {
 
 }
 
-class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef, chunkGenerator: ActorRef)
+class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef,
+                 chunkGenerator: ActorRef, blockFactory: BlockFactory)
     extends Actor with Stash with utils.Scheduled with BinaryStorage {
   import ShardActor._
   import GeneratorActor._
@@ -213,6 +216,24 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     }
   }
 
+  def runQuery(query: BoxQuery, sender: ActorRef) = {
+    val box = query.box
+    val chunk = ChunkPosition(box.start)
+    loadChunk(chunk).map { c =>
+      c.unpackTo(blockBuffer)
+      val data = new Array[Int](box.blocks + 1)
+      for(
+        x <- box.start.x until box.end.x;
+        y <- box.start.y until box.end.y;
+        z <- box.start.z until box.end.z) {
+        val p = Position(x, y, z)
+        data(box.index(p)) =
+          blockBuffer(ChunkData.index(chunk, p)).toInt
+      }
+      sender ! BoxQueryRawResult(BoxData(box, java.util.Arrays.asList(data:_*)))
+    }
+  }
+
   def readChunk(pos: Position)(read: Byte => Unit) = {
     val chunk = ChunkPosition(pos)
     loadChunk(chunk).map { c =>
@@ -233,6 +254,27 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       val data = ChunkData(blockBuffer, compressionBuffer)
       chunks(index(chunk)) = Some(data)
       db ! BlockList(chunk, data)
+    }
+  }
+
+  def replaceBlocks(chunk: ChunkPosition,
+    filter: BlockFilter, blocks: Map[Position, BlockTypeId]) {
+    loadChunk(chunk).map { c =>
+      var isDirty = false
+      c.unpackTo(blockBuffer)
+      for((position, newTypeId) <- blocks) {
+        val i = ChunkData.index(chunk, position)
+        val typeId = blockFactory.wMapping(blockBuffer(i))
+        if(filter.matches(typeId, blockFactory.blockTypes(typeId))) {
+          blockBuffer(i) = blockFactory.blockTypeIdMapping(newTypeId).toByte
+          isDirty = true
+        }
+      }
+      if(isDirty) {
+        val data = ChunkData(blockBuffer, compressionBuffer)
+        chunks(index(chunk)) = Some(data)
+        db ! BlockList(chunk, data)
+      }
     }
   }
 
@@ -263,12 +305,8 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         s ! BlockRemoved(p, w, initiator)
         0
       }
-    case ReplaceBlock(p, w, initiator) =>
-      val s = sender
-      updateChunk(initiator, p) { oldW =>
-        s ! BlockRemoved(p, oldW, initiator)
-        w.toByte
-      }
+    case q: BoxQuery =>
+      runQuery(q, sender)
     case BinaryLoaded(id, dataOption) =>
       val chunk = chunkFromId(id)
       dataOption match {
@@ -289,12 +327,17 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         }
       }
       dirty = Set()
+    case ReplaceBlocks(chunk, filter, blocks) =>
+      replaceBlocks(chunk, filter, blocks)
   }
 
 }
 
 object ShardActor {
   case object StoreChunks
+
+  case class ReplaceBlocks(chunk: ChunkPosition,
+    filter: BlockFilter, blocks: Map[Position, BlockTypeId])
 
   def index(c: ChunkPosition): Int = {
     val lp = math.abs(c.p % Db.ShardSize)
@@ -304,6 +347,7 @@ object ShardActor {
   }
 
   def props(db: ActorRef, shard: ShardPosition,
-    binaryStorage: ActorRef, chunkGenerator: ActorRef) =
-    Props(classOf[ShardActor], db, shard, binaryStorage, chunkGenerator)
+    binaryStorage: ActorRef, chunkGenerator: ActorRef,
+    blockFactory: BlockFactory) =
+    Props(classOf[ShardActor], db, shard, binaryStorage, chunkGenerator, blockFactory)
 }
