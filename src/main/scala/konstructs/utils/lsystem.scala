@@ -47,26 +47,26 @@ case class LSystem(rules: Seq[ProductionRule]) {
     arr.reverse.toSeq
   }
 
-  def longestMatch(production: String): Option[ProductionRule] =
+  def longestMatch(production: StringBuilder): Option[ProductionRule] =
     orderedRules filter { r =>
       production.startsWith(r.predecessor)
     } headOption
 
   @tailrec
-  private def iterate(current: String, production: String): String = {
-    if(production != "") {
+  private def iterate(current: StringBuilder, production: StringBuilder): String = {
+    if(!production.isEmpty) {
       longestMatch(production) match {
-        case Some(rule) => iterate(current + rule.successor, production.drop(rule.predecessor.size))
-        case None =>  iterate(current + production.head.toString, production.tail)
+        case Some(rule) => iterate(current.append(rule.successor), production.delete(0, rule.predecessor.size))
+        case None => iterate(current.append(production.head), production.delete(0, 1))
       }
     } else {
-      current
+      current.toString
     }
   }
 
   def iterate(init: String, iterations: Int): String = {
     if(iterations > 0) {
-      iterate(iterate("", init), iterations - 1)
+      iterate(iterate(new StringBuilder(), new StringBuilder(init)), iterations - 1)
     } else {
       init
     }
