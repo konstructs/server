@@ -1,5 +1,6 @@
 package konstructs.plugin;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
@@ -81,6 +82,27 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      */
     public void onBoxQueryResult(BoxQueryResult result) {
         System.out.println("called onBoxQueryResult: not implemented");
+    }
+
+    /**
+     * Write a block to the world replacing any existing block
+     * @param   position   The position at which the block will be written
+     * @param   block      A collection of blocks.
+     */
+    public void replaceBlock(Position position, BlockTypeId block) {
+        replaceBlock(position, block, BlockFilterFactory.empty());
+    }
+
+    /**
+     * Write a block to the world
+     * @param   position   The position at which the block will be written
+     * @param   block      A collection of blocks.
+     * @param   filter     Filter that defines what type of block that can be replaced
+     */
+    public void replaceBlock(Position position, BlockTypeId block, BlockFilter filter) {
+        Map<Position, BlockTypeId> blocks = new HashMap<Position, BlockTypeId>();
+        blocks.put(position, block);
+        replaceBlocks(blocks, filter);
     }
 
     /**
