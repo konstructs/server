@@ -3,6 +3,7 @@ package konstructs
 import akka.actor.{ Actor, ActorRef, Props, Stash }
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 import konstructs.api._
+import collection.JavaConversions._
 
 class UniverseActor(
                      name: String,
@@ -80,7 +81,7 @@ class UniverseActor(
     case i: InteractPrimaryFilter =>
       i.message.pos.foreach { pos =>
         db.tell(DbActor.RemoveBlock(pos, i.message.sender), blockManager)
-        blockUpdateEvents.foreach(e => e ! EventBlockRemoved(pos))
+        blockUpdateEvents.foreach(e => e ! EventBlockRemoved(Set(pos)))
       }
       i.message.block foreach { block =>
         i.message.sender ! ReceiveStack(Stack.fromBlock(block))
@@ -93,7 +94,7 @@ class UniverseActor(
         case Some(pos) =>
           i.message.block.foreach { block =>
             blockManager.tell(BlockMetaActor.PutBlockTo(pos, block, db), i.message.sender)
-            blockUpdateEvents.foreach(e => e ! EventBlockUpdated(pos, block))
+            blockUpdateEvents.foreach(e => e ! EventBlockUpdated(Map(pos -> block.`type`)))
           }
         case None =>
           i.message.block.foreach { block =>
@@ -109,13 +110,16 @@ class UniverseActor(
       }
     case PutBlock(pos, block) =>
       blockManager.forward(BlockMetaActor.PutBlockTo(pos, block, db))
-      blockUpdateEvents.foreach(e => e ! EventBlockUpdated(pos, block))
+      blockUpdateEvents.foreach(e => e ! EventBlockUpdated(Map(pos -> block.`type`)))
     case RemoveBlock(pos) =>
       db.tell(DbActor.RemoveBlock(pos, sender), blockManager)
-      blockUpdateEvents.foreach(e => e ! EventBlockRemoved(pos))
+      blockUpdateEvents.foreach(e => e ! EventBlockRemoved(Set(pos)))
     case ViewBlock(pos) =>
       db.tell(DbActor.ViewBlock(pos, sender), blockManager)
     case r: ReplaceBlocks =>
+      blockUpdateEvents.foreach(e =>
+        e ! EventBlockUpdated(r.blocks)
+      )
       db forward r
     case c: CreateInventory =>
       inventoryManager.forward(c)
