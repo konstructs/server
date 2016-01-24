@@ -501,8 +501,8 @@ case class ViewBlock(pos: Position)
 case class BlockViewed(pos: Position, block: Block)
 
 /* Events */
-case class EventBlockRemoved(pos: Position)
-case class EventBlockUpdated(pos: Position, block: Block)
+case class EventBlockRemoved(pos: java.util.Set[Position])
+case class EventBlockUpdated(blocks: java.util.Map[Position, BlockTypeId])
 
 /* World queries */
 case class BoxQuery(box: Box)
