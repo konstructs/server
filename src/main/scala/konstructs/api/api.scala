@@ -150,6 +150,17 @@ trait Filter[T] {
 case class Position(x: Int, y: Int, z: Int) {
   def +(p: Position) = Position(x + p.x, y + p.y, z + p.z)
   def -(p: Position) = Position(x - p.x, y - p.y, z - p.z)
+  def inc(p: Position) = this + p
+  def dec(p: Position) = this - p
+  def incX(i: Int) = copy(x = x + i)
+  def incY(i: Int) = copy(y = y + i)
+  def incZ(i: Int) = copy(z = z + i)
+  def decX(i: Int) = copy(x = x - i)
+  def decY(i: Int) = copy(y = y - i)
+  def decZ(i: Int) = copy(z = z - i)
+  def withX(i: Int) = copy(x = i)
+  def withY(i: Int) = copy(y = i)
+  def withZ(i: Int) = copy(z = i)
 }
 
 object Position {
