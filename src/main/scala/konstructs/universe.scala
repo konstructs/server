@@ -3,6 +3,7 @@ package konstructs
 import akka.actor.{ Actor, ActorRef, Props, Stash }
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 import konstructs.api._
+import collection.JavaConversions._
 
 class UniverseActor(
                      name: String,
@@ -116,6 +117,11 @@ class UniverseActor(
     case ViewBlock(pos) =>
       db.tell(DbActor.ViewBlock(pos, sender), blockManager)
     case r: ReplaceBlocks =>
+      blockUpdateEvents.foreach(e =>
+        for((pos, block) <- r.blocks) {
+          e ! EventBlockUpdated(pos, Block.create(block))
+        }
+      )
       db forward r
     case c: CreateInventory =>
       inventoryManager.forward(c)
