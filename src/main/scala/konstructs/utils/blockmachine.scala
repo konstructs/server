@@ -5,7 +5,7 @@ import scala.collection.JavaConverters._
 import konstructs.Matrix
 import konstructs.api._
 
-case class BlockMachine(alphabet: Map[Char, BlockTypeId]) {
+case class BlockMachine(alphabet: Map[Char, BlockTypeId], overwrite: Boolean = false) {
   import BlockMachine._
 
   def interpretJava(program: String, initPos: Position, initDir: Matrix):
@@ -46,7 +46,8 @@ case class BlockMachine(alphabet: Map[Char, BlockTypeId]) {
           pos = oldPos
           dir = oldDir
         case a =>
-          blocks += pos -> alphabet.getOrElse(a, BlockTypeId.Vacuum)
+          if(overwrite || !blocks.contains(pos))
+            blocks += pos -> alphabet.getOrElse(a, BlockTypeId.Vacuum)
           pos = pos + dir.adg
       }
     }
@@ -80,7 +81,10 @@ object BlockMachine {
 
   val VacuumMachine = BlockMachine(Map())
   def vacuumMachine = VacuumMachine
-  def fromJavaMap(alphabet: java.util.Map[java.lang.Character, BlockTypeId]) =
+  def fromJavaMap(alphabet: java.util.Map[java.lang.Character, BlockTypeId]): BlockMachine =
+    fromJavaMap(alphabet, false)
+  def fromJavaMap(alphabet: java.util.Map[java.lang.Character, BlockTypeId],
+    overwrite: Boolean): BlockMachine =
     apply(Map(alphabet.asScala.toSeq.map({
       case (k, v) => (k.toChar, v)
     }) :_*))

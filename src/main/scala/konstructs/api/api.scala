@@ -24,6 +24,7 @@ case class BlockTypeId(namespace: String, name: String)
 
 object BlockTypeId {
   val Vacuum = BlockTypeId("org/konstructs", "vacuum")
+  def vacuum = Vacuum
 
   def fromString(idString: String): BlockTypeId = {
     val lastSlash = idString.lastIndexOf('/')

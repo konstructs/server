@@ -136,6 +136,7 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
   implicit val selectionTimeout = Timeout(1, java.util.concurrent.TimeUnit.SECONDS)
 
   val StringType = classOf[String]
+  val IntegerType = classOf[Int]
   val FileType = classOf[File]
   val ActorRefType = classOf[ActorRef]
   val SeqType = classOf[Seq[_]]
@@ -188,6 +189,11 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
           Left(opt(listType(p.listType.get, configToSeq(keepString)(config.getConfig(p.name)))))
         } else {
           Left(opt(config.getString(p.name)))
+        }
+        case IntegerType => if(p.listType.isDefined) {
+          Left(opt(listType(p.listType.get, config.getIntList(p.name).asScala.toSeq)))
+        } else {
+          Left(opt(new Integer(config.getInt(p.name))))
         }
         case FileType => if(p.listType.isDefined) {
           Left(opt(listType(p.listType.get, configToSeq(toFile)(config.getConfig(p.name)))))
