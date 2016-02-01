@@ -177,9 +177,19 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      * @param   msec Time to wait, in milliseconds
      */
     public void scheduleSelfOnce(Object obj, int msec) {
+        scheduleOnce(obj, msec, getSelf());
+    }
+
+    /**
+     * Schedule a message to another actor
+     * @param   obj  The object to send
+     * @param   msec Time to wait, in milliseconds
+     * @param   to   The actor that will receive the message
+     */
+    public void scheduleOnce(Object obj, int msec, ActorRef to) {
         getContext().system().scheduler().scheduleOnce(
                 Duration.create(msec, TimeUnit.MILLISECONDS),
-                getSelf(), obj, getContext().system().dispatcher(), null);
+                to, obj, getContext().system().dispatcher(), null);
     }
 
 }
