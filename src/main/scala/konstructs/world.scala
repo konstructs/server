@@ -89,7 +89,7 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
           w(Konstructs, "sand")
         } else if(global.y == height - 1) {
           if(global.y + random.nextInt(10) - 5 < 64)
-            w(Konstructs, "grass-dirt")
+            w(Konstructs, "dirt")
           else {
             if(global.y + random.nextInt(4) - 2 < 128) {
               w(Konstructs, "snow-dirt")
@@ -108,12 +108,6 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
         }
       } else if (global.y < 10) {
         w(Konstructs, "water")
-      } else if(global.y < height + 1 && global.y < 40 && global.y > 12 && random.nextInt(25) == 1) {
-        if(random.nextInt(8) == 1) { // One in 8 grass is a random flower
-          w(Konstructs, Flowers(random.nextInt(Flowers.size)))
-        } else {
-          w(Konstructs, "grass")
-        }
       } else {
         w(Konstructs, "vacuum")
       }
