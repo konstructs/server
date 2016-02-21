@@ -148,11 +148,19 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
     }
 
     /** Query for a box of blocks
-     *  @param start Starting corner of box
-     *  @param end End corner of box
+     *  @param from Starting corner of box (this block is included)
+     *  @param until End corner of box (this block is excluded)
      */
-    public void boxQuery(Position start, Position end) {
-        universe.tell(new BoxQuery(new Box(start, end)), getSelf());
+    public void boxQuery(Position from, Position until) {
+        universe.tell(new BoxQuery(new Box(from, until)), getSelf());
+    }
+
+   /** Query for a box of blocks
+     *  @param center The center of the query
+     *  @param dimensions dimensions of the box
+     */
+    public void boxQueryAround(Position center, Position dimensions) {
+        universe.tell(new BoxQuery(Box.around(center, dimensions)), getSelf());
     }
 
     /**
