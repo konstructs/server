@@ -65,6 +65,11 @@ case class Box(start: Position, end: Position) {
   def blocks = xSize * ySize * zSize
 }
 
+object Box {
+  def around(start: Position, size: Position): Box =
+    apply(start.dec(size), start.inc(size.inc(Position.ONE)))
+}
+
 case class ChunkPosition(p: Int, q: Int, k: Int) {
   def translate(pd: Int, qd: Int, kd: Int) =
     copy(p = p + pd, q = q + qd, k = k + kd)

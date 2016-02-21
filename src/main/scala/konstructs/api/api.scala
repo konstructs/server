@@ -165,6 +165,7 @@ case class Position(x: Int, y: Int, z: Int) {
 }
 
 object Position {
+  val ONE = Position(1,1,1)
   def apply(pos: protocol.Position): Position =
     apply(math.round(pos.x), math.round(pos.y), math.round(pos.z))
   def apply(chunk: ChunkPosition, x: Int, y: Int, z: Int): Position =
