@@ -12,14 +12,6 @@ import konstructs.{ Db, Box }
 
 /* Data structures */
 
-case class BlockType(faces: java.util.List[Int], shape: String, isObstacle: Boolean,
-  isTransparent: Boolean)
-
-object BlockType {
-  val ShapeBlock = "block"
-  val ShapePlant = "plant"
-}
-
 case class BlockTypeId(namespace: String, name: String)
 
 object BlockTypeId {
@@ -444,9 +436,9 @@ case class BlockFilterNode(namespace: Option[String], name: Option[String],
   def matches(blockTypeId: BlockTypeId, blockType: BlockType): Boolean = {
     (!namespace.isDefined || namespace.get == blockTypeId.namespace) &&
     (!name.isDefined || name.get == blockTypeId.name) &&
-    (!shape.isDefined || shape.get == blockType.shape) &&
-    (!transparent.isDefined || transparent.get == blockType.isTransparent) &&
-    (!obstacle.isDefined || obstacle.get == blockType.isObstacle)
+    (!shape.isDefined || shape.get == blockType.getShape()) &&
+    (!transparent.isDefined || transparent.get == blockType.isTransparent()) &&
+    (!obstacle.isDefined || obstacle.get == blockType.isObstacle())
   }
 }
 

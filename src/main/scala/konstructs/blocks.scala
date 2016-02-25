@@ -150,20 +150,20 @@ object BlockMetaActor {
     }
     val shape = if(config.hasPath("shape")) {
       val s = config.getString("shape")
-      if(s != BlockType.ShapeBlock && s != BlockType.ShapePlant) {
-        throw new IllegalStateException(s"Block shape must be ${BlockType.ShapeBlock} or ${BlockType.ShapePlant}")
+      if(s != BlockType.SHAPE_BLOCK && s != BlockType.SHAPE_PLANT) {
+        throw new IllegalStateException(s"Block shape must be ${BlockType.SHAPE_BLOCK} or ${BlockType.SHAPE_PLANT}")
       }
       s
     } else {
-      BlockType.ShapeBlock
+      BlockType.SHAPE_BLOCK
     }
     val blockType = if(config.hasPath("faces")) {
       val faces = config.getIntList("faces")
       if(faces.size != 6) throw new IllegalStateException("There must be exactly 6 faces")
-      BlockType(faces.asScala.map(_ + texturePosition).asJava, shape, isObstacle, false)
+      new BlockType(faces.asScala.map(_ + texturePosition).toArray, shape, isObstacle, false)
     } else {
       /* Default is to assume only one texture for all faces */
-      BlockType(List(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition).asJava, shape, isObstacle, false)
+      new BlockType(Array(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition), shape, isObstacle, false)
     }
     typeId -> blockType
   }
@@ -189,8 +189,8 @@ object BlockMetaActor {
     val texturesGraphics = textures.getGraphics()
     val blockSeq = (for((idString, block) <- blocks) yield {
       val t = blockType(idString, block, texturePosition)
-      val maxIndex = t._2.faces.asScala.max + 1
-      val numTextures = maxIndex - t._2.faces.asScala.min
+      val maxIndex = t._2.getFaces().max + 1
+      val numTextures = maxIndex - t._2.getFaces().min
       val img = loadTexture(idString)
       var transparent = false
       for(i <- 0 until numTextures) {
@@ -199,7 +199,7 @@ object BlockMetaActor {
         insertTexture(texturePosition + i, texture, texturesGraphics)
       }
       texturePosition = maxIndex
-      t._1 -> t._2.copy(isTransparent = transparent)
+      t._1 -> t._2.withTransparent(transparent)
     }) toSeq
     val texturesBinary = new ByteArrayOutputStream()
 
