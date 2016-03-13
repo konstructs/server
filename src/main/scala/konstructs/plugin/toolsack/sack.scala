@@ -11,9 +11,9 @@ class ToolSackActor(universe: ActorRef) extends Actor {
   def receive = {
     case i: InteractTertiaryFilter =>
       i.message match {
-        case InteractTertiary(sender, _, _, Some(Block(Some(blockId), BlockId))) =>
-          sender ! ReceiveStack(Stack.fromBlock(i.message.block.get))
-          context.actorOf(KonstructingViewActor.props(sender, universe, blockId,
+        case InteractTertiary(sender, _, _, block) if block.getId != null && block.getType == BlockId =>
+          sender ! ReceiveStack(Stack.createFromBlock(i.message.block))
+          context.actorOf(KonstructingViewActor.props(sender, universe, block.getId,
             SackView, KonstructingView, ResultView))
           i.drop
         case _ =>
@@ -23,10 +23,10 @@ class ToolSackActor(universe: ActorRef) extends Actor {
 }
 
 object ToolSackActor {
-  val BlockId = BlockTypeId("org/konstructs", "tool-sack")
-  val SackView = InventoryView(2, 4, 4, 4)
-  val KonstructingView = InventoryView(7,5,2,2)
-  val ResultView = InventoryView(8,9,1,1)
+  val BlockId = new BlockTypeId("org/konstructs", "tool-sack")
+  val SackView = new InventoryView(2, 4, 4, 4)
+  val KonstructingView = new InventoryView(7,5,2,2)
+  val ResultView = new InventoryView(8,9,1,1)
 
   @PluginConstructor
   def props(name: String, universe: ActorRef) = Props(classOf[ToolSackActor], universe)

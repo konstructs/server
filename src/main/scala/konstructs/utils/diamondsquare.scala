@@ -15,7 +15,7 @@ trait LocalHeightMap {
 case class ArrayHeightMap(data: Array[Int], sizeX: Int, sizeZ: Int)
     extends LocalHeightMap {
   private val SizeOfInt = 4
-  def get(pos: Position) = data(pos.x + pos.z * sizeZ)
+  def get(pos: Position) = data(pos.getX + pos.getZ * sizeZ)
   def toByteArray = {
     val bytes = new ByteArrayOutputStream(sizeX*sizeZ*SizeOfInt)
     val dataWriter = new DataOutputStream(bytes)
@@ -29,7 +29,7 @@ case class ArrayHeightMap(data: Array[Int], sizeX: Int, sizeZ: Int)
 object ArrayHeightMap {
   def fromExistingHeightMap(map: PartialFunction[Position, Int], sizeX: Int, sizeZ: Int): ArrayHeightMap = {
     val local = for(x <- 0 until sizeX; z <- 0 until sizeZ) yield {
-      map(Position(x, 0, z))
+      map(new Position(x, 0, z))
     }
     ArrayHeightMap(local.toArray, sizeX, sizeZ)
   }
@@ -56,7 +56,7 @@ case object EmptyHeightMap extends HeightMap {
 case class ImageHeightMap(img: Image, range: Int = 128) extends LocalHeightMap {
   private val scale: Double = (256*256*256) / range
   def get(local: Position) = {
-    val v: Double = (img.pixel(local.x, local.z) & 0x00FFFFFF)
+    val v: Double = (img.pixel(local.getX, local.getZ) & 0x00FFFFFF)
     (v / scale).toInt
   }
   def sizeX = img.width
@@ -65,48 +65,45 @@ case class ImageHeightMap(img: Image, range: Int = 128) extends LocalHeightMap {
 
 case class GlobalHeightMap(placement: Position, map: LocalHeightMap) extends HeightMap {
   def apply(position: Position) = {
-    val x = position.x - placement.x
-    val z = position.z - placement.z
-    map.get(Position(x, 0, z))
+    map.get(position.dec(placement).withY(0))
   }
   def isDefinedAt(position: Position) =
-    (position.x >= placement.x &&
-      position.z >= placement.z &&
-      position.x < placement.x + map.sizeX &&
-      position.z < placement.z + map.sizeZ)
+    (position.getX >= placement.getX &&
+      position.getZ >= placement.getZ &&
+      position.getX < placement.getX + map.sizeX &&
+      position.getZ < placement.getZ + map.sizeZ)
 }
 
 class DiamondSquareHeightMap(roughness: Float, baseSize: Int, placement: Position, global: PartialFunction[Position, Int]) extends HeightMap {
   import DiamondSquareHeightMap._
   private val size = findNearestPowerOfTwo(baseSize) + 1
   private val offset = size / 4 + 1
-  private val localPlacement = placement.copy(x = placement.x - offset,
-                                              z = placement.z - offset)
+  private val localPlacement = placement.decX(offset).decZ(offset)
   private val max = size - 1
   private val array = Array.fill[Float](size * size)(Float.NaN)
   private val random = new scala.util.Random()
 
   private val local = new PartialFunction[Position, Float] {
     def apply(local: Position) = {
-      array(local.x + size * local.z)
+      array(local.getX + size * local.getZ)
     }
     def isDefinedAt(local: Position) =
-      array.isDefinedAt(local.x + size * local.z)
+      array.isDefinedAt(local.getX + size * local.getZ)
   }
 
   val g = new PartialFunction[Position, Float] {
     def apply(local: Position) = {
       val noise = (1.0f - (random.nextFloat() * 2.0f))
-      global(Position(localPlacement.x + local.x, 0, localPlacement.z + local.z)).toFloat + noise
+      global(localPlacement.inc(local).withY(0)).toFloat + noise
     }
     def isDefinedAt(local: Position) =
-      global.isDefinedAt(Position(localPlacement.x + local.x, 0, localPlacement.z + local.z))
+      global.isDefinedAt(localPlacement.inc(local).withY(0))
   }
 
   val result = GlobalHeightMap(placement, new LocalHeightMap {
 
     def get(local: Position): Int =
-      math.round(array((local.x + offset) + size * (local.z + offset)))
+      math.round(array((local.getX + offset) + size * (local.getZ + offset)))
 
     def sizeX = baseSize
     def sizeZ = baseSize
@@ -124,7 +121,7 @@ class DiamondSquareHeightMap(roughness: Float, baseSize: Int, placement: Positio
   }
 
   private def getPoint(x: Int, z: Int): Option[Float] = {
-    val pos = Position(x, 0, z)
+    val pos = new Position(x, 0, z)
     if(map.isDefinedAt(pos)) {
       val point = map(pos)
       if(point.isNaN) None

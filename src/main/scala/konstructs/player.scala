@@ -7,9 +7,8 @@ import scala.util.Sorting
 
 import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 
-import spray.json._
-
 import konstructs.api._
+import konstructs.api.messages._
 
 case class Player(nick: String, password: String, position: protocol.Position,
   active: Int, inventory: Inventory)
@@ -26,32 +25,29 @@ class PlayerActor(
                  ) extends Actor with Stash with utils.Scheduled with JsonStorage {
 
   import PlayerActor._
-  import KonstructsJsonProtocol._
   import DbActor.BlockList
 
   val ns = "players"
 
-  implicit val protocolFormat = jsonFormat5(protocol.Position)
-  implicit val playerFormat = jsonFormat5(Player)
   var chunkLoader: ActorRef = null
   var data: Player = null
 
   schedule(5000, StoreData)
 
-  loadJson(nick)
+  loadGson(nick)
 
   def receive = {
-    case JsonLoaded(_, Some(json)) =>
-      val newData = json.convertTo[Player]
+    case GsonLoaded(_, json) if json != null =>
+      val newData = gson.fromJson(json, classOf[Player])
       if(newData.password == password) {
         data = newData
         if(data.inventory.isEmpty) {
           val inventoryBlock = Block.createWithId(ToolSackActor.BlockId)
-          universe ! CreateInventory(inventoryBlock.id.get, 16)
-          val inventory = Inventory.createEmpty(9).withSlot(0, Stack.fromBlock(inventoryBlock))
+          universe ! CreateInventory(inventoryBlock.getId, 16)
+          val inventory = Inventory.createEmpty(9).withSlot(0, Stack.createFromBlock(inventoryBlock))
           data = data.copy(inventory = inventory)
         }
-        chunkLoader = context.actorOf(ChunkLoaderActor.props(client, db, Position(data.position)))
+        chunkLoader = context.actorOf(ChunkLoaderActor.props(client, db, data.position.toApiPosition))
         client ! PlayerInfo(pid, nick, self, data.position)
         context.become(sendBelt)
         unstashAll()
@@ -60,12 +56,12 @@ class PlayerActor(
         client ! PoisonPill
         context.stop(self)
       }
-    case JsonLoaded(_, None) =>
+    case GsonLoaded(_, _) =>
       val inventoryBlock = Block.createWithId(ToolSackActor.BlockId)
-      universe ! CreateInventory(inventoryBlock.id.get, 16)
-      val inventory = Inventory.createEmpty(9).withSlot(0, Stack.fromBlock(inventoryBlock))
+      universe ! CreateInventory(inventoryBlock.getId, 16)
+      val inventory = Inventory.createEmpty(9).withSlot(0, Stack.createFromBlock(inventoryBlock))
       data = Player(nick, password, startingPosition, 0, inventory)
-      chunkLoader = context.actorOf(ChunkLoaderActor.props(client, db, Position(data.position)))
+      chunkLoader = context.actorOf(ChunkLoaderActor.props(client, db, data.position.toApiPosition))
       client ! PlayerInfo(pid, nick, self, data.position)
       context.become(sendBelt)
       unstashAll()
@@ -74,31 +70,28 @@ class PlayerActor(
   }
 
   def update(position: protocol.Position) {
-    val pos = Position(position)
     data = data.copy(position = position)
-    chunkLoader ! ChunkLoaderActor.UpdatePosition(pos)
+    chunkLoader ! ChunkLoaderActor.UpdatePosition(position.toApiPosition)
   }
 
   def update(inventory: Inventory) {
     data = data.copy(inventory = inventory)
-    client ! BeltUpdate(inventory.stacks)
+    client ! BeltUpdate(inventory.getStacks)
   }
 
   val random = new scala.util.Random
 
-  val material = Set(BlockTypeId("org/konstructs", "sand"),BlockTypeId("org/konstructs", "stone-brick"),BlockTypeId("org/konstructs", "brick"),BlockTypeId("org/konstructs", "wood"),BlockTypeId("org/konstructs", "stone"),BlockTypeId("org/konstructs", "plnaks"),BlockTypeId("org/konstructs", "glass"),BlockTypeId("org/konstructs", "cobble"),BlockTypeId("org/konstructs", "white-stone"),BlockTypeId("org/konstructs", "framed-stone")).toVector
-
-  def getBeltBlock: Option[Block] = {
+  def getBeltBlock: Block = {
     val inventory = data.inventory
     val active = data.active
-    val block = inventory.blockHeadOption(active)
-    if(block.isDefined) {
+    val block = inventory.stackHead(active)
+    if(block != null) {
       update(inventory.stackTail(active))
     }
     block
   }
 
-  def action(pos: Option[Position], button: Int) = {
+  def action(pos: Position, button: Int) = {
     button match {
       case 1 =>
         universe ! InteractPrimary(self, nick, pos, getBeltBlock)
@@ -111,14 +104,12 @@ class PlayerActor(
 
   def putInBelt(stack: Stack) {
     val inventory = data.inventory
-    inventory.accept(stack) match {
-      case Some((i, Stack.Empty)) =>
-        update(i)
-      case Some((i, stack)) =>
-        update(i)
-        println(s"The following stack was destroyed: $stack")
-      case None =>
-        println(s"The following stack was destroyed: $stack")
+    val r = inventory.acceptPartOf(stack)
+    if(r.getGiving == null) {
+      update(r.getAccepting)
+    } else {
+      update(r.getAccepting)
+      println(s"The following stack was destroyed: ${r.getGiving}")
     }
   }
 
@@ -129,13 +120,13 @@ class PlayerActor(
 
   override def postStop {
     if(data != null)
-      storeJson(nick, data.toJson)
+      storeGson(nick, gson.toJsonTree(data))
     universe ! PlayerLogout(pid)
   }
 
   def sendBelt: Receive = {
     /* Send belt*/
-    client ! BeltUpdate(data.inventory.stacks)
+    client ! BeltUpdate(data.inventory.getStacks)
     client ! BeltActiveUpdate(data.active.toString)
     ready
   }
@@ -149,10 +140,11 @@ class PlayerActor(
       sender ! BeltActiveUpdate(data.active.toString)
     case Action(pos, button) =>
       action(pos, button)
-    case BlockRemoved(_, block) =>
-      putInBelt(Stack.fromBlock(block))
-    case UnableToPut(_, block) =>
-      putInBelt(Stack.fromBlock(block))
+    case b: BlockRemoved =>
+      if(b.getBlock != null)
+        putInBelt(Stack.createFromBlock(b.getBlock))
+    case u: UnableToPut =>
+      putInBelt(Stack.createFromBlock(u.getBlock))
     case ReceiveStack(stack) =>
       putInBelt(stack)
     case p: PlayerMovement =>
@@ -163,7 +155,7 @@ class PlayerActor(
       to ! PlayerMovement(pid, data.position)
       to ! PlayerNick(pid, data.nick)
     case StoreData =>
-      storeJson(nick, data.toJson)
+      storeGson(nick, gson.toJsonTree(data))
     case l: PlayerLogout =>
       client ! l
     case protocol.Say(msg) =>
@@ -179,7 +171,7 @@ class PlayerActor(
       chunkLoader ! bl
   }
 
-  val BeltView = InventoryView(0,4,1,9)
+  val BeltView = new InventoryView(0,4,1,9)
 
   def addBelt(view: View) = view.add(BeltView, data.inventory)
 
@@ -196,28 +188,31 @@ class PlayerActor(
   }
 
   def stackSelected(inventoryActor: ActorRef, view: View, stack: Stack): Receive = {
-    if(stack.isEmpty) {
-      client ! HeldStack(None)
-    } else {
-      client ! HeldStack(Some(stack))
-    }
+
+    client ! HeldStack(stack)
 
     val f: Receive = {
       case SelectItem(index) =>
         if(BeltView.contains(index)) {
           val beltIndex = BeltView.translate(index)
-          val oldStack = data.inventory.stacks.get(beltIndex)
-          oldStack.acceptStack(stack) match {
-            case Some((newStack, left)) =>
-              if(left != Stack.Empty) {
-                context.become(stackSelected(inventoryActor, view, left))
+          val oldStack = data.inventory.getStack(beltIndex)
+          if(oldStack != null) {
+            if(stack != null && oldStack.acceptsPartOf(stack)) {
+              val r = oldStack.acceptPartOf(stack)
+              if(r.getGiving != null) {
+                context.become(stackSelected(inventoryActor, view, r.getGiving))
               } else {
                 context.become(manageInventory(inventoryActor, view))
               }
-              update(data.inventory.withSlot(beltIndex, newStack))
-            case None =>
+              update(data.inventory.withSlot(beltIndex, r.getAccepting))
+            } else {
               context.become(stackSelected(inventoryActor, view, oldStack))
-              update(data.inventory.withSlot(beltIndex, stack))
+              if(stack != null)
+                update(data.inventory.withSlot(beltIndex, stack))
+            }
+          } else {
+            update(data.inventory.withSlot(beltIndex, stack))
+            context.become(manageInventory(inventoryActor, view))
           }
           client ! InventoryUpdate(addBelt(view))
         } else {
@@ -240,13 +235,13 @@ class PlayerActor(
   }
 
   def manageInventory(inventoryActor: ActorRef, view: View): Receive = {
-    client ! HeldStack(None)
+    client ! HeldStack(null)
 
     val f: Receive = {
       case SelectItem(index) =>
         if(BeltView.contains(index)) {
           val beltIndex = BeltView.translate(index)
-          val stack = data.inventory.stacks.get(beltIndex)
+          val stack = data.inventory.getStack(beltIndex)
           context.become(stackSelected(inventoryActor, view, stack))
           update(data.inventory.withoutSlot(beltIndex))
           client ! InventoryUpdate(addBelt(view))
@@ -278,15 +273,15 @@ object PlayerActor {
   case class PlayerInfo(pid: Int, nick: String, actor: ActorRef, pos: protocol.Position)
   case class PlayerNick(pid: Int, nick: String)
   case class ActivateBeltItem(activate: Int)
-  case class BeltUpdate(items: java.util.List[Stack])
+  case class BeltUpdate(items: Array[Stack])
   case class BeltActiveUpdate(active: String)
-  case class Action(pos: Option[Position], button: Int)
+  case class Action(pos: Position, button: Int)
   case class SendInfo(to: ActorRef)
   case class IncreaseChunks(amount: Int)
   case class InventoryUpdate(view: View)
   case object Konstruct
   case class SelectItem(index: Int)
-  case class HeldStack(held: Option[Stack])
+  case class HeldStack(held: Stack)
 
   def props(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, universe: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, db, universe, store, startingPosition)
 

@@ -13,33 +13,109 @@ import scala.collection.JavaConverters._
 import com.typesafe.config.{ Config => TypesafeConfig }
 import akka.actor.{ Actor, Props, ActorRef, Stash }
 
-import spray.json._
+import com.google.gson.reflect.TypeToken
 
 import konstructs.api._
+import konstructs.api.messages._
 import konstructs.plugin.{ListConfig, PluginConstructor, Config}
+
+case class BlockFactoryImpl(blockTypeIdMapping: java.util.Map[BlockTypeId, Integer],
+  wMapping: java.util.Map[Integer, BlockTypeId], blockTypes: java.util.Map[BlockTypeId, BlockType])
+    extends BlockFactory {
+
+  def createBlock(uuid: UUID, w: Int): Block = {
+    val t = wMapping.get(w)
+    new Block(uuid, t)
+  }
+
+  def createBlock(w: Int): Block = {
+    val t = wMapping.get(w)
+    new Block(null, t)
+  }
+
+  def getW(block: Block) =
+    blockTypeIdMapping.get(block.getType)
+
+  def getW(stack: Stack) =
+    blockTypeIdMapping.get(stack.getTypeId)
+
+  def getW(typeId: BlockTypeId) =
+    blockTypeIdMapping.get(typeId)
+
+  def getBlockType(id: BlockTypeId): BlockType = {
+    blockTypes.get(id)
+  }
+
+  def getBlockTypeId(w: Int) =
+    wMapping.get(w)
+
+  def getBlockTypes() =
+    blockTypes
+
+  def getWMapping() =
+    wMapping
+
+}
+
+object BlockFactoryImpl {
+
+    private def findFreeW(wMapping: java.util.Map[Integer, BlockTypeId]): Integer = {
+    for(w <- 0 until 256) {
+      if(!wMapping.containsKey(w)) {
+        return w
+      }
+    }
+    throw new IllegalStateException("No free w to allocate for new block type")
+  }
+
+  private def addBlockType(blockTypeIdMapping: java.util.Map[BlockTypeId, Integer],
+    wMapping: java.util.Map[Integer, BlockTypeId],
+    blockTypeMapping: java.util.Map[BlockTypeId, BlockType]): PartialFunction[(BlockTypeId, BlockType), Unit] = {
+    case (t, bt) =>
+      val foundW = blockTypeIdMapping.get(t)
+      val w = if(foundW != null) {
+        foundW
+      } else {
+        findFreeW(wMapping)
+      }
+      blockTypeIdMapping.put(t, w)
+      wMapping.put(w, t)
+      blockTypeMapping.put(t, bt)
+  }
+
+  def apply(defined: java.util.Map[Integer, BlockTypeId], configured: Seq[(BlockTypeId, BlockType)]): BlockFactoryImpl = {
+    val wMapping = new java.util.HashMap[Integer, BlockTypeId]()
+    val reverse = new java.util.HashMap[BlockTypeId, Integer]()
+    val tMapping = new java.util.HashMap[BlockTypeId, BlockType]()
+
+    for((w, tId) <- defined.asScala) {
+      wMapping.put(w, tId)
+      reverse.put(tId, w)
+    }
+    configured.map(addBlockType(reverse, wMapping, tMapping))
+    apply(reverse, wMapping, tMapping)
+  }
+}
+
 
 case class Chunk(data: Array[Byte])
 
-class BlockMetaActor(
-                      val ns: String,
+class BlockMetaActor( val ns: String,
                       val jsonStorage: ActorRef,
                       configuredBlocks: Seq[(BlockTypeId, BlockType)],
                       textures: Array[Byte]
                     ) extends Actor with Stash with utils.Scheduled with JsonStorage {
 
-  import KonstructsJsonProtocol._
   import BlockMetaActor._
 
   val PositionMappingFile = "position-mapping"
   val BlockIdFile = "block-id-mapping"
 
-  implicit val positionFormat = jsonFormat3(Position.apply)
+  val typeOfwMapping = new TypeToken[java.util.Map[Integer, BlockTypeId]](){}.getType
+  val typeOfPositionMapping = new TypeToken[java.util.Map[String, UUID]](){}.getType
 
-  val blockTypeIdMapping = mutable.HashMap[BlockTypeId, Int]()
-  val wMapping = mutable.HashMap[Int, BlockTypeId]()
-
-  var factory: BlockFactory = null
-  var positionMapping: mutable.HashMap[String, UUID] = null
+  var factory: BlockFactoryImpl = null
+  var positionMapping: java.util.Map[String, UUID] = null
 
   def load(pos: Position, w: Int, remove: Boolean = false): Block = {
     val uuid = if(remove) {
@@ -47,51 +123,50 @@ class BlockMetaActor(
     } else {
       positionMapping.get(str(pos))
     }
-    factory.block(uuid, w)
+    factory.createBlock(uuid, w)
   }
 
   def store(pos: Position, block: Block): Int = {
-    if(block.id.isDefined) {
-      positionMapping += str(pos) -> block.id.get
+    if(block.getId != null) {
+      positionMapping.put(str(pos), block.getId)
     }
-    factory.w(block)
+    factory.getW(block)
   }
 
   schedule(5000, StoreData)
 
-  loadJson(PositionMappingFile)
+  loadGson(PositionMappingFile)
 
-  private def str(p: Position) = s"${p.x}-${p.y}-${p.z}"
+  private def str(p: Position) = s"${p.getX}-${p.getY}-${p.getZ}"
 
   def receive = {
-    case JsonLoaded(_, Some(json)) =>
-      val m = json.convertTo[Map[String, UUID]]
-      positionMapping = mutable.HashMap[String, UUID](m.toSeq: _*)
+    case GsonLoaded(_, json) if json != null =>
+      positionMapping = gson.fromJson(json, classOf[java.util.Map[String, UUID]])
       context.become(loadBlockDb)
-      loadJson(BlockIdFile)
-    case JsonLoaded(_, None) =>
-      positionMapping = mutable.HashMap[String, UUID]()
+      loadGson(BlockIdFile)
+    case GsonLoaded(_, _) =>
+      positionMapping = new java.util.HashMap()
       context.become(loadBlockDb)
-      loadJson(BlockIdFile)
+      loadGson(BlockIdFile)
     case _ =>
       stash()
   }
 
   def storeDb() {
-    storeJson(BlockIdFile, factory.wMapping.toSeq.map {
-      case (k, v) => k.toString -> v
-    }.toMap.toJson)
+    storeGson(BlockIdFile, gson.toJsonTree(factory.getWMapping, typeOfwMapping))
   }
 
   def loadBlockDb: Receive = {
-    case JsonLoaded(_, Some(json)) =>
-      val defined = json.convertTo[Map[String, BlockTypeId]]
-      factory = BlockFactory(defined, configuredBlocks)
+    case GsonLoaded(_, json) if json != null =>
+      val defined = gson.fromJson(json, classOf[java.util.Map[Integer, BlockTypeId]])
+      factory = BlockFactoryImpl(defined, configuredBlocks)
       storeDb()
       context.become(ready)
       unstashAll()
-    case JsonLoaded(_, None) =>
-      factory = BlockFactory(Map[String, BlockTypeId]("0" -> BlockTypeId("org/konstructs", "vacuum")), configuredBlocks)
+    case GsonLoaded(_, _) =>
+      val map = new java.util.HashMap[Integer, BlockTypeId]()
+      map.put(0, BlockTypeId.VACUUM)
+      factory = BlockFactoryImpl(map, configuredBlocks)
       storeDb()
       context.become(ready)
       unstashAll()
@@ -103,13 +178,13 @@ class BlockMetaActor(
     case PutBlockTo(pos, block, db) =>
       db ! DbActor.PutBlock(pos, store(pos, block), sender)
     case DbActor.BlockViewed(pos, w, initiator) =>
-      initiator ! BlockViewed(pos, load(pos, w))
+      initiator ! new BlockViewed(pos, load(pos, w))
     case DbActor.BlockRemoved(pos, w, initiator) =>
-      initiator ! BlockRemoved(pos, load(pos, w, true))
+      initiator ! new BlockRemoved(pos, load(pos, w, true))
     case DbActor.UnableToPut(pos, w, initiator) =>
-      initiator ! UnableToPut(pos, load(pos, w, true))
+      initiator ! new UnableToPut(pos, load(pos, w, true))
     case StoreData =>
-      storeJson(PositionMappingFile, positionMapping.toMap.toJson)
+      storeGson(PositionMappingFile, gson.toJsonTree(positionMapping, typeOfPositionMapping))
     case GetBlockFactory =>
       sender ! factory
     case GetTextures =>

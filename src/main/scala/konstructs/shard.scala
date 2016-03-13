@@ -4,8 +4,9 @@ import scala.collection.mutable
 
 import akka.actor.{ Actor, Stash, ActorRef, Props }
 
-import konstructs.api.{ BoxQuery, BoxQueryRawResult, BoxData, BinaryLoaded, Position,
+import konstructs.api.{ BinaryLoaded, Position,
                         BlockTypeId, BlockFilter, BlockFactory }
+import konstructs.api.messages.{ BoxQuery, BoxQueryResult }
 import konstructs.utils.compress
 
 case class OpaqueFaces(pn: Boolean, pp: Boolean, qn: Boolean, qp: Boolean, kn: Boolean, kp: Boolean) {
@@ -167,9 +168,9 @@ object ChunkData {
     x + y * Db.ChunkSize + z * Db.ChunkSize * Db.ChunkSize
 
   def index(c: ChunkPosition, p: Position): Int = {
-    val x = p.x - c.p * Db.ChunkSize
-    val y = p.y - c.k * Db.ChunkSize
-    val z = p.z - c.q * Db.ChunkSize
+    val x = p.getX - c.p * Db.ChunkSize
+    val y = p.getY - c.k * Db.ChunkSize
+    val z = p.getZ - c.q * Db.ChunkSize
     index(x, y, z)
   }
 
@@ -217,20 +218,20 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
   }
 
   def runQuery(query: BoxQuery, sender: ActorRef) = {
-    val box = query.box
-    val chunk = ChunkPosition(box.start)
+    val box = query.getBox
+    val chunk = ChunkPosition(box.getFrom)
     loadChunk(chunk).map { c =>
       c.unpackTo(blockBuffer)
-      val data = new Array[Int](box.blocks + 1)
+      val data = new Array[BlockTypeId](box.getNumberOfBlocks + 1)
       for(
-        x <- box.start.x until box.end.x;
-        y <- box.start.y until box.end.y;
-        z <- box.start.z until box.end.z) {
-        val p = Position(x, y, z)
-        data(box.index(p)) =
-          blockBuffer(ChunkData.index(chunk, p)).toInt
+        x <- box.getFrom.getX until box.getUntil.getX;
+        y <- box.getFrom.getY until box.getUntil.getY;
+        z <- box.getFrom.getZ until box.getUntil.getZ) {
+        val p = new Position(x, y, z)
+        data(box.arrayIndex(p)) =
+          blockFactory.getBlockTypeId(blockBuffer(ChunkData.index(chunk, p)).toInt)
       }
-      sender ! BoxQueryRawResult(BoxData(box, java.util.Arrays.asList(data:_*)))
+      sender ! new BoxQueryResult(box, data)
     }
   }
 
@@ -264,9 +265,9 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       c.unpackTo(blockBuffer)
       for((position, newTypeId) <- blocks) {
         val i = ChunkData.index(chunk, position)
-        val typeId = blockFactory.wMapping(blockBuffer(i))
-        if(filter.matches(typeId, blockFactory.blockTypes(typeId))) {
-          blockBuffer(i) = blockFactory.blockTypeIdMapping(newTypeId).toByte
+        val typeId = blockFactory.getBlockTypeId(blockBuffer(i))
+        if(filter.matches(typeId, blockFactory.getBlockType(typeId))) {
+          blockBuffer(i) = blockFactory.getW(newTypeId).toByte
           isDirty = true
         }
       }

@@ -3,10 +3,10 @@ package konstructs
 import java.io.File
 import scala.util.Try
 import akka.actor.{ Actor, ActorRef, Props }
-import spray.json._
 import org.apache.commons.io.FileUtils
 import konstructs.plugin.{ PluginConstructor, Config }
-import com.google.gson.{ Gson, JsonParser }
+import konstructs.api.GsonDefault
+import com.google.gson.{ Gson, JsonParser, JsonElement }
 
 class BinaryStorageActor(name: String, directory: File) extends Actor {
   import konstructs.api.{ StoreBinary, LoadBinary, BinaryLoaded }
@@ -39,7 +39,7 @@ object BinaryStorageActor {
 }
 
 class JsonStorageActor(name: String, directory: File) extends Actor {
-  import konstructs.api.{ StoreJson, LoadJson, JsonLoaded, StoreGson, LoadGson, GsonLoaded }
+  import konstructs.api.{ StoreGson, LoadGson, GsonLoaded }
   import Storage._
 
   private val Suffix = "json"
@@ -47,19 +47,12 @@ class JsonStorageActor(name: String, directory: File) extends Actor {
   private val parser = new JsonParser()
 
   def receive = {
-    case StoreJson(id, ns, data) =>
-      write(directory, id, ns, Suffix, data.compactPrint.getBytes)
-    case LoadJson(id, ns) =>
-      val data = load(directory, id, ns, Suffix).flatMap { d =>
-        Try((new String(d)).parseJson).toOption
-      }
-      sender ! JsonLoaded(id, data)
     case StoreGson(id, ns, data) =>
       write(directory, id, ns, Suffix, gson.toJson(data).getBytes())
     case LoadGson(id, ns) =>
       val data = load(directory, id, ns, Suffix).flatMap { d =>
         Try(parser.parse(new String(d))).toOption
-      }
+      } getOrElse(null)
       sender ! GsonLoaded(id, data)
 
   }
@@ -72,13 +65,15 @@ object JsonStorageActor {
 }
 
 trait JsonStorage {
-  import konstructs.api.{ StoreJson, LoadJson }
+  import konstructs.api.{ StoreGson, LoadGson }
+
+  val gson = GsonDefault.getDefaultGson
 
   def ns: String
   def jsonStorage: ActorRef
 
-  def loadJson(id: String)(implicit sender: ActorRef) = jsonStorage ! LoadJson(id, ns)
-  def storeJson(id: String, data: JsValue)(implicit sender: ActorRef) = jsonStorage ! StoreJson(id, ns, data)
+  def loadGson(id: String)(implicit sender: ActorRef) = jsonStorage ! LoadGson(id, ns)
+  def storeGson(id: String, data: JsonElement)(implicit sender: ActorRef) = jsonStorage ! StoreGson(id, ns, data)
 
 }
 

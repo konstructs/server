@@ -1,6 +1,7 @@
 package konstructs.api;
 
 import java.io.Serializable;
+import java.util.Arrays;
 
 /**
  * BlockType is a class that holds all relevant information regarding
@@ -8,7 +9,7 @@ import java.io.Serializable;
  * server is started from the server configuration. It is immutable
  * and serializable.
  */
-final public class BlockType implements Serializable {
+public final class BlockType implements Serializable {
     public static final String SHAPE_BLOCK = "block";
     public static final String SHAPE_PLANT = "plant";
 
@@ -120,5 +121,38 @@ final public class BlockType implements Serializable {
      */
     public BlockType withTransparent(boolean transparent) {
         return new BlockType(faces, shape, obstacle, transparent);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        BlockType blockType = (BlockType) o;
+
+        if (obstacle != blockType.obstacle) return false;
+        if (transparent != blockType.transparent) return false;
+        if (!Arrays.equals(faces, blockType.faces)) return false;
+        return shape.equals(blockType.shape);
+
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Arrays.hashCode(faces);
+        result = 31 * result + shape.hashCode();
+        result = 31 * result + (obstacle ? 1 : 0);
+        result = 31 * result + (transparent ? 1 : 0);
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        return "BlockType(" +
+                "faces=" + Arrays.toString(faces) +
+                ", shape='" + shape + '\'' +
+                ", obstacle=" + obstacle +
+                ", transparent=" + transparent +
+                ')';
     }
 }

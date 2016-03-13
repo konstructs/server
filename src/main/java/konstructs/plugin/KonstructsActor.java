@@ -3,13 +3,14 @@ package konstructs.plugin;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.ArrayList;
+
+import konstructs.api.messages.BoxQueryResult;
 import scala.concurrent.duration.Duration;
 
 import akka.actor.ActorRef;
 import akka.actor.UntypedActorWithStash;
 import konstructs.api.*;
-import konstructs.Box;
+import konstructs.api.messages.*;
 
 public abstract class KonstructsActor extends UntypedActorWithStash {
 
@@ -90,7 +91,7 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      * @param   block      A collection of blocks.
      */
     public void replaceBlock(Position position, BlockTypeId block) {
-        replaceBlock(position, block, BlockFilterFactory.empty());
+        replaceBlock(position, block, BlockFilterFactory.EMPTY);
     }
 
     /**
@@ -110,7 +111,7 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      * @param   blocks      A collection of blocks.
      */
     public void replaceBlocks(Map<Position, BlockTypeId> blocks) {
-        replaceBlocks(blocks, BlockFilterFactory.empty());
+        replaceBlocks(blocks, BlockFilterFactory.EMPTY);
     }
 
     /**
@@ -160,7 +161,7 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      *  @param dimensions dimensions of the box
      */
     public void boxQueryAround(Position center, Position dimensions) {
-        universe.tell(new BoxQuery(Box.around(center, dimensions)), getSelf());
+        universe.tell(new BoxQuery(Box.createAround(center, dimensions)), getSelf());
     }
 
     /**

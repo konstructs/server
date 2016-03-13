@@ -43,9 +43,9 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
     } else if(command.startsWith("M,")) {
       val ints = readData(_.toInt, command.drop(2))
       if(ints(0) != 0) {
-        player.actor ! Action(Some(konstructs.api.Position(ints(1), ints(2), ints(3))), ints(4))
+        player.actor ! Action(new konstructs.api.Position(ints(1), ints(2), ints(3)), ints(4))
       } else {
-        player.actor ! Action(None, ints(4))
+        player.actor ! Action(null, ints(4))
       }
     } else if(command.startsWith("T,")) {
       val message = command.substring(2)
@@ -101,7 +101,7 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
     case BeltActiveUpdate(active) =>
       sendBeltActive(pipe, active)
     case InventoryUpdate(view) =>
-      sendInventory(pipe, view.items)
+      sendInventory(pipe, view.getItems.asScala.toMap)
     case p: PlayerMovement =>
       sendPlayerMovement(pipe, p)
     case PlayerNick(pid, nick) =>
@@ -110,10 +110,11 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
       sendPlayerLogout(pipe, pid)
     case Said(text) =>
       sendSaid(pipe, text)
-    case HeldStack(Some(stack)) =>
-      sendHeldStack(pipe, stack.size, factory.w(stack))
-    case HeldStack(None) =>
-      sendHeldStack(pipe, 0, -1)
+    case HeldStack(stack) =>
+      if(stack != null)
+        sendHeldStack(pipe, stack.size, factory.getW(stack))
+      else
+        sendHeldStack(pipe, 0, -1)
     case _: Tcp.ConnectionClosed =>
       player.actor ! PoisonPill
       context.stop(self)
@@ -135,9 +136,13 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
     send(pipe, s"P,${p.pid},${p.pos.x},${p.pos.y},${p.pos.z},${p.pos.rx},${p.pos.ry}")
   }
 
-  def sendBelt(pipe: ActorRef, items: java.util.List[Stack]) {
-    for((stack, i) <- items.asScala.zipWithIndex) {
-      send(pipe, s"G,${i},${stack.size},${factory.w(stack)}")
+  def sendBelt(pipe: ActorRef, items: Array[Stack]) {
+    for((stack, i) <- items.zipWithIndex) {
+      if(stack != null) {
+        send(pipe, s"G,${i},${stack.size},${factory.getW(stack)}")
+      } else {
+        send(pipe, s"G,${i},0,0")
+      }
     }
   }
 
@@ -150,13 +155,12 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
     send(pipe, s"A,${active}")
   }
 
-  def sendInventory(pipe: ActorRef, items: Map[Int, Option[Stack]]) {
-    for((p, stackOption) <- items) {
-      stackOption match {
-        case Some(stack) =>
-          send(pipe, s"I,${p},${stack.size},${factory.w(stack)}")
-        case None =>
-          send(pipe, s"I,${p},0,-1")
+  def sendInventory(pipe: ActorRef, items: Map[Integer, Stack]) {
+    for((p, stack) <- items) {
+      if(stack != null) {
+        send(pipe, s"I,${p},${stack.size},${factory.getW(stack)}")
+      } else {
+        send(pipe, s"I,${p},0,-1")
       }
     }
   }
@@ -187,8 +191,8 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
   }
 
   def sendBlockTypes(pipe: ActorRef) {
-    val types = factory.blockTypes.map {
-      case (id, t) => factory.blockTypeIdMapping(id) -> t
+    val types = factory.getBlockTypes().asScala.map {
+      case (id, t) => factory.getW(id) -> t
     }
     for((w, t) <- types) {
       sendBlockType(pipe, w, t)

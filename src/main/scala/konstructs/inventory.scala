@@ -6,62 +6,64 @@ import scala.collection.mutable
 
 import akka.actor.{ Actor, Props, ActorRef, Stash }
 
-import spray.json._
-
+import com.google.gson.reflect.TypeToken
 import konstructs.plugin.{ PluginConstructor, Config }
 import konstructs.api._
+
+
 
 class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
     with Stash with JsonStorage with utils.Scheduled {
   import InventoryActor._
-  import KonstructsJsonProtocol._
 
   schedule(5000, StoreData)
 
-  loadJson(InventoriesFile)
+  loadGson(InventoriesFile)
 
-  var inventories: mutable.HashMap[String, Inventory] = null
+  val typeOfInventories = new TypeToken[java.util.Map[String, Inventory]](){}.getType
+  var inventories: java.util.Map[String, Inventory] = null
 
-  private def put(blockId: UUID, slot: Int, stack: Stack): Option[Stack] = {
-    if(inventories.contains(blockId.toString)) {
-      val inventory = inventories(blockId.toString)
-      val oldStack = inventory.stacks.get(slot)
-      oldStack.acceptStack(stack) match {
-        case Some((newStack, left)) =>
-          inventories += blockId.toString -> inventory.withSlot(slot, newStack)
-          if(left != Stack.Empty) {
-            Some(left)
-          } else {
-            None
-          }
-        case None =>
-          inventories += blockId.toString -> inventory.withSlot(slot, stack)
-          inventory.stackOption(slot)
+  private def put(blockId: UUID, slot: Int, stack: Stack): Stack = {
+    if(inventories.containsKey(blockId.toString)) {
+      val inventory = inventories.get(blockId.toString)
+      val oldStack = inventory.getStack(slot)
+
+      if(oldStack != null) {
+        val r = oldStack.acceptPartOf(stack)
+        inventories.put(blockId.toString, inventory.withSlot(slot, r.getAccepting))
+        r.getGiving
+      } else {
+        inventories.put(blockId.toString, inventory.withSlot(slot, stack))
+        null;
       }
     } else {
-      Some(stack)
+      stack
     }
   }
 
-  private def get(blockId: UUID, slot: Int): Option[Stack] =
-    inventories.get(blockId.toString).flatMap { i =>
-      i.stackOption(slot)
+  private def get(blockId: UUID, slot: Int): Stack =
+    if(inventories.containsKey(blockId.toString)) {
+      inventories.get(blockId.toString).getStack(slot)
+    } else {
+      null
     }
 
-  private def remove(blockId: UUID, slot: Int): Option[Stack] =
-    inventories.get(blockId.toString).flatMap { i =>
-      inventories += blockId.toString -> i.withoutSlot(slot)
-      i.stackOption(slot)
+  private def remove(blockId: UUID, slot: Int): Stack =
+    if(inventories.containsKey(blockId.toString)) {
+      val i = inventories.get(blockId.toString)
+      inventories.put(blockId.toString, i.withoutSlot(slot))
+      i.getStack(slot)
+    } else {
+      null
     }
 
   def receive = {
-    case JsonLoaded(_, Some(json)) =>
-      val i = json.convertTo[Map[String, Inventory]]
-      inventories = mutable.HashMap[String, Inventory](i.toSeq: _*)
+    case GsonLoaded(_, json) if json != null =>
+      inventories = gson.fromJson(json, classOf[java.util.Map[String, Inventory]])
       context.become(ready)
       unstashAll()
-    case JsonLoaded(_, None) =>
-      inventories = mutable.HashMap[String, Inventory]()
+    case GsonLoaded(_, _) =>
+      inventories = new java.util.HashMap()
       context.become(ready)
       unstashAll()
     case _ =>
@@ -70,34 +72,28 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
 
   def ready: Receive = {
     case CreateInventory(blockId, size) =>
-      if(!inventories.contains(blockId.toString)) {
-        inventories += blockId.toString -> Inventory.createEmpty(size)
+      if(!inventories.containsKey(blockId.toString)) {
+        inventories.put(blockId.toString, Inventory.createEmpty(size))
       }
 
     case GetInventory(blockId) =>
-      sender ! GetInventoryResponse(blockId, inventories.get(blockId.toString))
+      sender ! GetInventoryResponse(blockId, Option(inventories.get(blockId.toString)))
 
     case PutStack(blockId, slot, stack) =>
-      put(blockId, slot, stack).map { s =>
-        sender ! ReceiveStack(s)
-      }
+      val leftovers = put(blockId, slot, stack)
+      sender ! new ReceiveStack(leftovers)
 
     case RemoveStack(blockId, slot) =>
-      val stack = remove(blockId, slot)
-      if(stack.isDefined) {
-        sender ! ReceiveStack(stack.get)
-      } else {
-        sender ! ReceiveStack(Stack.Empty)
-      }
+      sender ! new ReceiveStack(remove(blockId, slot))
 
     case GetStack(blockId, slot) =>
       sender ! GetStackResponse(blockId, slot, get(blockId, slot))
 
     case DeleteInventory(blockId) =>
-      inventories -= blockId.toString
+      inventories.remove(blockId.toString)
 
     case StoreData =>
-      storeJson(InventoriesFile, inventories.toMap.toJson)
+      storeGson(InventoriesFile, gson.toJsonTree(inventories, typeOfInventories))
 
   }
 }

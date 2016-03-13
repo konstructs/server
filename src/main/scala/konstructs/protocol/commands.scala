@@ -8,5 +8,7 @@ case class Talk(message: String)
 case class Disconnect(pid: Int)
 case class Sign(x: Int, y: Int, z: Int, face: Int, text: String)
 case class Version(version: Int)
-case class Position(x: Float, y: Float, z: Float, rx: Float, ry: Float)
+case class Position(x: Float, y: Float, z: Float, rx: Float, ry: Float) {
+  def toApiPosition = new konstructs.api.Position(x.toInt, y.toInt, z.toInt)
+}
 case class Say(message: String)
