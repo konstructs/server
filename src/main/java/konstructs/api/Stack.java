@@ -51,7 +51,7 @@ public final class Stack {
     }
 
     public Stack take(int n) {
-        return new Stack(typeId, Arrays.copyOf(blocks, Math.max(n, blocks.length)));
+        return new Stack(typeId, Arrays.copyOf(blocks, Math.min(n, blocks.length)));
     }
 
     public Stack drop(int n) {
@@ -60,11 +60,11 @@ public final class Stack {
     }
 
     public boolean acceptsPartOf(Stack stack) {
-        return stack.typeId == typeId && !isFull();
+        return stack.typeId.equals(typeId) && !isFull();
     }
 
     public boolean accepts(Block block) {
-        return block.getType() == typeId && !isFull();
+        return block.getType().equals(typeId) && !isFull();
     }
 
     public AcceptResult<Stack> acceptPartOf(Stack stack) {
@@ -73,7 +73,7 @@ public final class Stack {
             Stack taken = stack.take(r);
             Block[] newBlocks = new Block[taken.size() + blocks.length];
             System.arraycopy(blocks, 0, newBlocks, 0, blocks.length);
-            System.arraycopy(taken.getBlocks(), 0, newBlocks, blocks.length, blocks.length + taken.size());
+            System.arraycopy(taken.getBlocks(), 0, newBlocks, blocks.length, taken.size());
             return new AcceptResult(new Stack(typeId, newBlocks), stack.drop(r));
         } else {
             return null;
