@@ -177,6 +177,26 @@ public final class Inventory {
         public int getLastRow() {
             return lastRow;
         }
+
+        public int getNumberOfStacks() {
+            int columns = lastColumn - firstColumn;
+            int rows = lastRow - firstRow;
+            return columns *rows;
+        }
+
+        public int getColumns() {
+            return lastColumn - firstColumn;
+        }
+
+        @Override
+        public String toString() {
+            return "PatternFrame(" +
+                    "firstColumn=" + firstColumn +
+                    ", lastColumn=" + lastColumn +
+                    ", firstRow=" + firstRow +
+                    ", lastRow=" + lastRow +
+                    ')';
+        }
     }
 
     private boolean isRowEmpty(int row, InventoryView view) {
@@ -195,13 +215,13 @@ public final class Inventory {
 
     private PatternFrame getPatternFrame(InventoryView view) {
         int firstRow = 0;
-        int lastRow = 0;
+        int lastRow = view.getRows();
         int firstColumn = 0;
-        int lastColumn = 0;
+        int lastColumn = view.getColumns();
 
         for(int r = 0; r < view.getRows(); r++) {
             if(isRowEmpty(r, view))
-                firstRow = r;
+                firstRow = r + 1;
             else
                 break;
         }
@@ -215,7 +235,7 @@ public final class Inventory {
 
         for(int c = 0; c < view.getColumns(); c++) {
             if(isColumnEmpty(c, view))
-                firstColumn = c;
+                firstColumn = c + 1;
             else
                 break;
         }
@@ -235,13 +255,14 @@ public final class Inventory {
             return null;
         } else {
             PatternFrame frame = getPatternFrame(view);
-            Stack[] patternStacks = new Stack[(frame.getLastRow() - frame.getFirstRow()) * (frame.getLastColumn() - frame.getLastColumn())];
-            for(int row = frame.getFirstRow(); row <= frame.getLastRow(); row++) {
-                for(int column = frame.getFirstColumn(); column <= frame.getLastColumn(); column++) {
-                    patternStacks[(row - frame.getFirstRow()) * view.getColumns() + frame.getFirstColumn() - column] = stacks[row * view.getColumns() + column];
+            Stack[] patternStacks = new Stack[frame.getNumberOfStacks()];
+            for(int row = frame.getFirstRow(); row < frame.getLastRow(); row++) {
+                for(int column = frame.getFirstColumn(); column < frame.getLastColumn(); column++) {
+                    Stack s = stacks[row * view.getColumns() + column];
+                    patternStacks[(row - frame.getFirstRow()) * frame.getColumns() + column - frame.getFirstColumn()] = s;
                 }
             }
-            return new Pattern(patternStacks, frame.getLastColumn() - frame.getFirstColumn(), frame.getLastRow() - frame.getFirstRow());
+            return new Pattern(patternStacks, frame.getLastRow() - frame.getFirstRow(), frame.getLastColumn() - frame.getFirstColumn());
         }
     }
 

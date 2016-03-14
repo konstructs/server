@@ -10,7 +10,7 @@ public final class Pattern {
     private final int columns;
     private final int rows;
 
-    public Pattern(Stack[] stacks, int columns, int rows) {
+    public Pattern(Stack[] stacks, int rows, int columns) {
         this.stacks = stacks;
         this.columns = columns;
         this.rows = rows;
@@ -46,6 +46,8 @@ public final class Pattern {
             for(int i = 0; i < size(); i++) {
                 Stack self = stacks[i];
                 Stack other = p.getStacks()[i];
+                if(self == null && other == null) continue;
+                if(self == null || other == null) return false;
                 if(!self.getTypeId().equals(other.getTypeId())) return false;
                 if(self.size() < other.size()) return false;
             }

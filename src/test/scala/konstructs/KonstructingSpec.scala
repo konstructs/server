@@ -17,42 +17,42 @@ class KonstructingSpec extends WordSpec with Matchers {
     "produce a 1x1 pattern for a 1x1 inventory" in {
       val view = new InventoryView(0,0,1,1)
       val i = new Inventory(Array(s(One)))
-      i.getPattern(view) shouldEqual Some(new Pattern(Array(s(One)), 1, 1))
+      i.getPattern(view) shouldEqual new Pattern(Array(s(One)), 1, 1)
     }
     "produce a 1x1 pattern for a 2x2 inventory if only one stack" in {
       val view = new InventoryView(0,0,2,2)
       val i = new Inventory(Array(s(One), null, null, null))
-      i.getPattern(view) shouldEqual Some(new Pattern(Array(s(One)), 1, 1))
+      i.getPattern(view) shouldEqual new Pattern(Array(s(One)), 1, 1)
     }
     "produce a 1x1 pattern for a 2x2 inventory if only one stack on another position" in {
       val view = new InventoryView(0,0,2,2)
       val i = new Inventory(Array(null, null, s(One), null))
-      i.getPattern(view) shouldEqual Some(new Pattern(Array(s(One)), 1, 1))
+      i.getPattern(view) shouldEqual new Pattern(Array(s(One)), 1, 1)
     }
     "produce a 1x2 pattern for a 2x2 inventory" in {
       val view = new InventoryView(0,0,2,2)
       val i = new Inventory(Array(s(One), s(Two), null, null))
-      i.getPattern(view) shouldEqual Some(new Pattern(Array(s(One), s(Two)), 1, 2))
+      i.getPattern(view) shouldEqual new Pattern(Array(s(One), s(Two)), 1, 2)
     }
     "produce a 1x2 pattern for a 2x2 inventory on second row" in {
       val view = new InventoryView(0,0,2,2)
       val i = new Inventory(Array( null, null, s(One), s(Two)))
-      i.getPattern(view) shouldEqual Some(new Pattern(Array(s(One), s(Two)), 1, 2))
+      i.getPattern(view) shouldEqual new Pattern(Array(s(One), s(Two)), 1, 2)
     }
     "produce a 2x1 pattern for a 2x2 inventory" in {
       val view = new InventoryView(0,0,2,2)
       val i = new Inventory(Array(s(One), null, s(Two), null))
-      i.getPattern(view) shouldEqual Some(new Pattern(Array(s(One), s(Two)), 2, 1))
+      i.getPattern(view) shouldEqual new Pattern(Array(s(One), s(Two)), 2, 1)
     }
     "produce a 2x1 pattern for a 2x2 inventory on second column" in {
       val view = new InventoryView(0,0,2,2)
       val i = new Inventory(Array( null, s(One), null, s(Two)))
-      i.getPattern(view) shouldEqual Some(new Pattern(Array(s(One), s(Two)), 2, 1))
+      i.getPattern(view) shouldEqual new Pattern(Array(s(One), s(Two)), 2, 1)
     }
     "produce no pattern if empty" in {
       val view = new InventoryView(0,0,1,1)
       val i = new Inventory(Array[Stack]())
-      i.getPattern(view) shouldEqual None
+      i.getPattern(view) shouldEqual null
     }
   }
   "A Pattern" should {
