@@ -24,7 +24,7 @@ public final class Box {
 
         this.from = from;
         this.until = until;
-        this.size = from.dec(until);
+        this.size = until.dec(from);
     }
 
     public Position getFrom() {
