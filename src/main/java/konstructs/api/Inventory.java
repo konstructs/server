@@ -6,6 +6,15 @@ import java.util.Arrays;
  * Created by petter on 2016-02-29.
  */
 public final class Inventory {
+    public static Inventory convertPre0_1(Inventory inventory) {
+        Stack stacks[] = new Stack[inventory.getStacks().length];
+
+        for(int i = 0; i < inventory.getStacks().length; i++) {
+            stacks[i] = Stack.convertPre0_1(inventory.getStack(i));
+        }
+        return new Inventory(stacks);
+    }
+
     public static Inventory createEmpty(int size) {
         return new Inventory(new Stack[size]);
     }

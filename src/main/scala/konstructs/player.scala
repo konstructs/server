@@ -46,6 +46,8 @@ class PlayerActor(
           universe ! CreateInventory(inventoryBlock.getId, 16)
           val inventory = Inventory.createEmpty(9).withSlot(0, Stack.createFromBlock(inventoryBlock))
           data = data.copy(inventory = inventory)
+        } else {
+          data = data.copy(inventory = Inventory.convertPre0_1(data.inventory))
         }
         chunkLoader = context.actorOf(ChunkLoaderActor.props(client, db, data.position.toApiPosition))
         client ! PlayerInfo(pid, nick, self, data.position)

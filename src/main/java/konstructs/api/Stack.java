@@ -5,6 +5,20 @@ import java.util.Arrays;
 public final class Stack {
     public static final int MAX_SIZE = 64;
 
+    public static Stack convertPre0_1(Stack stack) {
+
+        if(stack == null || stack.getBlocks().length == 0) {
+            return null;
+        } else {
+            // This set's the block type id to the first block's type
+            if(stack.getTypeId() == null) {
+                return new Stack(stack.getBlocks()[0].getType(), stack.getBlocks());
+            } else {
+                return stack;
+            }
+        }
+    }
+
     public static Stack createFromBlock(Block block) {
         Block[] blocks = { block };
         return new Stack(block.getType(), blocks);

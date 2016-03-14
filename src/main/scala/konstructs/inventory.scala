@@ -3,6 +3,7 @@ package konstructs
 import java.util.UUID
 
 import scala.collection.mutable
+import scala.collection.JavaConverters._
 
 import akka.actor.{ Actor, Props, ActorRef, Stash }
 
@@ -65,6 +66,13 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
   def receive = {
     case GsonLoaded(_, json) if json != null =>
       inventories = gson.fromJson(json, typeOfInventories)
+        // This handles old inventories where empty stacks wasn't null
+      val updatedInventories = new java.util.HashMap[String, Inventory]()
+      inventories.asScala.toMap foreach {
+        case (pos, inventory) =>
+          updatedInventories.put(pos, Inventory.convertPre0_1(inventory))
+      }
+      inventories = updatedInventories
       context.become(ready)
       unstashAll()
     case GsonLoaded(_, _) =>
