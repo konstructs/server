@@ -26,7 +26,7 @@ public final class BlockTypeId implements Serializable {
     public static BlockTypeId fromString(String id) {
         int lastSlash = id.lastIndexOf('/');
         String namespace = id.substring(0, lastSlash);
-        String name = id.substring(lastSlash);
+        String name = id.substring(lastSlash + 1);
         return new BlockTypeId(namespace, name);
     }
 

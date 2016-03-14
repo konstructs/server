@@ -141,7 +141,7 @@ class BlockMetaActor( val ns: String,
 
   def receive = {
     case GsonLoaded(_, json) if json != null =>
-      positionMapping = gson.fromJson(json, classOf[java.util.Map[String, UUID]])
+      positionMapping = gson.fromJson(json, typeOfPositionMapping)
       context.become(loadBlockDb)
       loadGson(BlockIdFile)
     case GsonLoaded(_, _) =>
@@ -158,7 +158,7 @@ class BlockMetaActor( val ns: String,
 
   def loadBlockDb: Receive = {
     case GsonLoaded(_, json) if json != null =>
-      val defined = gson.fromJson(json, classOf[java.util.Map[Integer, BlockTypeId]])
+      val defined: java.util.Map[Integer, BlockTypeId] = gson.fromJson(json, typeOfwMapping)
       factory = BlockFactoryImpl(defined, configuredBlocks)
       storeDb()
       context.become(ready)

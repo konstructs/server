@@ -52,9 +52,8 @@ class JsonStorageActor(name: String, directory: File) extends Actor {
     case LoadGson(id, ns) =>
       val data = load(directory, id, ns, Suffix).flatMap { d =>
         Try(parser.parse(new String(d))).toOption
-      } getOrElse(null)
-      sender ! GsonLoaded(id, data)
-
+      }
+      sender ! GsonLoaded(id, data.orNull)
   }
 }
 

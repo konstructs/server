@@ -59,7 +59,7 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
 
   def receive = {
     case GsonLoaded(_, json) if json != null =>
-      inventories = gson.fromJson(json, classOf[java.util.Map[String, Inventory]])
+      inventories = gson.fromJson(json, typeOfInventories)
       context.become(ready)
       unstashAll()
     case GsonLoaded(_, _) =>
