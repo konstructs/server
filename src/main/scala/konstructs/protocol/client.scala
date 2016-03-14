@@ -160,7 +160,7 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
       if(stack != null) {
         send(pipe, s"I,${p},${stack.size},${factory.getW(stack)}")
       } else {
-        send(pipe, s"I,${p},0,-1")
+        send(pipe, s"I,${p},0,0")
       }
     }
   }

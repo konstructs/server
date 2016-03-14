@@ -197,7 +197,7 @@ class PlayerActor(
           val beltIndex = BeltView.translate(index)
           val oldStack = data.inventory.getStack(beltIndex)
           if(oldStack != null) {
-            if(stack != null && oldStack.acceptsPartOf(stack)) {
+            if(oldStack.acceptsPartOf(stack)) {
               val r = oldStack.acceptPartOf(stack)
               if(r.getGiving != null) {
                 context.become(stackSelected(inventoryActor, view, r.getGiving))
@@ -242,9 +242,11 @@ class PlayerActor(
         if(BeltView.contains(index)) {
           val beltIndex = BeltView.translate(index)
           val stack = data.inventory.getStack(beltIndex)
-          context.become(stackSelected(inventoryActor, view, stack))
-          update(data.inventory.withoutSlot(beltIndex))
-          client ! InventoryUpdate(addBelt(view))
+          if(stack != null) {
+            context.become(stackSelected(inventoryActor, view, stack))
+            update(data.inventory.withoutSlot(beltIndex))
+            client ! InventoryUpdate(addBelt(view))
+          }
         } else {
           context.become(waitForSelectedStack(inventoryActor, view))
           inventoryActor ! RemoveViewStack(index)
@@ -253,7 +255,8 @@ class PlayerActor(
         context.become(manageInventory(inventoryActor, view))
         client ! InventoryUpdate(addBelt(view))
       case ReceiveStack(stack) =>
-        context.become(stackSelected(inventoryActor, view, stack))
+        if(stack != null)
+          context.become(stackSelected(inventoryActor, view, stack))
       case CloseInventory =>
         context.become(ready)
         inventoryActor ! CloseInventory

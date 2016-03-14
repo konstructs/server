@@ -123,10 +123,10 @@ public final class Inventory {
         Inventory result = this;
         for (int i = 0; i < stacks.length; i++) {
             Stack s = stacks[i];
-            if (s.getTypeId().equals(stack.getTypeId())) {
+            if (s != null && s.getTypeId().equals(stack.getTypeId())) {
                 if(toRemove == null) {
                     toRemove = s.take(stack.size());
-                    result = withSlot(i, s.drop(stack.size()));
+                    result = withSlot(i, s.drop(toRemove.size()));
                 } else {
                     int n = stack.size() - toRemove.size();
                     AcceptResult<Stack> r = toRemove.acceptPartOf(s.take(n));

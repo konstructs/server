@@ -6,7 +6,7 @@ public final class InventoryView {
     private final int columns;
     private final int rows;
 
-    public InventoryView(int columnOffset, int rowOffset, int columns, int rows) {
+    public InventoryView(int rowOffset, int columnOffset, int rows, int columns) {
         this.columnOffset = columnOffset;
         this.rowOffset = rowOffset;
         this.columns = columns;

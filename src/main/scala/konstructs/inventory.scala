@@ -29,9 +29,14 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
       val oldStack = inventory.getStack(slot)
 
       if(oldStack != null) {
-        val r = oldStack.acceptPartOf(stack)
-        inventories.put(blockId.toString, inventory.withSlot(slot, r.getAccepting))
-        r.getGiving
+        if(oldStack.acceptsPartOf(stack)) {
+          val r = oldStack.acceptPartOf(stack)
+          inventories.put(blockId.toString, inventory.withSlot(slot, r.getAccepting))
+          r.getGiving
+        } else {
+          inventories.put(blockId.toString, inventory.withSlot(slot, stack))
+          oldStack
+        }
       } else {
         inventories.put(blockId.toString, inventory.withSlot(slot, stack))
         null;
