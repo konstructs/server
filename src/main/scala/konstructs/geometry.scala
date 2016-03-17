@@ -52,7 +52,7 @@ object BoxChunking {
     box.contains(chunk.position(0, 0, 0))
 
   def translate(box: Box, chunk: ChunkPosition): ChunkPosition = {
-    ChunkPosition(chunk.position(0, 0, 0).dec(box.getFrom))
+    ChunkPosition(chunk.position(0, 0, 0).subtract(box.getFrom))
   }
 
   def chunked(box: Box): Set[Box] = {

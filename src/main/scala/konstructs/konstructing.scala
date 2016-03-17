@@ -52,7 +52,6 @@ object KonstructingActor {
       1
     }
     new Stack(
-      BlockTypeId.fromString(blockId),
       ((0 until amount).map { i => Block.create(blockId) }).toArray )
   }
 

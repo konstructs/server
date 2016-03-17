@@ -6,7 +6,7 @@ import java.io.Serializable;
  * BlockTypeId is a class that holds the <code>namespace</code> and
  * <code>name</code> of a block type. This information is very static
  * and should never change after a new block type has been introduced
- * into the game. The <code>namespace</namespace> should preferable be
+ * into the game. The <code>namespace</code> should preferable be
  * something unique for the plugin, like a domain name or the name of
  * the plugin. Avoid generic namespaces like "stones", "forest". Use
  * namespaces like "your/domain/stones" where are in control of
@@ -46,7 +46,7 @@ public final class BlockTypeId implements Serializable {
     /**
      * Returns the namespace of this <code>BlockTypeId</code>
      * @return the namespace
-     * @see BlocKTypeId
+     * @see BlockTypeId
      */
     public String getNamespace() {
         return namespace;
@@ -56,7 +56,7 @@ public final class BlockTypeId implements Serializable {
     /**
      * Returns the name of this <code>BlockTypeId</code>
      * @return the name
-     * @see BlocKTypeId
+     * @see BlockTypeId
      */
     public String getName() {
         return name;

@@ -65,7 +65,7 @@ case class ImageHeightMap(img: Image, range: Int = 128) extends LocalHeightMap {
 
 case class GlobalHeightMap(placement: Position, map: LocalHeightMap) extends HeightMap {
   def apply(position: Position) = {
-    map.get(position.dec(placement).withY(0))
+    map.get(position.subtract(placement).withY(0))
   }
   def isDefinedAt(position: Position) =
     (position.getX >= placement.getX &&
@@ -78,7 +78,7 @@ class DiamondSquareHeightMap(roughness: Float, baseSize: Int, placement: Positio
   import DiamondSquareHeightMap._
   private val size = findNearestPowerOfTwo(baseSize) + 1
   private val offset = size / 4 + 1
-  private val localPlacement = placement.decX(offset).decZ(offset)
+  private val localPlacement = placement.subtractX(offset).subtractZ(offset)
   private val max = size - 1
   private val array = Array.fill[Float](size * size)(Float.NaN)
   private val random = new scala.util.Random()
@@ -94,10 +94,10 @@ class DiamondSquareHeightMap(roughness: Float, baseSize: Int, placement: Positio
   val g = new PartialFunction[Position, Float] {
     def apply(local: Position) = {
       val noise = (1.0f - (random.nextFloat() * 2.0f))
-      global(localPlacement.inc(local).withY(0)).toFloat + noise
+      global(localPlacement.add(local).withY(0)).toFloat + noise
     }
     def isDefinedAt(local: Position) =
-      global.isDefinedAt(localPlacement.inc(local).withY(0))
+      global.isDefinedAt(localPlacement.add(local).withY(0))
   }
 
   val result = GlobalHeightMap(placement, new LocalHeightMap {

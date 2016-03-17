@@ -60,7 +60,7 @@ class KonstructingSpec extends WordSpec with Matchers {
       new Pattern(Array(s(One)), 1, 1).contains(new Pattern(Array(s(One)), 1, 1))
     }
     "contain a 1x1 pattern in a 1x1 pattern with more blocks" in {
-      new Pattern(Array(new Stack(One, Array(b(One), b(One), b(One)))), 1, 1).contains(new Pattern(Array(s(One)), 1, 1))
+      new Pattern(Array(new Stack(Array(b(One), b(One), b(One)))), 1, 1).contains(new Pattern(Array(s(One)), 1, 1))
     }
     "not contain a 1x1 pattern in an empty" in {
       new Pattern(Array(null), 1, 1).contains(new Pattern(Array(s(One)), 1, 1)) shouldEqual false
@@ -69,7 +69,7 @@ class KonstructingSpec extends WordSpec with Matchers {
       new Pattern(Array(s(One), s(Two)), 1, 2).contains(new Pattern(Array(s(One), s(Two)), 1, 2)) shouldEqual true
     }
     "contain a 1x2 pattern in a 1x2 pattern with more blocks" in {
-      new Pattern(Array(new Stack(One, Array(b(One), b(One), b(One))), s(Two)), 1, 2).contains(new Pattern(Array(s(One), s(Two)), 1, 2)) shouldEqual true
+      new Pattern(Array(new Stack(Array(b(One), b(One), b(One))), s(Two)), 1, 2).contains(new Pattern(Array(s(One), s(Two)), 1, 2)) shouldEqual true
     }
     "not contain a 1x2 pattern in an invalid 1x2 pattern" in {
       new Pattern(Array(s(Three), s(Two)), 1, 2).contains(new Pattern(Array(s(One), s(Two)), 1, 2)) shouldEqual false

@@ -48,7 +48,7 @@ case class BlockMachine(alphabet: Map[Char, BlockTypeId], overwrite: Boolean = f
         case a =>
           if(overwrite || !blocks.contains(pos))
             blocks += pos -> alphabet.getOrElse(a, BlockTypeId.VACUUM)
-          pos = pos.inc(dir.adg)
+          pos = pos.add(dir.adg)
       }
     }
     blocks

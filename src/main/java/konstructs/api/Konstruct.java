@@ -1,18 +1,39 @@
 package konstructs.api;
 
+/**
+ * Konstruct is a class that describes a recipe for creating new
+ * blocks. It contains a pattern that should be matched for a
+ * resulting stack to be provided. For more details on crafting,
+ * please see Pattern and InventoryView.
+ * @see Pattern
+ * @see InventoryView
+ */
 public class Konstruct {
     private final Pattern pattern;
     private final Stack result;
 
+    /**
+     * Constrcu a new immutable Konstruct
+     * @param pattern The pattern that needs to be matched
+     * @param result The resulting stack
+     */
     public Konstruct(Pattern pattern, Stack result) {
         this.pattern = pattern;
         this.result = result;
     }
 
+    /**
+     * Get the pattern
+     * @return The pattern
+     */
     public Pattern getPattern() {
         return pattern;
     }
 
+    /**
+     * Get the stack
+     * @return The stack
+     */
     public Stack getResult() {
         return result;
     }

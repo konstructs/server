@@ -117,7 +117,7 @@ class PlayerActor(
 
   def moveInBelt(from: Int, to: Int) {
     val inventory = data.inventory
-    update(inventory.moveSlot(from, to))
+    update(inventory.swapSlot(from, to))
   }
 
   override def postStop {

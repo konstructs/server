@@ -1,9 +1,27 @@
 package konstructs.api;
 
+/**
+ * BlockFilterOr is a class that represents a logical OR
+ * between two BlockFilters. It is created via the or method
+ * of the BlockFilter base class.
+ *
+ * @see BlockFilter#or(BlockFilter)
+ */
 public class BlockFilterOr extends BlockFilter {
     private final BlockFilter f1;
     private final BlockFilter f2;
 
+    /**
+     * Constructs an immutable BlockFilterOr
+     * <p>
+     *     Note: You rarely need to create an instance of the class,
+     *     but it is rather usually created via the BlockFilter or
+     *     method.
+     * </p>
+     * @param f1 The first filter
+     * @param f2 The second filter
+     * @see BlockFilter#or(BlockFilter)
+     */
     public BlockFilterOr(BlockFilter f1, BlockFilter f2) {
         super();
         this.f1 = f1;
