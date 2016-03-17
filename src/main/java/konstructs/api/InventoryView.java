@@ -6,13 +6,13 @@ package konstructs.api;
  * rowOffset and columnsOffset which defines where it is placed within a View.
  * It has a number of rows and columns which are mapped into a Inventory of
  * size rows * columns.
- *
+ * <p>
  * When a message is received from the HUD this class can be used to identify
  * if it was directed to this specific view (i.e. if the action was done within
  * the area of this view) using the contains method. It can also generate a one
  * dimensional index that can be used to access the slots in an underlying
  * Inventory.
- *
+ * </p>
  * @see Inventory
  * @see View
  */
@@ -87,7 +87,7 @@ public final class InventoryView {
      * If this method returns true, then the translate method can safely
      * be used to translate the HUD position given to a position in an
      * Inventory.
-     * @param position
+     * @param position The HUD position / index to check
      * @return True if this InventoryView contains the HUD position
      */
     public boolean contains(int position) {

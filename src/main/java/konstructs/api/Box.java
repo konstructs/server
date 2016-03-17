@@ -14,13 +14,13 @@ import java.util.Map;
  * <p>
  *     From is (1, 1) and until is (3,3). Positions marked with "*" are included
  *     in the box.
- *     <pre>
+ * </p>
+ * <pre>
  *     (0,3)   (1,3)   (2,3)   (3,3)
  *     (0,2)  *(1,2)* *(2,2)*  (3,2)
  *     (0,1)  *(1,1)* *(2,1)*  (3,1)
  *     (0,0)   (1,0)   (2,0)   (3,0)
- *     </pre>
- * </p>
+ * </pre>
  * <p>
  *     To make it easier to create a Box there are a couple of factory methods like
  *     createWithSize and createAround.
@@ -32,21 +32,23 @@ import java.util.Map;
  *     that contains these 4 values we can use the methods arrayIndex and arrayIndexLocal
  *     to get the indexes for the array. Consider the following 2 dimensional example
  *     (box is still the example from above):
- *     <code>
- *         BlockTypeId[] blocks = {
- *             new BlockTypeId("org/constructs", "stone"),
- *             new BlockTypeId("org/constructs", "stone"),
- *             new BlockTypeId("org/constructs", "stone"),
- *             new BlockTypeId("org/constructs", "stone")
- *             };
- *         // This returns the data of the block at global position 1,1
- *         blocks[box.arrayIndex(new Position(1,1));
+ * </p>
+ * <pre>
+ *     BlockTypeId[] blocks = {
+ *         new BlockTypeId("org/constructs", "stone"),
+ *         new BlockTypeId("org/constructs", "stone"),
+ *         new BlockTypeId("org/constructs", "stone"),
+ *         new BlockTypeId("org/constructs", "stone")
+ *         };
+ *     // This returns the data of the block at global position 1,1
+ *     blocks[box.arrayIndex(new Position(1,1));
  *
- *         // This returns the data of the block at global position 2,2
- *         // As you can see, the arrayIndexLocal uses a position relative to
- *         // from
- *         blocks[box.arrayIndexLocal(new Position(1,1));
- *     </code>
+ *     // This returns the data of the block at global position 2,2
+ *     // As you can see, the arrayIndexLocal uses a position relative to
+ *     // from
+ *     blocks[box.arrayIndexLocal(new Position(1,1));
+ * </pre>
+ * <p>
  *     To reduce the boilerplate even further, there are two more helper methods,
  *     get and getLocal, by taking the array as an argument the provide a simple way
  *     to directly get data from an array using a local or global position.

@@ -254,7 +254,7 @@ public final class Inventory {
      * Switch the contents of two slots with each other
      * @param s1 The first stack in the swap
      * @param s2 The second stack in the swap
-     * @return
+     * @return A new inventory with the two slots swapped
      */
     public Inventory swapSlot(int s1, int s2) {
         Stack s1Stack = stacks[s1];

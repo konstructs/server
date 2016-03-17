@@ -3,13 +3,13 @@ package konstructs.api;
 /**
  * BlockFilterFactory is a class with static factory methods for quickly
  * and easily creating BlockFilters. A simple example:
- * <code>
+ * <pre>
  *     BlockFilterFactory
  *         .withName("grass")
  *         .withObstacle(true)
  *         .or(BlockFilterFactory
  *             .withNamespace("org/konstructs"));
- * </code>
+ * </pre>
  * This creates a filter that matches blocks that are named "grass" AND are obstacles
  * OR blocks that have the namespace "org/konstructs".
  */
@@ -48,7 +48,7 @@ public class BlockFilterFactory {
      * @param blockTypeId The BlockTypeId to set in the new BlockFilter
      * @return The new BlockFilter with both namespace and name set
      */
-    public BlockFilterNode withBlockTypeId(BlockTypeId blockTypeId) {
+    public static BlockFilterNode withBlockTypeId(BlockTypeId blockTypeId) {
         return EMPTY.withBlockTypeId(blockTypeId);
     }
 
@@ -57,7 +57,7 @@ public class BlockFilterFactory {
      * @param shape The shape to set in the new BlockFilter
      * @return The new BlockFilter with the shape set
      */
-    public BlockFilterNode withShape(String shape) {
+    public static BlockFilterNode withShape(String shape) {
         return EMPTY.withShape(shape);
     }
 
@@ -66,7 +66,7 @@ public class BlockFilterFactory {
      * @param transparent Must the block be transparent to match?
      * @return The new BlockFilter with the transparent property set
      */
-    public BlockFilterNode withTransparent(Boolean transparent) {
+    public static BlockFilterNode withTransparent(Boolean transparent) {
         return EMPTY.withTransparent(transparent);
     }
 
@@ -75,7 +75,7 @@ public class BlockFilterFactory {
      * @param obstacle Must the block be an obstacle to match?
      * @return The new BlockFilter with the obstacle property set
      */
-    public BlockFilterNode withObstacle(Boolean obstacle) {
+    public static BlockFilterNode withObstacle(Boolean obstacle) {
         return EMPTY.withObstacle(obstacle);
     }
 }

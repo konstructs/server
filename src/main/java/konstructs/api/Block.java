@@ -7,13 +7,14 @@ import java.util.UUID;
  * a block that was once placed in the world or a block that is to
  * be placed in the world (BlockTypeId is used to identify blocks
  * in general, when there is no need for a specific block).
- *
+ * <p>
  * What makes the block real (or unique) is the associated ID.
  * This id is saved by the server when the block is placed in the
  * world and retrieved by the server when the block is removed
  * from the world. This means that this ID can be counted on
  * uniquely and persistently identifying this block.
- *
+ * </p>
+ * <p>
  * Why is this useful?
  * It is useful when building plugins that require to keep track
  * of blocks. Let's say you are building a chest block. You will
@@ -21,7 +22,7 @@ import java.util.UUID;
  * they are associated with the block. By saving the contents of
  * the chest with the id of the block as the key, you will always
  * be able to access them for the block.
- *
+ * </p>
  *  @see BlockTypeId
  */
 public final class Block {

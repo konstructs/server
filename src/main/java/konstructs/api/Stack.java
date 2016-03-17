@@ -6,7 +6,7 @@ import java.util.Arrays;
  * Stack is a class that describes a collection of blocks of
  * a certain BlockTypeId. All blocks of a stack must be of the
  * same BlockTypeId. A stack holds a maximum of 64 blocks.
- *
+ * <p>
  * Since stacks are immutable, when changing the composition
  * of a stack a new stack is returned. This is the case of all
  * objects in konstructs, but since a stack is basically a list
@@ -15,7 +15,8 @@ import java.util.Arrays;
  * you can safely skip this section. They work as usual, except that
  * the empty list is represented by null. Otherwise a short introduction
  * to the head and the tail of the stack follows.
- *
+ * </p>
+ * <p>
  * A stack must have at least one element. An empty stack is
  * represented by null. The head of the stack is the first block
  * in the stack. It can be accessed via the getHead() method.
@@ -24,22 +25,22 @@ import java.util.Arrays;
  * the stack is null. The tail of the stack is in itself a stack and
  * the getTail() method returns a new stack that contains the tail of
  * the current stack. An example of getting a block from a stack:
- *
- * <code>
+ * </p>
+ * <pre>
  *     // Get the first block in the stack
  *     Block b = stack.head();
  *
  *     // Update the stack variable with the tail of the stack
  *     // It can be null and if it is, the stack is empty
  *     stack = stack.tail();
- * </code>
- *
+ * </pre>
+ * <p>
  * More generic variant of the head and tail are the take(int) and drop(int) methods.
  * Take returns a new stack of the first n blocks in the stack in the same way
  * as head returns the first block. Drop returns a new stack without the first n
  * blocks in the stack, much in the same way as getTail returns all blocks except
  * the first one.
- *
+ * </p>
  * @see #getHead()
  * @see #getTail()
  * @see #take(int)
