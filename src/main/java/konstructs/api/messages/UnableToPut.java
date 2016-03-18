@@ -3,19 +3,39 @@ package konstructs.api.messages;
 import konstructs.api.Block;
 import konstructs.api.Position;
 
+/**
+ * UnableToPut is a message received as a response to a PutBlock message
+ * when the block present at the position was not VACUUM. This message
+ * returns the block that was to be put onto that position to the sender.
+ * @see PutBlock
+ * @see konstructs.api.BlockTypeId#VACUUM
+ */
 public class UnableToPut {
     private final Position position;
     private final Block block;
 
+    /**
+     * Constructs and immutable UnableToPut message
+     * @param position The position onto which it was not possible to put the block
+     * @param block The block itself
+     */
     public UnableToPut(Position position, Block block) {
         this.position = position;
         this.block = block;
     }
 
+    /**
+     * Get the position onto which it was not possible to put the block
+     * @return The position
+     */
     public Position getPosition() {
         return position;
     }
 
+    /**
+     * Get the block itself
+     * @return The block
+     */
     public Block getBlock() {
         return block;
     }

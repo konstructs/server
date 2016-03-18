@@ -2,13 +2,27 @@ package konstructs.api.messages;
 
 import konstructs.api.Box;
 
+/**
+ * BocQuery is a message to query the world for a rectangular volume of
+ * blocks. The volume is defined by the Box class. Please see the documentation
+ * of the Box class for details on how it works.
+ * @see Box
+ */
 public class BoxQuery {
     private final Box box;
 
+    /**
+     * Construct an immutable BoxQuery
+     * @param box The box queried for
+     */
     public BoxQuery(Box box) {
         this.box = box;
     }
 
+    /**
+     * Get the box queried for
+     * @return The box queried for
+     */
     public Box getBox() {
         return box;
     }
