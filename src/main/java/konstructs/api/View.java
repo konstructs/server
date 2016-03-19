@@ -43,12 +43,12 @@ public final class View {
 
     /**
      * Add an inventory to this View
-     * Returns a new view towhich the Inventory has been added
+     * Returns a new view to which the Inventory has been added
      * @param inventoryView The InventoryView that defines where in the HUD
      *                      the inventory should be shown as well as the dimensions
      *                      of it
      * @param inventory The Inventory to show in the HUD
-     * @return A new View that shows the given invetory at the given position
+     * @return A new View that shows the given inventory at the given position
      * @see Inventory
      * @see InventoryView
      */

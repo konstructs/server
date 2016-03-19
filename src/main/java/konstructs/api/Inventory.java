@@ -127,7 +127,7 @@ public final class Inventory {
 
     /**
      * Check whether this Inventory can accept the given block. Accept here means if
-     * there is a stack in the inventory that can accomodate the block or if there is
+     * there is a stack in the inventory that can accommodate the block or if there is
      * an empty slot into which the block can be put.
      * @param b The block to be checked
      * @return True if the block can be accepted by this inventory

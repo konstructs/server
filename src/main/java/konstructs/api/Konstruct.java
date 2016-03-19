@@ -13,7 +13,7 @@ public class Konstruct {
     private final Stack result;
 
     /**
-     * Constrcu a new immutable Konstruct
+     * Construct an immutable Konstruct
      * @param pattern The pattern that needs to be matched
      * @param result The resulting stack
      */

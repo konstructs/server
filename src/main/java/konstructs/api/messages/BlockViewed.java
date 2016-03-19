@@ -24,7 +24,7 @@ public class BlockViewed {
 
     /**
      * Get the position of the viewed block
-     * @return The positon of the viewed block
+     * @return The position of the viewed block
      */
     public Position getPosition() {
         return position;

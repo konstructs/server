@@ -42,7 +42,7 @@ public final class Pattern {
 
     /**
      * Get the number of columns of this pattern
-     * @return The number of coluns of this pattern
+     * @return The number of columns of this pattern
      */
     public int getColumns() {
         return columns;
@@ -83,7 +83,7 @@ public final class Pattern {
     }
 
     /**
-     * Check whether this pattern is a superset of the given pattern.
+     * Check whether this pattern is a super set of the given pattern.
      * This means that from this Pattern the pattern given can be produced,
      * i.e. this pattern contains the same layout of stacks of at least
      * the same size as the pattern given. In crafting, if this method returns true,

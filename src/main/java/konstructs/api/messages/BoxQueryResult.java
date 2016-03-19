@@ -22,7 +22,7 @@ public class BoxQueryResult {
     private final BlockTypeId blocks[];
 
     /**
-     * Constrcut an immutable BoxQueryResult
+     * Construct an immutable BoxQueryResult
      * @param box The box from the query
      * @param blocks The array of  blocks that was in the query
      */
@@ -49,7 +49,7 @@ public class BoxQueryResult {
 
     /**
      * Get a block on the specified global position. The position
-     * must be inide the Box of the original query.
+     * must be inside the Box of the original query.
      * @param p The position to be returned
      * @return The BlockTypeId found on the position
      * @see Box

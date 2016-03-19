@@ -69,7 +69,7 @@ public final class Block {
 
     /**
      * Constructs a immutable Block
-     * @param id The ID that should be asspicated with the Block (may be null)
+     * @param id The ID that should be associated with the Block (may be null)
      * @param type The type of the block
      */
     public Block(UUID id, BlockTypeId type) {
@@ -78,7 +78,7 @@ public final class Block {
     }
 
     /**
-     * Returns the ID of the block. It may be null if no ID is assoiated with
+     * Returns the ID of the block. It may be null if no ID is associated with
      * this block (default case).
      * @return The ID of the block (may be null)
      */

@@ -3,7 +3,7 @@ package konstructs.api.messages;
 import konstructs.api.Box;
 
 /**
- * BocQuery is a message to query the world for a rectangular volume of
+ * BoxQuery is a message to query the world for a rectangular volume of
  * blocks. The volume is defined by the Box class. Please see the documentation
  * of the Box class for details on how it works.
  * @see Box

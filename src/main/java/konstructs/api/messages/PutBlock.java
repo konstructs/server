@@ -25,7 +25,7 @@ public final class PutBlock {
 
     /**
      * Get the position onto which the block is to be put
-     * @return The position onto whicht the block is to be put
+     * @return The position onto which the block is to be put
      */
     public Position getPosition() {
         return position;

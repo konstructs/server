@@ -73,7 +73,7 @@ public final class Box {
      * Factory method for creating a Box around a central block
      * @param center The block in the center of the box
      * @param radi The number of blocks the box extends in each dimension
-     * @return The new Box bounding the are aroud the center with radi
+     * @return The new Box bounding the are around the center with radi
      *         number of blocks in both directions in each dimension
      */
     public static Box createAround(Position center, Position radi) {
@@ -126,7 +126,7 @@ public final class Box {
     /**
      * Get the distance between the from and until corner in
      * all dimensions.
-     * @return The distance (or size) ofthe box in all dimensions
+     * @return The distance (or size) of the box in all dimensions
      */
     public Position getSize() {
         return size;
@@ -135,7 +135,7 @@ public final class Box {
     /**
      * Returns true if the position is within this bounding box
      * @param p The position to be checked
-     * @return True if the poision is withing this bounding box
+     * @return True if the position is withing this bounding box
      */
     public boolean contains(Position p) {
         return p.getX() >= from.getZ() && p.getX() < until.getX() && p.getY() >= from.getY() && p.getY() < until.getY() && p.getZ() >= from.getZ() && p.getZ() < until.getZ();

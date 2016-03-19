@@ -45,7 +45,7 @@ public final class InventoryView {
     }
 
     /**
-     * Get the row offest at which this InventoryView is placed in the HUD
+     * Get the row offset at which this InventoryView is placed in the HUD
      * @return The row offset
      */
     public int getRowOffset() {

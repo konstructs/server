@@ -12,7 +12,7 @@ public class BlockRemoved {
     private final Block block;
 
     /**
-     * Constrcut an immutable BlockRemoved message
+     * Construct an immutable BlockRemoved message
      * @param position The position from which the block was removed
      * @param block The block that was removed
      */

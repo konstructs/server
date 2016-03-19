@@ -19,9 +19,12 @@ public final class BlockTypeId implements Serializable {
     public final static BlockTypeId VACUUM = new BlockTypeId("org/konstructs", "vacuum");
 
     /**
-     * Create a new immutable BlockTypeId from a name string. A name string consist of the namespace appended with a / and then the name, e.g. namespace "org/konstructs" and name "grass" would become "org/kosntructs/grass".
+     * Create a new immutable BlockTypeId from a name string. A name
+     * string consist of the namespace appended with a / and then the
+     * name, e.g. namespace "org/konstructs" and name "grass" would
+     * become "org/kosntructs/grass".
      * @param id the block id to be parsed for
-     * @return a new immutable BlocKTypeId
+     * @return a new immutable BlockTypeId
      */
     public static BlockTypeId fromString(String id) {
         int lastSlash = id.lastIndexOf('/');

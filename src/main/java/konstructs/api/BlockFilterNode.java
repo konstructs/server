@@ -46,7 +46,7 @@ public class BlockFilterNode extends BlockFilter {
     }
 
     /**
-     * Create a new BlockFilterNode with the specfic namespace set
+     * Create a new BlockFilterNode with the specific namespace set
      * @param namespace The namespace to set
      * @return The new BlockFilterNode with the namespace set
      */
@@ -67,7 +67,7 @@ public class BlockFilterNode extends BlockFilter {
      * Create a new BlockFilterNode with the specific BlockTypeId set.
      * This method sets both namespace and name.
      * @param blockTypeId The BlockTypeId to set
-     * @return The new BlockFilterNode with bothe the namespace and name set
+     * @return The new BlockFilterNode with both the namespace and name set
      */
     public BlockFilterNode withBlockTypeId(BlockTypeId blockTypeId) {
         return withNamespace(blockTypeId.getNamespace())
