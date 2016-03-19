@@ -3,39 +3,27 @@ package konstructs.api.messages;
 import konstructs.api.Block;
 import konstructs.api.Position;
 
-/**
- * BlockViewed is a message received in response to ViewBlock message.
- * It contains a copy of the block viewed, leaving the block itself
- * intact in the world.
- */
-public class BlockViewed {
+public class ReplaceBlockResult {
     private final Position position;
     private final Block block;
+    private final boolean successful;
 
-    /**
-     * Construct an immutable BlockViewed message
-     * @param position The position of the viewed block
-     * @param block A copy of the viewed block
-     */
-    public BlockViewed(Position position, Block block) {
+    public ReplaceBlockResult(Position position, Block block, boolean successful) {
         this.position = position;
         this.block = block;
+        this.successful = successful;
     }
 
-    /**
-     * Get the position of the viewed block
-     * @return The position of the viewed block
-     */
     public Position getPosition() {
         return position;
     }
 
-    /**
-     * Get the copy of the viewed block
-     * @return A  copy of the viewed block
-     */
     public Block getBlock() {
         return block;
+    }
+
+    public boolean isSuccessful() {
+        return successful;
     }
 
     @Override
@@ -43,8 +31,9 @@ public class BlockViewed {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        BlockViewed that = (BlockViewed) o;
+        ReplaceBlockResult that = (ReplaceBlockResult) o;
 
+        if (successful != that.successful) return false;
         if (!position.equals(that.position)) return false;
         return block.equals(that.block);
 
@@ -54,14 +43,16 @@ public class BlockViewed {
     public int hashCode() {
         int result = position.hashCode();
         result = 31 * result + block.hashCode();
+        result = 31 * result + (successful ? 1 : 0);
         return result;
     }
 
     @Override
     public String toString() {
-        return "BlockViewed(" +
+        return "ReplaceBlockResult(" +
                 "position=" + position +
                 ", block=" + block +
+                ", successful=" + successful +
                 ')';
     }
 }

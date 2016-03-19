@@ -142,11 +142,10 @@ class PlayerActor(
       sender ! BeltActiveUpdate(data.active.toString)
     case Action(pos, button) =>
       action(pos, button)
-    case b: BlockRemoved =>
-      if(b.getBlock != null)
-        putInBelt(Stack.createFromBlock(b.getBlock))
-    case u: UnableToPut =>
-      putInBelt(Stack.createFromBlock(u.getBlock))
+    case r: ReplaceBlockResult =>
+      if(!r.getBlock.getType.equals(BlockTypeId.VACUUM)) {
+        putInBelt(Stack.createFromBlock(r.getBlock))
+      }
     case ReceiveStack(stack) =>
       putInBelt(stack)
     case p: PlayerMovement =>

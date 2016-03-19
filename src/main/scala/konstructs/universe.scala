@@ -3,7 +3,7 @@ package konstructs
 import akka.actor.{ Actor, ActorRef, Props, Stash }
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 import konstructs.api._
-import konstructs.api.messages.{ EventBlockRemoved, EventBlockUpdated, PutBlock, RemoveBlock, ViewBlock, ReplaceBlocks, BoxQuery }
+import konstructs.api.messages.{ EventBlockRemoved, EventBlockUpdated, ReplaceBlock, ViewBlock, ReplaceBlocks, BoxQuery }
 import collection.JavaConversions._
 
 class UniverseActor(
@@ -53,7 +53,7 @@ class UniverseActor(
   def receive = {
     case factory: BlockFactory =>
       generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage, factory))
-      db = context.actorOf(DbActor.props(self, generator, binaryStorage, factory))
+      db = context.actorOf(DbActor.props(self, generator, binaryStorage, jsonStorage, factory))
       context.become(ready)
       unstashAll()
     case _ =>
@@ -81,7 +81,7 @@ class UniverseActor(
       filters.head.forward(InteractPrimaryFilter(filters.tail, i))
     case i: InteractPrimaryFilter =>
       if(i.message.pos != null) {
-        db.tell(DbActor.RemoveBlock(i.message.pos, i.message.sender), blockManager)
+        db.tell(new ReplaceBlock(BlockFilterFactory.EMPTY, i.message.pos, Block.create(BlockTypeId.VACUUM)), i.message.sender)
         blockUpdateEvents.foreach(e => e ! new EventBlockRemoved(Set(i.message.pos)))
       }
       if(i.message.block != null) {
@@ -93,7 +93,7 @@ class UniverseActor(
     case i: InteractSecondaryFilter =>
       if(i.message.pos != null) {
         if(i.message.block != null) {
-          blockManager.tell(BlockMetaActor.PutBlockTo(i.message.pos, i.message.block, db), i.message.sender)
+          db.tell(new ReplaceBlock(BlockFilterFactory.VACUUM, i.message.pos, i.message.block), i.message.sender)
           blockUpdateEvents.foreach(e => e ! new EventBlockUpdated(Map(i.message.pos -> i.message.block.getType)))
         }
       } else {
@@ -108,14 +108,11 @@ class UniverseActor(
       if(i.message.block != null) {
         i.message.sender ! new ReceiveStack(Stack.createFromBlock(i.message.block))
       }
-    case p: PutBlock =>
-      blockManager.forward(BlockMetaActor.PutBlockTo(p.getPosition, p.getBlock, db))
+    case p: ReplaceBlock =>
+      db.forward(p)
       blockUpdateEvents.foreach(e => e ! new EventBlockUpdated(Map(p.getPosition -> p.getBlock.getType)))
-    case r: RemoveBlock =>
-      db.tell(DbActor.RemoveBlock(r.getPosition, sender), blockManager)
-      blockUpdateEvents.foreach(e => e ! new EventBlockRemoved(Set(r.getPosition)))
     case v: ViewBlock =>
-      db.tell(DbActor.ViewBlock(v.getPosition, sender), blockManager)
+      db.forward(v)
     case r: ReplaceBlocks =>
       blockUpdateEvents.foreach(e =>
         e ! new EventBlockUpdated(r.getBlocks)

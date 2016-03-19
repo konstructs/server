@@ -103,11 +103,11 @@ public class BlockFilterNode extends BlockFilter {
 
     @Override
     public boolean matches(BlockTypeId blockTypeId, BlockType blockType) {
-        return ((namespace == null || namespace == blockTypeId.getNamespace())
-                && (name == null || name == blockTypeId.getName())
-                && (shape == null || shape == blockType.getShape()) &&
-                (transparent == null || transparent == blockType.isTransparent()) &&
-                (obstacle == null || obstacle == blockType.isObstacle()));
+        return ((namespace == null || namespace.equals(blockTypeId.getNamespace()))
+                && (name == null || name.equals(blockTypeId.getName()))
+                && (shape == null || shape.equals(blockType.getShape()))
+                && (transparent == null || transparent.equals(blockType.isTransparent()))
+                && (obstacle == null || obstacle.equals(blockType.isObstacle())));
     }
 
     @Override

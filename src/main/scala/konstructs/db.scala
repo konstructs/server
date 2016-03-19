@@ -5,8 +5,8 @@ import scala.collection.mutable
 import akka.actor.{ Actor, ActorRef, Props }
 
 import konstructs.api.{ Position, BlockFactory, Box, BlockTypeId }
-import konstructs.api.messages.{ BoxQuery, BoxQueryResult,
-                                 ReplaceBlocks }
+import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ViewBlock,
+                                 ReplaceBlocks, ReplaceBlock }
 
 object Db {
   val ChunkSize = 32
@@ -32,7 +32,7 @@ object ShardPosition {
 }
 
 class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
-  blockFactory: BlockFactory)
+  jsonStorage: ActorRef, blockFactory: BlockFactory)
     extends Actor {
   import DbActor._
 
@@ -49,17 +49,15 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
     context.child(rid) match {
       case Some(a) => a
       case None =>
-        context.actorOf(ShardActor.props(self, shard, binaryStorage, generator, blockFactory), rid)
+        context.actorOf(ShardActor.props(self, shard, binaryStorage, jsonStorage, generator, blockFactory), rid)
     }
   }
 
   def receive = {
-    case p: DbActor.PutBlock =>
-      getShardActor(p.pos) forward p
-    case r: DbActor.RemoveBlock =>
-      getShardActor(r.pos) forward r
-    case v: DbActor.ViewBlock =>
-      getShardActor(v.pos) forward v
+    case r: ReplaceBlock =>
+      getShardActor(r.getPosition) forward r
+    case v: ViewBlock =>
+      getShardActor(v.getPosition) forward v
     case s: SendBlocks =>
       getShardActor(s.chunk) forward s
     case q: BoxQuery =>
@@ -81,13 +79,6 @@ object DbActor {
   case class SendBlocks(chunk: ChunkPosition)
   case class BlockList(chunk: ChunkPosition, data: ChunkData)
 
-  case class PutBlock(pos: Position, w: Int, initiator: ActorRef)
-  case class UnableToPut(pos: Position, w: Int, initiator: ActorRef)
-  case class RemoveBlock(pos: Position, initiator: ActorRef)
-  case class BlockRemoved(pos: Position, w: Int, initiator: ActorRef)
-  case class ViewBlock(pos: Position, initiator: ActorRef)
-  case class BlockViewed(pos: Position, w: Int, intitator: ActorRef)
-
   def splitList[T](placed: java.util.Map[Position, T]):
       Map[ChunkPosition, Map[Position, T]] = {
     val shards = mutable.HashMap[ChunkPosition, mutable.Map[Position, T]]()
@@ -105,8 +96,8 @@ object DbActor {
   }
 
   def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
-    blockFactory: BlockFactory) =
-    Props(classOf[DbActor], universe, generator, binaryStorage, blockFactory)
+    jsonStorage: ActorRef, blockFactory: BlockFactory) =
+    Props(classOf[DbActor], universe, generator, binaryStorage, jsonStorage, blockFactory)
 }
 
 class BoxQueryResultActor(initiator: ActorRef, blockFactory: BlockFactory,

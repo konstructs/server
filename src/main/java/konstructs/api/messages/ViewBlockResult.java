@@ -4,36 +4,35 @@ import konstructs.api.Block;
 import konstructs.api.Position;
 
 /**
- * PutBlock is a message that ask the world to put a given block
- * on a given position if the block presently there is VACUUM
- *
- * @see konstructs.api.BlockTypeId#VACUUM
+ * ViewBlockResult is a message received in response to ViewBlock message.
+ * It contains a copy of the block viewed, leaving the block itself
+ * intact in the world.
  */
-public final class PutBlock {
+public class ViewBlockResult {
     private final Position position;
     private final Block block;
 
     /**
-     * Construct an immutable PutBLock
-     * @param position The position the block is to be put onto
-     * @param block The block to be put
+     * Construct an immutable ViewBlockResult message
+     * @param position The position of the viewed block
+     * @param block A copy of the viewed block
      */
-    public PutBlock(Position position, Block block) {
+    public ViewBlockResult(Position position, Block block) {
         this.position = position;
         this.block = block;
     }
 
     /**
-     * Get the position onto which the block is to be put
-     * @return The position onto which the block is to be put
+     * Get the position of the viewed block
+     * @return The position of the viewed block
      */
     public Position getPosition() {
         return position;
     }
 
     /**
-     * Get the block to be put
-     * @return The block
+     * Get the copy of the viewed block
+     * @return A  copy of the viewed block
      */
     public Block getBlock() {
         return block;
@@ -44,10 +43,10 @@ public final class PutBlock {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        PutBlock putBlock = (PutBlock) o;
+        ViewBlockResult that = (ViewBlockResult) o;
 
-        if (!position.equals(putBlock.position)) return false;
-        return block.equals(putBlock.block);
+        if (!position.equals(that.position)) return false;
+        return block.equals(that.block);
 
     }
 
@@ -60,7 +59,7 @@ public final class PutBlock {
 
     @Override
     public String toString() {
-        return "PutBlock(" +
+        return "ViewBlockResult(" +
                 "position=" + position +
                 ", block=" + block +
                 ')';

@@ -25,8 +25,8 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      */
     public void onReceive(Object message) {
 
-        if (message instanceof BlockViewed) {
-            BlockViewed blockPosition = (BlockViewed)message;
+        if (message instanceof ViewBlockResult) {
+            ViewBlockResult blockPosition = (ViewBlockResult)message;
             onBlockViewed(blockPosition);
             return;
         }
@@ -65,9 +65,9 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
     }
 
     /**
-     * This function is called when we receive a BlockViewed message.
+     * This function is called when we receive a ViewBlockResult message.
      */
-    public void onBlockViewed(BlockViewed blockPosition) {
+    public void onBlockViewed(ViewBlockResult blockPosition) {
         System.out.println("called onBlockViewed: not implemented");
     }
 
@@ -121,23 +121,6 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      */
     public void replaceBlocks(Map<Position, BlockTypeId> blocks, BlockFilter filter) {
         universe.tell(new ReplaceBlocks(filter, blocks), getSelf());
-    }
-
-    /**
-     * Write a single block to the world.
-     * @param   b   A block
-     */
-    public void putBlock(PutBlock b) {
-        universe.tell(b, getSelf());
-    }
-
-    /**
-     * Write a single block to the world.
-     * @param   p   The position of the block
-     * @param   b   The block
-     */
-    public void putBlock(Position p, Block b) {
-        putBlock(new PutBlock(p, b));
     }
 
     /**

@@ -7,9 +7,9 @@ import konstructs.api.Position;
  * does not change the world, but rather returns a copy of the block.
  * This can be useful to inspect the world, even though there is of
  * course no guarantee that the block returned is still present when
- * the BlockViewed message is received.
+ * the ViewBlockResult message is received.
  *
- * @see BlockViewed
+ * @see ViewBlockResult
  */
 public class ViewBlock {
     private final Position position;

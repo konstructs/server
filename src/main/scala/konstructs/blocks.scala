@@ -7,7 +7,6 @@ import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 import konstructs.plugin.Plugin._
 
-import scala.collection.mutable
 import scala.collection.JavaConverters._
 
 import com.typesafe.config.{ Config => TypesafeConfig }
@@ -98,8 +97,6 @@ object BlockFactoryImpl {
 }
 
 
-case class Chunk(data: Array[Byte])
-
 class BlockMetaActor( val ns: String,
                       val jsonStorage: ActorRef,
                       configuredBlocks: Seq[(BlockTypeId, BlockType)],
@@ -108,83 +105,34 @@ class BlockMetaActor( val ns: String,
 
   import BlockMetaActor._
 
-  val PositionMappingFile = "position-mapping"
   val BlockIdFile = "block-id-mapping"
 
   val typeOfwMapping = new TypeToken[java.util.Map[Integer, BlockTypeId]](){}.getType
-  val typeOfPositionMapping = new TypeToken[java.util.Map[String, UUID]](){}.getType
 
-  var factory: BlockFactoryImpl = null
-  var positionMapping: java.util.Map[String, UUID] = null
-
-  def load(pos: Position, w: Int, remove: Boolean = false): Block = {
-    val uuid = if(remove) {
-      positionMapping.remove(str(pos))
-    } else {
-      positionMapping.get(str(pos))
-    }
-    factory.createBlock(uuid, w)
-  }
-
-  def store(pos: Position, block: Block): Int = {
-    if(block.getId != null) {
-      positionMapping.put(str(pos), block.getId)
-    }
-    factory.getW(block)
-  }
-
-  schedule(5000, StoreData)
-
-  loadGson(PositionMappingFile)
-
-  private def str(p: Position) = s"${p.getX}-${p.getY}-${p.getZ}"
-
-  def receive = {
-    case GsonLoaded(_, json) if json != null =>
-      positionMapping = gson.fromJson(json, typeOfPositionMapping)
-      context.become(loadBlockDb)
-      loadGson(BlockIdFile)
-    case GsonLoaded(_, _) =>
-      positionMapping = new java.util.HashMap()
-      context.become(loadBlockDb)
-      loadGson(BlockIdFile)
-    case _ =>
-      stash()
-  }
-
-  def storeDb() {
+  def storeDb(factory: BlockFactory) {
     storeGson(BlockIdFile, gson.toJsonTree(factory.getWMapping, typeOfwMapping))
   }
 
-  def loadBlockDb: Receive = {
+  loadGson(BlockIdFile)
+  def receive() = {
     case GsonLoaded(_, json) if json != null =>
       val defined: java.util.Map[Integer, BlockTypeId] = gson.fromJson(json, typeOfwMapping)
-      factory = BlockFactoryImpl(defined, configuredBlocks)
-      storeDb()
-      context.become(ready)
+      val factory = BlockFactoryImpl(defined, configuredBlocks)
+      storeDb(factory)
+      context.become(ready(factory))
       unstashAll()
     case GsonLoaded(_, _) =>
       val map = new java.util.HashMap[Integer, BlockTypeId]()
       map.put(0, BlockTypeId.VACUUM)
-      factory = BlockFactoryImpl(map, configuredBlocks)
-      storeDb()
-      context.become(ready)
+      val factory = BlockFactoryImpl(map, configuredBlocks)
+      storeDb(factory)
+      context.become(ready(factory))
       unstashAll()
     case _ =>
       stash()
   }
 
-  def ready: Receive = {
-    case PutBlockTo(pos, block, db) =>
-      db ! DbActor.PutBlock(pos, store(pos, block), sender)
-    case DbActor.BlockViewed(pos, w, initiator) =>
-      initiator ! new BlockViewed(pos, load(pos, w))
-    case DbActor.BlockRemoved(pos, w, initiator) =>
-      initiator ! new BlockRemoved(pos, load(pos, w, true))
-    case DbActor.UnableToPut(pos, w, initiator) =>
-      initiator ! new UnableToPut(pos, load(pos, w, true))
-    case StoreData =>
-      storeGson(PositionMappingFile, gson.toJsonTree(positionMapping, typeOfPositionMapping))
+  def ready(factory: BlockFactoryImpl): Receive = {
     case GetBlockFactory =>
       sender ! factory
     case GetTextures =>
@@ -196,10 +144,6 @@ class BlockMetaActor( val ns: String,
 object BlockMetaActor {
   val NumTextures = 16
   val TextureSize = 16
-
-  case object StoreData
-
-  case class PutBlockTo(pos: Position, block: Block, db: ActorRef)
 
   def textureFilename(idString: String): String =
     s"/textures/$idString.png"
