@@ -68,6 +68,16 @@ public final class Block {
     }
 
     /**
+     * Factory method that creates a new block with a given id and type
+     * @param id Id of the block
+     * @param t The block type
+     * @return A new block without an ID
+     */
+    public static Block create(UUID id, BlockTypeId type) {
+        return new Block(id, type);
+    }
+
+    /**
      * Constructs a immutable Block
      * @param id The ID that should be associated with the Block (may be null)
      * @param type The type of the block

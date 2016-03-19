@@ -37,15 +37,9 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
             return;
         }
 
-        if (message instanceof EventBlockRemoved) {
-            EventBlockRemoved removedBlock = (EventBlockRemoved)message;
-            onEventBlockRemoved(removedBlock);
-            return;
-        }
-
-        if (message instanceof EventBlockUpdated) {
-            EventBlockUpdated updatedBlock = (EventBlockUpdated)message;
-            onEventBlockUpdated(updatedBlock);
+        if (message instanceof BlockUpdateEvent) {
+            BlockUpdateEvent event = (BlockUpdateEvent)message;
+            onBlockUpdateEvent(event);
             return;
         }
 
@@ -148,19 +142,11 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
     }
 
     /**
-     * Called when a block is removed.
-     * @param block     The block
-     */
-    public void onEventBlockRemoved(EventBlockRemoved block) {
-        System.out.println("called onEventBlockRemoved: not implemented");
-    }
-
-    /**
      * Called when a block is updated/created
      * @param block     The block
      */
-    public void onEventBlockUpdated(EventBlockUpdated block) {
-        System.out.println("called onEventBlockUpdated: not implemented");
+    public void onBlockUpdateEvent(BlockUpdateEvent event) {
+        System.out.println("called onBlockUpdateEvent: not implemented");
     }
 
     /**

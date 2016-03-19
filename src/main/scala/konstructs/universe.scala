@@ -3,7 +3,7 @@ package konstructs
 import akka.actor.{ Actor, ActorRef, Props, Stash }
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 import konstructs.api._
-import konstructs.api.messages.{ EventBlockRemoved, EventBlockUpdated, ReplaceBlock, ViewBlock, ReplaceBlocks, BoxQuery }
+import konstructs.api.messages.{ ReplaceBlock, ViewBlock, ReplaceBlocks, BoxQuery }
 import collection.JavaConversions._
 
 class UniverseActor(
@@ -53,7 +53,7 @@ class UniverseActor(
   def receive = {
     case factory: BlockFactory =>
       generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage, factory))
-      db = context.actorOf(DbActor.props(self, generator, binaryStorage, jsonStorage, factory))
+      db = context.actorOf(DbActor.props(self, generator, binaryStorage, jsonStorage, blockUpdateEvents, factory))
       context.become(ready)
       unstashAll()
     case _ =>
@@ -82,7 +82,6 @@ class UniverseActor(
     case i: InteractPrimaryFilter =>
       if(i.message.pos != null) {
         db.tell(new ReplaceBlock(BlockFilterFactory.EMPTY, i.message.pos, Block.create(BlockTypeId.VACUUM)), i.message.sender)
-        blockUpdateEvents.foreach(e => e ! new EventBlockRemoved(Set(i.message.pos)))
       }
       if(i.message.block != null) {
         i.message.sender ! ReceiveStack(Stack.createFromBlock(i.message.block))
@@ -94,7 +93,6 @@ class UniverseActor(
       if(i.message.pos != null) {
         if(i.message.block != null) {
           db.tell(new ReplaceBlock(BlockFilterFactory.VACUUM, i.message.pos, i.message.block), i.message.sender)
-          blockUpdateEvents.foreach(e => e ! new EventBlockUpdated(Map(i.message.pos -> i.message.block.getType)))
         }
       } else {
         if(i.message.block != null) {
@@ -110,13 +108,9 @@ class UniverseActor(
       }
     case p: ReplaceBlock =>
       db.forward(p)
-      blockUpdateEvents.foreach(e => e ! new EventBlockUpdated(Map(p.getPosition -> p.getBlock.getType)))
     case v: ViewBlock =>
       db.forward(v)
     case r: ReplaceBlocks =>
-      blockUpdateEvents.foreach(e =>
-        e ! new EventBlockUpdated(r.getBlocks)
-      )
       db forward r
     case c: CreateInventory =>
       inventoryManager.forward(c)

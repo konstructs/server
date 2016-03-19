@@ -9,8 +9,11 @@ import akka.actor.{ Actor, Stash, ActorRef, Props }
 import com.google.gson.reflect.TypeToken
 
 import konstructs.api.{ BinaryLoaded, Position, Block, GsonLoaded,
-                        BlockTypeId, BlockFilter, BlockFactory }
-import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ReplaceBlock, ReplaceBlockResult, ViewBlock, ViewBlockResult }
+                        BlockTypeId, BlockFilter, BlockFactory,
+                        BlockUpdate }
+import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ReplaceBlock,
+                                 ReplaceBlockResult, ViewBlock, ViewBlockResult,
+                                 BlockUpdateEvent }
 import konstructs.utils.compress
 
 case class OpaqueFaces(pn: Boolean, pp: Boolean, qn: Boolean, qp: Boolean, kn: Boolean, kp: Boolean) {
@@ -181,7 +184,7 @@ object ChunkData {
 }
 
 class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef,
-                 val jsonStorage: ActorRef,
+                 val jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef],
                  chunkGenerator: ActorRef, blockFactory: BlockFactory)
     extends Actor with Stash with utils.Scheduled with BinaryStorage with JsonStorage {
   import ShardActor._
@@ -215,6 +218,19 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
 
   schedule(5000, StoreChunks)
 
+  def sendEvent(events: java.util.Map[Position, BlockUpdate]) {
+    val msg = new BlockUpdateEvent(events)
+    for(l <- blockUpdateEvents) {
+      l ! msg
+    }
+  }
+
+  def sendEvent(position: Position, from: Block, to: Block) {
+    val events = new java.util.HashMap[Position, BlockUpdate]()
+    events.put(position, new BlockUpdate(from, to))
+    sendEvent(events)
+  }
+
   def loadChunk(chunk: ChunkPosition): Option[ChunkData] = {
     val i = index(chunk)
     val blocks = chunks(i)
@@ -243,6 +259,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         val p = new Position(x, y, z)
         data(box.arrayIndex(p)) =
           blockFactory.getBlockTypeId(blockBuffer(ChunkData.index(chunk, p)).toInt)
+
       }
       sender ! new BoxQueryResult(box, data)
     }
@@ -272,14 +289,18 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
   }
 
   def replaceBlocks(chunk: ChunkPosition,
-    filter: BlockFilter, blocks: Map[Position, BlockTypeId]) {
+    filter: BlockFilter, blocks: Map[Position, BlockTypeId],
+    positionMapping: java.util.Map[String, UUID]) {
     loadChunk(chunk).map { c =>
       var isDirty = false
       c.unpackTo(blockBuffer)
+      val events = new java.util.HashMap[Position, BlockUpdate]()
       for((position, newTypeId) <- blocks) {
         val i = ChunkData.index(chunk, position)
         val typeId = blockFactory.getBlockTypeId(blockBuffer(i))
         if(filter.matches(typeId, blockFactory.getBlockType(typeId))) {
+          val id = positionMapping.remove(str(position))
+          events.put(position, new BlockUpdate(Block.create(id, typeId), Block.create(newTypeId)))
           blockBuffer(i) = blockFactory.getW(newTypeId).toByte
           isDirty = true
         }
@@ -288,6 +309,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         val data = ChunkData(blockBuffer, compressionBuffer)
         chunks(index(chunk)) = Some(data)
         db ! BlockList(chunk, data)
+        sendEvent(events)
         dirty = dirty + chunk
       }
     }
@@ -332,7 +354,9 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
           } else {
             positionMapping.remove(str(p))
           }
-          s ! new ReplaceBlockResult(p, new Block(oldId, typeId), true)
+          val oldBlock = Block.create(oldId, typeId)
+          s ! new ReplaceBlockResult(p, oldBlock, true)
+          sendEvent(p, oldBlock, block)
           blockFactory.getW(block).toByte
         } else {
           s ! new ReplaceBlockResult(p, block, false)
@@ -340,7 +364,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         }
       }
     case ReplaceBlocks(chunk, filter, blocks) =>
-      replaceBlocks(chunk, filter, blocks)
+      replaceBlocks(chunk, filter, blocks, positionMapping)
     case v: ViewBlock =>
       val s = sender
       val p = v.getPosition
@@ -391,7 +415,9 @@ object ShardActor {
   }
 
   def props(db: ActorRef, shard: ShardPosition,
-    binaryStorage: ActorRef, jsonStorage: ActorRef, chunkGenerator: ActorRef,
+    binaryStorage: ActorRef, jsonStorage: ActorRef,
+    blockUpdateEvents: Seq[ActorRef], chunkGenerator: ActorRef,
     blockFactory: BlockFactory) =
-    Props(classOf[ShardActor], db, shard, binaryStorage, jsonStorage, chunkGenerator, blockFactory)
+    Props(classOf[ShardActor], db, shard, binaryStorage, jsonStorage,
+      blockUpdateEvents, chunkGenerator, blockFactory)
 }

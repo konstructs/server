@@ -32,7 +32,7 @@ object ShardPosition {
 }
 
 class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
-  jsonStorage: ActorRef, blockFactory: BlockFactory)
+  jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef], blockFactory: BlockFactory)
     extends Actor {
   import DbActor._
 
@@ -49,7 +49,8 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
     context.child(rid) match {
       case Some(a) => a
       case None =>
-        context.actorOf(ShardActor.props(self, shard, binaryStorage, jsonStorage, generator, blockFactory), rid)
+        context.actorOf(ShardActor.props(self, shard, binaryStorage, jsonStorage, blockUpdateEvents,
+          generator, blockFactory), rid)
     }
   }
 
@@ -96,8 +97,8 @@ object DbActor {
   }
 
   def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
-    jsonStorage: ActorRef, blockFactory: BlockFactory) =
-    Props(classOf[DbActor], universe, generator, binaryStorage, jsonStorage, blockFactory)
+    jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef], blockFactory: BlockFactory) =
+    Props(classOf[DbActor], universe, generator, binaryStorage, jsonStorage, blockUpdateEvents, blockFactory)
 }
 
 class BoxQueryResultActor(initiator: ActorRef, blockFactory: BlockFactory,
