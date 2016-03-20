@@ -4,20 +4,20 @@ package konstructs.api;
  * Created by petter on 2016-03-19.
  */
 public class BlockUpdate {
-    private final Block from;
-    private final Block to;
+    private final Block before;
+    private final Block after;
 
-    public BlockUpdate(Block from, Block to) {
-        this.from = from;
-        this.to = to;
+    public BlockUpdate(Block before, Block after) {
+        this.before = before;
+        this.after = after;
     }
 
-    public Block getFrom() {
-        return from;
+    public Block getBefore() {
+        return before;
     }
 
-    public Block getTo() {
-        return to;
+    public Block getAfter() {
+        return after;
     }
 
     @Override
@@ -27,23 +27,23 @@ public class BlockUpdate {
 
         BlockUpdate that = (BlockUpdate) o;
 
-        if (!from.equals(that.from)) return false;
-        return to.equals(that.to);
+        if (!before.equals(that.before)) return false;
+        return after.equals(that.after);
 
     }
 
     @Override
     public int hashCode() {
-        int result = from.hashCode();
-        result = 31 * result + to.hashCode();
+        int result = before.hashCode();
+        result = 31 * result + after.hashCode();
         return result;
     }
 
     @Override
     public String toString() {
         return "BlockUpdate(" +
-                "from=" + from +
-                ", to=" + to +
+                "before=" + before +
+                ", after=" + after +
                 ')';
     }
 }
