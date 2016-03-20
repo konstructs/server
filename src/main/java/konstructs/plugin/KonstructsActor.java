@@ -3,13 +3,14 @@ package konstructs.plugin;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.ArrayList;
+
+import konstructs.api.messages.BoxQueryResult;
 import scala.concurrent.duration.Duration;
 
 import akka.actor.ActorRef;
 import akka.actor.UntypedActorWithStash;
 import konstructs.api.*;
-import konstructs.Box;
+import konstructs.api.messages.*;
 
 public abstract class KonstructsActor extends UntypedActorWithStash {
 
@@ -24,9 +25,9 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      */
     public void onReceive(Object message) {
 
-        if (message instanceof BlockViewed) {
-            BlockViewed blockPosition = (BlockViewed)message;
-            onBlockViewed(blockPosition);
+        if (message instanceof ViewBlockResult) {
+            ViewBlockResult blockPosition = (ViewBlockResult)message;
+            onViewBlockResult(blockPosition);
             return;
         }
 
@@ -36,15 +37,9 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
             return;
         }
 
-        if (message instanceof EventBlockRemoved) {
-            EventBlockRemoved removedBlock = (EventBlockRemoved)message;
-            onEventBlockRemoved(removedBlock);
-            return;
-        }
-
-        if (message instanceof EventBlockUpdated) {
-            EventBlockUpdated updatedBlock = (EventBlockUpdated)message;
-            onEventBlockUpdated(updatedBlock);
+        if (message instanceof BlockUpdateEvent) {
+            BlockUpdateEvent event = (BlockUpdateEvent)message;
+            onBlockUpdateEvent(event);
             return;
         }
 
@@ -53,6 +48,8 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
             onBoxQueryResult(result);
             return;
         }
+
+        unhandled(message);
     }
 
     /**
@@ -64,79 +61,32 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
     }
 
     /**
-     * This function is called when we receive a BlockViewed message.
+     * This function is called when we receive a ViewBlockResult message.
      */
-    public void onBlockViewed(BlockViewed blockPosition) {
-        System.out.println("called onBlockViewed: not implemented");
+    public void onViewBlockResult(ViewBlockResult blockPosition) {
+        unhandled(blockPosition);
     }
 
     /**
      * This function is called when we receive a ReceiveStack message.
      */
-    public void onReceiveStack(ReceiveStack receiveBlock) {
-        System.out.println("called onReceiveStack: not implemented");
+    public void onReceiveStack(ReceiveStack receiveStack) {
+        unhandled(receiveStack);
     }
 
     /**
-     * This function is called when we receive a BoxQueryResut
+     * This function is called when we receive a BoxQueryResult
      */
     public void onBoxQueryResult(BoxQueryResult result) {
-        System.out.println("called onBoxQueryResult: not implemented");
+        unhandled(result);
     }
 
     /**
-     * Write a block to the world replacing any existing block
-     * @param   position   The position at which the block will be written
-     * @param   block      A collection of blocks.
+     * Called when a block is updated/created
+     * @param block     The block
      */
-    public void replaceBlock(Position position, BlockTypeId block) {
-        replaceBlock(position, block, BlockFilterFactory.empty());
-    }
-
-    /**
-     * Write a block to the world
-     * @param   position   The position at which the block will be written
-     * @param   block      A collection of blocks.
-     * @param   filter     Filter that defines what type of block that can be replaced
-     */
-    public void replaceBlock(Position position, BlockTypeId block, BlockFilter filter) {
-        Map<Position, BlockTypeId> blocks = new HashMap<Position, BlockTypeId>();
-        blocks.put(position, block);
-        replaceBlocks(blocks, filter);
-    }
-
-    /**
-     * Write a collection of blocks to the world replacing any existing blocks
-     * @param   blocks      A collection of blocks.
-     */
-    public void replaceBlocks(Map<Position, BlockTypeId> blocks) {
-        replaceBlocks(blocks, BlockFilterFactory.empty());
-    }
-
-    /**
-     * Write a collection of blocks to the world.
-     * @param   blocks      A collection of blocks.
-     * @param   filter      Filter that defines what type of block that can be replaced
-     */
-    public void replaceBlocks(Map<Position, BlockTypeId> blocks, BlockFilter filter) {
-        universe.tell(new ReplaceBlocks(filter, blocks), getSelf());
-    }
-
-    /**
-     * Write a single block to the world.
-     * @param   b   A block
-     */
-    public void putBlock(PutBlock b) {
-        universe.tell(b, getSelf());
-    }
-
-    /**
-     * Write a single block to the world.
-     * @param   p   The position of the block
-     * @param   b   The block
-     */
-    public void putBlock(Position p, Block b) {
-        putBlock(new PutBlock(p, b));
+    public void onBlockUpdateEvent(BlockUpdateEvent event) {
+        unhandled(event);
     }
 
     /**
@@ -151,32 +101,8 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
      *  @param from Starting corner of box (this block is included)
      *  @param until End corner of box (this block is excluded)
      */
-    public void boxQuery(Position from, Position until) {
-        universe.tell(new BoxQuery(new Box(from, until)), getSelf());
-    }
-
-   /** Query for a box of blocks
-     *  @param center The center of the query
-     *  @param dimensions dimensions of the box
-     */
-    public void boxQueryAround(Position center, Position dimensions) {
-        universe.tell(new BoxQuery(Box.around(center, dimensions)), getSelf());
-    }
-
-    /**
-     * Called when a block is removed.
-     * @param block     The block
-     */
-    public void onEventBlockRemoved(EventBlockRemoved block) {
-        System.out.println("called onEventBlockRemoved: not implemented");
-    }
-
-    /**
-     * Called when a block is updated/created
-     * @param block     The block
-     */
-    public void onEventBlockUpdated(EventBlockUpdated block) {
-        System.out.println("called onEventBlockUpdated: not implemented");
+    public void boxQuery(Box box) {
+        universe.tell(box, getSelf());
     }
 
     /**

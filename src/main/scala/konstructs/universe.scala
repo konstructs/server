@@ -3,6 +3,7 @@ package konstructs
 import akka.actor.{ Actor, ActorRef, Props, Stash }
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 import konstructs.api._
+import konstructs.api.messages.{ ReplaceBlock, ViewBlock, ReplaceBlocks, BoxQuery }
 import collection.JavaConversions._
 
 class UniverseActor(
@@ -52,7 +53,7 @@ class UniverseActor(
   def receive = {
     case factory: BlockFactory =>
       generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage, factory))
-      db = context.actorOf(DbActor.props(self, generator, binaryStorage, factory))
+      db = context.actorOf(DbActor.props(self, generator, binaryStorage, jsonStorage, blockUpdateEvents, factory))
       context.become(ready)
       unstashAll()
     case _ =>
@@ -79,47 +80,37 @@ class UniverseActor(
       val filters = primaryInteractionFilters :+ self
       filters.head.forward(InteractPrimaryFilter(filters.tail, i))
     case i: InteractPrimaryFilter =>
-      i.message.pos.foreach { pos =>
-        db.tell(DbActor.RemoveBlock(pos, i.message.sender), blockManager)
-        blockUpdateEvents.foreach(e => e ! EventBlockRemoved(Set(pos)))
+      if(i.message.pos != null) {
+        db.tell(new ReplaceBlock(BlockFilterFactory.EMPTY, i.message.pos, Block.create(BlockTypeId.VACUUM)), i.message.sender)
       }
-      i.message.block foreach { block =>
-        i.message.sender ! ReceiveStack(Stack.fromBlock(block))
+      if(i.message.block != null) {
+        i.message.sender ! ReceiveStack(Stack.createFromBlock(i.message.block))
       }
     case i: InteractSecondary =>
       val filters = secondaryInteractionFilters :+ self
       filters.head.forward(InteractSecondaryFilter(filters.tail, i))
     case i: InteractSecondaryFilter =>
-      i.message.pos match {
-        case Some(pos) =>
-          i.message.block.foreach { block =>
-            blockManager.tell(BlockMetaActor.PutBlockTo(pos, block, db), i.message.sender)
-            blockUpdateEvents.foreach(e => e ! EventBlockUpdated(Map(pos -> block.`type`)))
-          }
-        case None =>
-          i.message.block.foreach { block =>
-            i.message.sender ! ReceiveStack(Stack.fromBlock(block))
-          }
+      if(i.message.pos != null) {
+        if(i.message.block != null) {
+          db.tell(new ReplaceBlock(BlockFilterFactory.VACUUM, i.message.pos, i.message.block), i.message.sender)
+        }
+      } else {
+        if(i.message.block != null) {
+          i.message.sender ! new ReceiveStack(Stack.createFromBlock(i.message.block))
+        }
       }
     case i: InteractTertiary =>
       val filters = tertiaryInteractionFilters :+ self
       filters.head.forward(InteractTertiaryFilter(filters.tail, i))
     case i: InteractTertiaryFilter =>
-      i.message.block foreach { block =>
-        i.message.sender ! ReceiveStack(Stack.fromBlock(block))
+      if(i.message.block != null) {
+        i.message.sender ! new ReceiveStack(Stack.createFromBlock(i.message.block))
       }
-    case PutBlock(pos, block) =>
-      blockManager.forward(BlockMetaActor.PutBlockTo(pos, block, db))
-      blockUpdateEvents.foreach(e => e ! EventBlockUpdated(Map(pos -> block.`type`)))
-    case RemoveBlock(pos) =>
-      db.tell(DbActor.RemoveBlock(pos, sender), blockManager)
-      blockUpdateEvents.foreach(e => e ! EventBlockRemoved(Set(pos)))
-    case ViewBlock(pos) =>
-      db.tell(DbActor.ViewBlock(pos, sender), blockManager)
+    case p: ReplaceBlock =>
+      db.forward(p)
+    case v: ViewBlock =>
+      db.forward(v)
     case r: ReplaceBlocks =>
-      blockUpdateEvents.foreach(e =>
-        e ! EventBlockUpdated(r.blocks)
-      )
       db forward r
     case c: CreateInventory =>
       inventoryManager.forward(c)

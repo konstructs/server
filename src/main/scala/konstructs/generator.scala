@@ -9,8 +9,8 @@ class GeneratorActor(jsonStorage: ActorRef, binaryStorage: ActorRef, factory: Bl
 
   val worlds = Seq[WorldEntry](
     WorldEntry(
-      Box(Position(-1536, 0, -1536), Position(1536, 512, 1536)),
-      context.actorOf(FlatWorldActor.props("Terra", Position(3072, 1024, 3072), factory, jsonStorage, binaryStorage))
+      new Box(new Position(-1536, 0, -1536), new Position(1536, 512, 1536)),
+      context.actorOf(FlatWorldActor.props("Terra", new Position(3072, 1024, 3072), factory, jsonStorage, binaryStorage))
     )
   )
 
@@ -18,9 +18,9 @@ class GeneratorActor(jsonStorage: ActorRef, binaryStorage: ActorRef, factory: Bl
 
   def receive = {
     case Generate(chunk) =>
-      worlds.filter(_.box.contains(chunk)).headOption match {
+      worlds.filter { b => BoxChunking.contains(b.box, chunk) }.headOption match {
         case Some(entry) =>
-          entry.actor forward World.Generate(chunk, entry.box.translate(chunk))
+          entry.actor forward World.Generate(chunk, BoxChunking.translate(entry.box, chunk))
         case None =>
           sender ! Generated(chunk, EmptyChunk)
       }

@@ -13,24 +13,27 @@ class KonstructingActor(konstructs: Set[Konstruct], konstructedFilters: Seq[Acto
 
   def bestMatch(pattern: Pattern): Option[Konstruct] = {
     konstructs.filter { k =>
-      pattern.contains(k.pattern)
-    }.toSeq.sortWith(_.pattern.complexity > _.pattern.complexity).headOption
+      pattern.contains(k.getPattern)
+    }.toSeq.sortWith(_.getPattern.getComplexity > _.getPattern.getComplexity).headOption
   }
 
   def receive = {
     case MatchPattern(pattern: Pattern) =>
       bestMatch(pattern).map { k =>
-        sender ! PatternMatched(k.result)
+        sender ! PatternMatched(k.getResult)
       }
     case KonstructPattern(pattern: Pattern) =>
       bestMatch(pattern) match {
         case Some(k) =>
           val filters = konstructedFilters :+ self
           filters.head.forward(
-            PatternKonstructedFilter(filters.tail, PatternKonstructed(k.pattern, k.result), sender)
+            PatternKonstructedFilter(
+              filters.tail,
+              PatternKonstructed(k.getPattern, k.getResult),
+              sender)
           )
         case None =>
-          sender ! PatternKonstructed(pattern, Stack.Empty)
+          sender ! PatternKonstructed(pattern, null)
         }
     case PatternKonstructedFilter(_, message, sender) =>
       sender ! message
@@ -48,16 +51,17 @@ object KonstructingActor {
     } else {
       1
     }
-    Stack(((0 until amount).map { i => Block.create(blockId) }).toList.asJava )
+    new Stack(
+      ((0 until amount).map { i => Block.create(blockId) }).toArray )
   }
 
   def parsePattern(config: TypesafeConfig): Pattern = {
     if(config.hasPath("stack")) {
-      Pattern(List(parseStack(config.getConfig("stack"))).asJava, 1, 1)
+      new Pattern(Array(parseStack(config.getConfig("stack"))), 1, 1)
     } else {
       val rows = config.getInt("rows")
       val columns = config.getInt("columns")
-      Pattern(config.getConfigList("stacks").asScala.map(parseStack).asJava, rows, columns)
+      new Pattern(config.getConfigList("stacks").asScala.map(parseStack).toArray, rows, columns)
     }
   }
 
@@ -68,7 +72,7 @@ object KonstructingActor {
     (for(konstruct <- konstructs) yield {
       val pattern = parsePattern(konstruct.getConfig("match"))
       val result = parseStack(konstruct.getConfig("result"))
-      Konstruct(pattern, result)
+      new Konstruct(pattern, result)
     }) toSet
   }
 
@@ -90,11 +94,11 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
 
   universe ! GetInventory(inventoryId)
 
-  var konstructing = Inventory.createEmpty(konstructingView.rows * konstructingView.columns)
-  var result = Inventory.createEmpty(resultView.rows * resultView.columns)
+  var konstructing = Inventory.createEmpty(konstructingView.getRows * konstructingView.getColumns)
+  var result = Inventory.createEmpty(resultView.getRows * resultView.getColumns)
 
   private def view(inventory: Inventory) =
-    View.Empty
+    View.EMPTY
       .add(inventoryView, inventory)
       .add(konstructingView, konstructing)
       .add(resultView, result)
@@ -102,9 +106,9 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
   private def updateKonstructing(k: Inventory) {
     konstructing = k
     result = Inventory.createEmpty(1)
-    konstructing.pattern(konstructingView).map { p =>
+    val p = konstructing.getPattern(konstructingView)
+    if(p != null)
       universe ! MatchPattern(p)
-    }
   }
 
   def receive = {
@@ -153,16 +157,19 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
         universe ! GetInventory(inventoryId)
       } else if(konstructingView.contains(to)) {
         val index = konstructingView.translate(to)
-        val oldStack = konstructing.stacks.get(index)
-        oldStack.acceptStack(stack) match {
-          case Some((newStack, left)) =>
-            if(left != Stack.Empty) {
-              sender ! ReceiveStack(left)
-            }
-            updateKonstructing(konstructing.withSlot(index, newStack))
-          case None =>
+        val oldStack = konstructing.getStack(index)
+        if(oldStack != null) {
+          if(oldStack.acceptsPartOf(stack)) {
+            val r = oldStack.acceptPartOf(stack)
+            sender ! ReceiveStack(r.getGiving)
+            updateKonstructing(konstructing.withSlot(index, r.getAccepting()))
+          } else {
             updateKonstructing(konstructing.withSlot(index, stack))
             sender ! ReceiveStack(oldStack)
+          }
+        } else {
+          updateKonstructing(konstructing.withSlot(index, stack))
+          sender ! ReceiveStack(null)
         }
         player ! UpdateView(view(inventory))
       } else {
@@ -174,21 +181,21 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
         universe.forward(RemoveStack(inventoryId, inventoryView.translate(from)))
         universe ! GetInventory(inventoryId)
       } else if(konstructingView.contains(from)) {
-        val stack = konstructing.stacks.get(konstructingView.translate(from))
+        val stack = konstructing.getStack(konstructingView.translate(from))
         updateKonstructing(konstructing.withoutSlot(konstructingView.translate(from)))
         sender ! ReceiveStack(stack)
         player ! UpdateView(view(inventory))
       } else if(resultView.contains(from)) {
-        konstructing.pattern(konstructingView) match {
-          case Some(pattern) =>
-            if(!result.isEmpty) {
-              context.become(awaitKonstruction(inventory))
-              universe ! KonstructPattern(pattern)
-            } else {
-              sender ! ReceiveStack(Stack.Empty)
-            }
-          case None =>
-            sender ! ReceiveStack(Stack.Empty)
+        val pattern = konstructing.getPattern(konstructingView)
+        if(pattern != null) {
+          if(!result.isEmpty) {
+            context.become(awaitKonstruction(inventory))
+            universe ! KonstructPattern(pattern)
+          } else {
+            sender ! ReceiveStack(null)
+          }
+        } else {
+          sender ! ReceiveStack(null)
         }
       }
     case CloseInventory =>

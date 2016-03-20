@@ -7,109 +7,132 @@ import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 import konstructs.plugin.Plugin._
 
-import scala.collection.mutable
 import scala.collection.JavaConverters._
 
 import com.typesafe.config.{ Config => TypesafeConfig }
 import akka.actor.{ Actor, Props, ActorRef, Stash }
 
-import spray.json._
+import com.google.gson.reflect.TypeToken
 
 import konstructs.api._
+import konstructs.api.messages._
 import konstructs.plugin.{ListConfig, PluginConstructor, Config}
 
-case class Chunk(data: Array[Byte])
+case class BlockFactoryImpl(blockTypeIdMapping: java.util.Map[BlockTypeId, Integer],
+  wMapping: java.util.Map[Integer, BlockTypeId], blockTypes: java.util.Map[BlockTypeId, BlockType])
+    extends BlockFactory {
 
-class BlockMetaActor(
-                      val ns: String,
+  def createBlock(uuid: UUID, w: Int): Block = {
+    val t = wMapping.get(w)
+    new Block(uuid, t)
+  }
+
+  def createBlock(w: Int): Block = {
+    val t = wMapping.get(w)
+    new Block(null, t)
+  }
+
+  def getW(block: Block) =
+    blockTypeIdMapping.get(block.getType)
+
+  def getW(stack: Stack) =
+    blockTypeIdMapping.get(stack.getTypeId)
+
+  def getW(typeId: BlockTypeId) =
+    blockTypeIdMapping.get(typeId)
+
+  def getBlockType(id: BlockTypeId): BlockType = {
+    blockTypes.get(id)
+  }
+
+  def getBlockTypeId(w: Int) =
+    wMapping.get(w)
+
+  def getBlockTypes() =
+    blockTypes
+
+  def getWMapping() =
+    wMapping
+
+}
+
+object BlockFactoryImpl {
+
+    private def findFreeW(wMapping: java.util.Map[Integer, BlockTypeId]): Integer = {
+    for(w <- 0 until 256) {
+      if(!wMapping.containsKey(w)) {
+        return w
+      }
+    }
+    throw new IllegalStateException("No free w to allocate for new block type")
+  }
+
+  private def addBlockType(blockTypeIdMapping: java.util.Map[BlockTypeId, Integer],
+    wMapping: java.util.Map[Integer, BlockTypeId],
+    blockTypeMapping: java.util.Map[BlockTypeId, BlockType]): PartialFunction[(BlockTypeId, BlockType), Unit] = {
+    case (t, bt) =>
+      val foundW = blockTypeIdMapping.get(t)
+      val w = if(foundW != null) {
+        foundW
+      } else {
+        findFreeW(wMapping)
+      }
+      blockTypeIdMapping.put(t, w)
+      wMapping.put(w, t)
+      blockTypeMapping.put(t, bt)
+  }
+
+  def apply(defined: java.util.Map[Integer, BlockTypeId], configured: Seq[(BlockTypeId, BlockType)]): BlockFactoryImpl = {
+    val wMapping = new java.util.HashMap[Integer, BlockTypeId]()
+    val reverse = new java.util.HashMap[BlockTypeId, Integer]()
+    val tMapping = new java.util.HashMap[BlockTypeId, BlockType]()
+
+    for((w, tId) <- defined.asScala) {
+      wMapping.put(w, tId)
+      reverse.put(tId, w)
+    }
+    configured.map(addBlockType(reverse, wMapping, tMapping))
+    apply(reverse, wMapping, tMapping)
+  }
+}
+
+
+class BlockMetaActor( val ns: String,
                       val jsonStorage: ActorRef,
                       configuredBlocks: Seq[(BlockTypeId, BlockType)],
                       textures: Array[Byte]
                     ) extends Actor with Stash with utils.Scheduled with JsonStorage {
 
-  import KonstructsJsonProtocol._
   import BlockMetaActor._
 
-  val PositionMappingFile = "position-mapping"
   val BlockIdFile = "block-id-mapping"
 
-  implicit val positionFormat = jsonFormat3(Position.apply)
+  val typeOfwMapping = new TypeToken[java.util.Map[Integer, BlockTypeId]](){}.getType
 
-  val blockTypeIdMapping = mutable.HashMap[BlockTypeId, Int]()
-  val wMapping = mutable.HashMap[Int, BlockTypeId]()
-
-  var factory: BlockFactory = null
-  var positionMapping: mutable.HashMap[String, UUID] = null
-
-  def load(pos: Position, w: Int, remove: Boolean = false): Block = {
-    val uuid = if(remove) {
-      positionMapping.remove(str(pos))
-    } else {
-      positionMapping.get(str(pos))
-    }
-    factory.block(uuid, w)
+  def storeDb(factory: BlockFactory) {
+    storeGson(BlockIdFile, gson.toJsonTree(factory.getWMapping, typeOfwMapping))
   }
 
-  def store(pos: Position, block: Block): Int = {
-    if(block.id.isDefined) {
-      positionMapping += str(pos) -> block.id.get
-    }
-    factory.w(block)
-  }
-
-  schedule(5000, StoreData)
-
-  loadJson(PositionMappingFile)
-
-  private def str(p: Position) = s"${p.x}-${p.y}-${p.z}"
-
-  def receive = {
-    case JsonLoaded(_, Some(json)) =>
-      val m = json.convertTo[Map[String, UUID]]
-      positionMapping = mutable.HashMap[String, UUID](m.toSeq: _*)
-      context.become(loadBlockDb)
-      loadJson(BlockIdFile)
-    case JsonLoaded(_, None) =>
-      positionMapping = mutable.HashMap[String, UUID]()
-      context.become(loadBlockDb)
-      loadJson(BlockIdFile)
-    case _ =>
-      stash()
-  }
-
-  def storeDb() {
-    storeJson(BlockIdFile, factory.wMapping.toSeq.map {
-      case (k, v) => k.toString -> v
-    }.toMap.toJson)
-  }
-
-  def loadBlockDb: Receive = {
-    case JsonLoaded(_, Some(json)) =>
-      val defined = json.convertTo[Map[String, BlockTypeId]]
-      factory = BlockFactory(defined, configuredBlocks)
-      storeDb()
-      context.become(ready)
+  loadGson(BlockIdFile)
+  def receive() = {
+    case GsonLoaded(_, json) if json != null =>
+      val defined: java.util.Map[Integer, BlockTypeId] = gson.fromJson(json, typeOfwMapping)
+      val factory = BlockFactoryImpl(defined, configuredBlocks)
+      storeDb(factory)
+      context.become(ready(factory))
       unstashAll()
-    case JsonLoaded(_, None) =>
-      factory = BlockFactory(Map[String, BlockTypeId]("0" -> BlockTypeId("org/konstructs", "vacuum")), configuredBlocks)
-      storeDb()
-      context.become(ready)
+    case GsonLoaded(_, _) =>
+      val map = new java.util.HashMap[Integer, BlockTypeId]()
+      map.put(0, BlockTypeId.VACUUM)
+      val factory = BlockFactoryImpl(map, configuredBlocks)
+      storeDb(factory)
+      context.become(ready(factory))
       unstashAll()
     case _ =>
       stash()
   }
 
-  def ready: Receive = {
-    case PutBlockTo(pos, block, db) =>
-      db ! DbActor.PutBlock(pos, store(pos, block), sender)
-    case DbActor.BlockViewed(pos, w, initiator) =>
-      initiator ! BlockViewed(pos, load(pos, w))
-    case DbActor.BlockRemoved(pos, w, initiator) =>
-      initiator ! BlockRemoved(pos, load(pos, w, true))
-    case DbActor.UnableToPut(pos, w, initiator) =>
-      initiator ! UnableToPut(pos, load(pos, w, true))
-    case StoreData =>
-      storeJson(PositionMappingFile, positionMapping.toMap.toJson)
+  def ready(factory: BlockFactoryImpl): Receive = {
     case GetBlockFactory =>
       sender ! factory
     case GetTextures =>
@@ -121,10 +144,6 @@ class BlockMetaActor(
 object BlockMetaActor {
   val NumTextures = 16
   val TextureSize = 16
-
-  case object StoreData
-
-  case class PutBlockTo(pos: Position, block: Block, db: ActorRef)
 
   def textureFilename(idString: String): String =
     s"/textures/$idString.png"
@@ -150,20 +169,20 @@ object BlockMetaActor {
     }
     val shape = if(config.hasPath("shape")) {
       val s = config.getString("shape")
-      if(s != BlockType.ShapeBlock && s != BlockType.ShapePlant) {
-        throw new IllegalStateException(s"Block shape must be ${BlockType.ShapeBlock} or ${BlockType.ShapePlant}")
+      if(s != BlockType.SHAPE_BLOCK && s != BlockType.SHAPE_PLANT) {
+        throw new IllegalStateException(s"Block shape must be ${BlockType.SHAPE_BLOCK} or ${BlockType.SHAPE_PLANT}")
       }
       s
     } else {
-      BlockType.ShapeBlock
+      BlockType.SHAPE_BLOCK
     }
     val blockType = if(config.hasPath("faces")) {
       val faces = config.getIntList("faces")
       if(faces.size != 6) throw new IllegalStateException("There must be exactly 6 faces")
-      BlockType(faces.asScala.map(_ + texturePosition).asJava, shape, isObstacle, false)
+      new BlockType(faces.asScala.map(_ + texturePosition).toArray, shape, isObstacle, false)
     } else {
       /* Default is to assume only one texture for all faces */
-      BlockType(List(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition).asJava, shape, isObstacle, false)
+      new BlockType(Array(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition), shape, isObstacle, false)
     }
     typeId -> blockType
   }
@@ -189,8 +208,8 @@ object BlockMetaActor {
     val texturesGraphics = textures.getGraphics()
     val blockSeq = (for((idString, block) <- blocks) yield {
       val t = blockType(idString, block, texturePosition)
-      val maxIndex = t._2.faces.asScala.max + 1
-      val numTextures = maxIndex - t._2.faces.asScala.min
+      val maxIndex = t._2.getFaces().max + 1
+      val numTextures = maxIndex - t._2.getFaces().min
       val img = loadTexture(idString)
       var transparent = false
       for(i <- 0 until numTextures) {
@@ -199,7 +218,7 @@ object BlockMetaActor {
         insertTexture(texturePosition + i, texture, texturesGraphics)
       }
       texturePosition = maxIndex
-      t._1 -> t._2.copy(isTransparent = transparent)
+      t._1 -> t._2.withTransparent(transparent)
     }) toSeq
     val texturesBinary = new ByteArrayOutputStream()
 

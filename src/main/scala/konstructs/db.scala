@@ -4,8 +4,9 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import akka.actor.{ Actor, ActorRef, Props }
 
-import konstructs.api.{ Position, BlockFactory, BoxQuery, BoxData, BlockTypeId,
-                        BoxQueryRawResult, BoxQueryResult, ReplaceBlocks }
+import konstructs.api.{ Position, BlockFactory, Box, BlockTypeId }
+import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ViewBlock,
+                                 ReplaceBlocks, ReplaceBlock }
 
 object Db {
   val ChunkSize = 32
@@ -31,7 +32,7 @@ object ShardPosition {
 }
 
 class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
-  blockFactory: BlockFactory)
+  jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef], blockFactory: BlockFactory)
     extends Actor {
   import DbActor._
 
@@ -48,28 +49,27 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
     context.child(rid) match {
       case Some(a) => a
       case None =>
-        context.actorOf(ShardActor.props(self, shard, binaryStorage, generator, blockFactory), rid)
+        context.actorOf(ShardActor.props(self, shard, binaryStorage, jsonStorage, blockUpdateEvents,
+          generator, blockFactory), rid)
     }
   }
 
   def receive = {
-    case p: DbActor.PutBlock =>
-      getShardActor(p.pos) forward p
-    case r: DbActor.RemoveBlock =>
-      getShardActor(r.pos) forward r
-    case v: DbActor.ViewBlock =>
-      getShardActor(v.pos) forward v
+    case r: ReplaceBlock =>
+      getShardActor(r.getPosition) forward r
+    case v: ViewBlock =>
+      getShardActor(v.getPosition) forward v
     case s: SendBlocks =>
       getShardActor(s.chunk) forward s
     case q: BoxQuery =>
-      val chunkBoxes = q.box.chunked
+      val chunkBoxes = BoxChunking.chunked(q.getBox)
       val resultActor = context.actorOf(BoxQueryResultActor.props(sender, q, chunkBoxes, blockFactory))
       chunkBoxes.foreach { box =>
-        getShardActor(box.start).tell(BoxQuery(box), resultActor)
+        getShardActor(box.getFrom).tell(new BoxQuery(box), resultActor)
       }
-    case ReplaceBlocks(filter, blocks) =>
-      for((chunk, blocks) <- splitList[BlockTypeId](blocks)) {
-        getShardActor(chunk) forward ShardActor.ReplaceBlocks(chunk, filter, blocks)
+    case r: ReplaceBlocks =>
+      for((chunk, blocks) <- splitList[BlockTypeId](r.getBlocks)) {
+        getShardActor(chunk) forward ShardActor.ReplaceBlocks(chunk, r.getFilter, blocks)
       }
     case b: BlockList =>
       universe ! b
@@ -79,13 +79,6 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
 object DbActor {
   case class SendBlocks(chunk: ChunkPosition)
   case class BlockList(chunk: ChunkPosition, data: ChunkData)
-
-  case class PutBlock(pos: Position, w: Int, initiator: ActorRef)
-  case class UnableToPut(pos: Position, w: Int, initiator: ActorRef)
-  case class RemoveBlock(pos: Position, initiator: ActorRef)
-  case class BlockRemoved(pos: Position, w: Int, initiator: ActorRef)
-  case class ViewBlock(pos: Position, initiator: ActorRef)
-  case class BlockViewed(pos: Position, w: Int, intitator: ActorRef)
 
   def splitList[T](placed: java.util.Map[Position, T]):
       Map[ChunkPosition, Map[Position, T]] = {
@@ -104,26 +97,26 @@ object DbActor {
   }
 
   def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
-    blockFactory: BlockFactory) =
-    Props(classOf[DbActor], universe, generator, binaryStorage, blockFactory)
+    jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef], blockFactory: BlockFactory) =
+    Props(classOf[DbActor], universe, generator, binaryStorage, jsonStorage, blockUpdateEvents, blockFactory)
 }
 
 class BoxQueryResultActor(initiator: ActorRef, blockFactory: BlockFactory,
   query: BoxQuery, boxes: Set[Box])
     extends Actor {
-  var receivedBoxes: Set[BoxData[Int]] = Set()
+  var receivedBoxes: Set[BoxQueryResult] = Set()
 
   def receive = {
-    case r: BoxQueryRawResult =>
-      receivedBoxes += r.result
-      if(receivedBoxes.map(_.box) == boxes) {
-        val data = new Array[BlockTypeId](query.box.blocks)
+    case r: BoxQueryResult =>
+      receivedBoxes += r
+      if(receivedBoxes.map(_.getBox) == boxes) {
+        val data = new Array[BlockTypeId](query.getBox.getNumberOfBlocks)
         for(subData <- receivedBoxes) {
-          for((position, typeId)  <- subData.toPlaced.asScala) {
-            data(query.box.index(position)) = blockFactory.wMapping(typeId)
+          for((position, typeId)  <- subData.getAsMap.asScala) {
+            data(query.getBox.arrayIndex(position)) = typeId
           }
         }
-        initiator ! BoxQueryResult(BoxData(query.box, java.util.Arrays.asList(data:_*)))
+        initiator ! new BoxQueryResult(query.getBox, data)
         context.stop(self)
       }
   }
