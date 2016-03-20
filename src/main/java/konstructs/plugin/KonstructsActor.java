@@ -106,6 +106,47 @@ public abstract class KonstructsActor extends UntypedActorWithStash {
     }
 
     /**
+     * Replace all blocks that matches a filter with blocks from a
+     * position to BlockTypeId mapping
+     * @param filter The filter to be matched for each block to be replaced
+     * @param blocks The blocks to replace with
+     */
+    public void replaceBlocks(BlockFilter filter, Map<Position, BlockTypeId> blocks) {
+        getUniverse().tell(new ReplaceBlocks(filter, blocks), getSelf());
+    }
+
+    /**
+     * Replace any block type at a given position with a block of
+     * VACUUM.  This can be seen as a way to "remove" blocks.
+     * @param position The position of the block to be replaced
+     */
+    public void replaceWithVacuum(Position position) {
+        replaceWithVacuum(BlockFilterFactory.VACUUM, position);
+    }
+
+    /**
+     * Replace a block that matches the filter at a given position
+     * with a block of VACUUM.  This can be seen as a way to
+     * "remove" blocks.
+     * @param filter The filter to be matched before replacing the block
+     * @param position The position of the block to be replaced
+     */
+    public void replaceWithVacuum(BlockFilter filter, Position position) {
+        getUniverse().tell(new ReplaceBlock(filter, position, Block.create(BlockTypeId.VACUUM)), getSelf());
+    }
+
+    /**
+     * Replace a block if it is VACUUM. This can be seen as a way to
+     * only add a block to the world if what is already there is
+     * VACUUM.
+     * @param position The position of the block to try to replace
+     * @param block The block to be added in the other blocks place
+     */
+    public void replaceVacuumBlock(Position position, Block block) {
+        getUniverse().tell(new ReplaceBlock(BlockFilterFactory.VACUUM, position, block), getSelf());
+    }
+
+    /**
      * Schedule a message to my self
      * @param   obj  The object to send
      * @param   msec Time to wait, in milliseconds
