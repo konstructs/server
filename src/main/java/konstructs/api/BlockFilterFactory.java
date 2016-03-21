@@ -15,9 +15,29 @@ package konstructs.api;
  */
 public class BlockFilterFactory {
     /**
-     * The EMPTY BlockFilter matches everything.
+     * The EVERYTHING BlockFilter matches everything.
      */
-    public static BlockFilterNode EMPTY = new BlockFilterNode(null, null, null, null, null);
+    public static final BlockFilterNode EVERYTHING = new BlockFilterNode(null, null, null, null, null);
+
+    /**
+     * The EMPTY BlockFilter is an alias for the EVERYTHING BlockFilter
+     */
+    public static final BlockFilterNode EMPTY = EVERYTHING;
+
+    /**
+     * The NOTHING BlockFilter matches nothing.
+     */
+    public static final BlockFilter NOTHING = new BlockFilter() {
+            @Override
+            public boolean matches(BlockTypeId blockTypeId, BlockType blockType) {
+                return false;
+            }
+
+            @Override
+            public BlockFilter or(BlockFilter filter) {
+                return filter;
+            }
+        };
 
     /**
      * The VACUUM BlockFilter matches only VACUUM.
