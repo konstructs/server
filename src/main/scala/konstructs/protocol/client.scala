@@ -5,7 +5,7 @@ import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 import akka.io.Tcp
 import akka.io.TcpPipelineHandler.{Init, WithinActorContext}
 import akka.util.ByteString
-import konstructs.{ PlayerActor, UniverseActor, DbActor }
+import konstructs.{ PlayerActor, UniverseActor, DbActor, ChunkPosition }
 import konstructs.api._
 
 class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef,
@@ -36,7 +36,7 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
       player.actor ! Position(floats(0), floats(1), floats(2), floats(3), floats(4))
     } else if(command.startsWith("C,")) {
       val ints = readData(_.toInt, command.drop(2))
-      player.actor ! IncreaseChunks(ints(0))
+      player.actor ! DbActor.SendBlocks(ChunkPosition(ints(0), ints(1), ints(2)))
     } else if(command.startsWith("A,")) {
       val ints = readData(_.toInt, command.drop(2))
       player.actor ! ActivateBeltItem(ints(0))

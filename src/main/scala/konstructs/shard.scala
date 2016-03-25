@@ -16,91 +16,10 @@ import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ReplaceBlock,
                                  BlockUpdateEvent }
 import konstructs.utils.compress
 
-case class OpaqueFaces(pn: Boolean, pp: Boolean, qn: Boolean, qp: Boolean, kn: Boolean, kp: Boolean) {
-  import OpaqueFaces._
-  def toByte = {
-    var v = 0
-    if(pn) {
-      v += PN
-    }
-    if(pp) {
-      v += PP
-    }
-    if(qn) {
-      v += QN
-    }
-    if(qp) {
-      v += QP
-    }
-    if(kn) {
-      v += KN
-    }
-    if(kp) {
-      v += KP
-    }
-    v.toByte
-  }
-}
-
-object OpaqueFaces {
-  import ChunkData._
-  val PN = 0x01
-  val PP = 0x02
-  val QN = 0x04
-  val QP = 0x08
-  val KN = 0x10
-  val KP = 0x20
-
-  def apply(blockBuffer: Array[Byte]): OpaqueFaces = {
-    val pn = !(for(
-      y <- 0 until Db.ChunkSize;
-      z <- 0 until Db.ChunkSize) yield {
-      val x = 0
-      isOpaque(blockBuffer(index(x, y, z)))
-    }).exists(!_)
-    val pp = !(for(
-      y <- 0 until Db.ChunkSize;
-      z <- 0 until Db.ChunkSize) yield {
-      val x = Db.ChunkSize - 1
-      isOpaque(blockBuffer(index(x, y, z)))
-    }).exists(!_)
-    val kn = !(for(
-      x <- 0 until Db.ChunkSize;
-      z <- 0 until Db.ChunkSize) yield {
-      val y = 0
-      isOpaque(blockBuffer(index(x, y, z)))
-    }).exists(!_)
-    val kp = !(for(
-      x <- 0 until Db.ChunkSize;
-      z <- 0 until Db.ChunkSize) yield {
-      val y = Db.ChunkSize - 1
-      isOpaque(blockBuffer(index(x, y, z)))
-    }).exists(!_)
-    val qn = !(for(
-      x <- 0 until Db.ChunkSize;
-      y <- 0 until Db.ChunkSize) yield {
-      val z = 0
-      isOpaque(blockBuffer(index(x, y, z)))
-    }).exists(!_)
-    val qp = !(for(
-      x <- 0 until Db.ChunkSize;
-      y <- 0 until Db.ChunkSize) yield {
-      val z = Db.ChunkSize - 1
-      isOpaque(blockBuffer(index(x, y, z)))
-    }).exists(!_)
-    apply(pn, pp, qn, qp, kn, kp)
-  }
-
-  def apply(data: Byte): OpaqueFaces = {
-    apply((data & PN) > 0, (data & PP) > 0, (data & QN) > 0, (data & QP) > 0, (data & KN) > 0, (data & KP) > 0)
-  }
-}
-
 case class ChunkData(data: Array[Byte]) {
   import ChunkData._
   import Db._
 
-  val faces = OpaqueFaces(data(1))
   val version = data(0)
 
   def unpackTo(blockBuffer: Array[Byte]) {
@@ -113,62 +32,15 @@ case class ChunkData(data: Array[Byte]) {
     blockBuffer(index(c, p))
   }
 
-  def chunks(position: ChunkPosition): Set[ChunkPosition] = {
-    val chunks = mutable.Set[ChunkPosition]()
-    if(!faces.pn) {
-      chunks += position.copy(p = position.p - 1)
-    }
-    if(!faces.pp) {
-      chunks += position.copy(p = position.p + 1)
-    }
-    if(!faces.qn) {
-      chunks += position.copy(q = position.q - 1)
-    }
-    if(!faces.qp) {
-      chunks += position.copy(q = position.q + 1)
-    }
-    if(!faces.kn) {
-      chunks += position.copy(k = position.k - 1)
-    }
-    if(!faces.kp) {
-      chunks += position.copy(k = position.k + 1)
-    }
-    chunks.toSet
-  }
 }
 
 object ChunkData {
-  import Db._
-  val EMPTY = 0
-  val GLASS = 10
-  val LEAVES = 15
-  val TALL_GRASS = 17
-  val YELLOW_FLOWER = 18
-  val RED_FLOWER = 19
-  val PURPLE_FLOWER = 20
-  val SUN_FLOWER = 21
-  val WHITE_FLOWER = 22
-  val BLUE_FLOWER = 23
 
   def apply(blocks: Array[Byte], buffer: Array[Byte]): ChunkData = {
-    val compressed = compress.deflate(blocks, buffer, Header)
+    val compressed = compress.deflate(blocks, buffer, Db.Header)
     compressed(0) = Db.Version
-    compressed(1) = OpaqueFaces(blocks).toByte
+    compressed(1) = 0.toByte
     apply(compressed)
-  }
-
-  def isOpaque(w: Byte): Boolean = w match {
-    case EMPTY => false
-    case GLASS => false
-    case LEAVES => false
-    case TALL_GRASS => false
-    case YELLOW_FLOWER => false
-    case RED_FLOWER => false
-    case PURPLE_FLOWER => false
-    case SUN_FLOWER => false
-    case WHITE_FLOWER => false
-    case BLUE_FLOWER => false
-    case _ => true
   }
 
   def index(x: Int, y: Int, z: Int): Int =
