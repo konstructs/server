@@ -126,6 +126,8 @@ class PlayerActor(
     /* Send belt*/
     client ! BeltUpdate(data.inventory.getStacks)
     client ! BeltActiveUpdate(data.active.toString)
+    /* Send time */
+    client ! protocol.Time(new java.util.Date().getTime / 1000L)
     ready
   }
 

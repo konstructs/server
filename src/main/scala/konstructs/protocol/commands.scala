@@ -12,3 +12,4 @@ case class Position(x: Float, y: Float, z: Float, rx: Float, ry: Float) {
   def toApiPosition = new konstructs.api.Position(x.toInt, y.toInt, z.toInt)
 }
 case class Say(message: String)
+case class Time(seconds: Long)
