@@ -115,6 +115,8 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
         sendHeldStack(pipe, stack.size, factory.getW(stack))
       else
         sendHeldStack(pipe, 0, -1)
+    case Time(t) =>
+      sendTime(pipe, t)
     case _: Tcp.ConnectionClosed =>
       player.actor ! PoisonPill
       context.stop(self)
@@ -122,6 +124,10 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
 
   def sendPlayerNick(pipe: ActorRef, pid: Int, nick: String) {
     send(pipe, s"N,$pid,$nick")
+  }
+
+  def sendTime(pipe: ActorRef, t: Long) {
+    send(pipe, s"T,$t")
   }
 
   def sendSaid(pipe: ActorRef, msg: String) {
