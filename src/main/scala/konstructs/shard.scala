@@ -187,7 +187,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
                  val jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef],
                  chunkGenerator: ActorRef, blockFactory: BlockFactory)
     extends Actor with Stash with utils.Scheduled with BinaryStorage with JsonStorage {
-  import ShardActor._
+  import ShardActor.{ ReplaceBlocks, index, StoreChunks, str }
   import GeneratorActor._
   import DbActor._
   import Db._
@@ -205,16 +205,15 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
   private def chunkId(c: ChunkPosition): String =
     s"${c.p}/${c.q}/${c.k}"
 
-  private val shardId = s"${shard.m}-${shard.n}-${shard.o}"
+  private val shardId = ShardActor.shardId(shard)
 
-  private val positionMappingFile = s"${shardId}-position-mapping"
+  private val positionMappingFile = ShardActor.positionMappingFile(shardId)
+
 
   private def chunkFromId(id: String): ChunkPosition = {
     val pqk = id.split('/').map(_.toInt)
     ChunkPosition(pqk(0), pqk(1), pqk(2))
   }
-
-  private def str(p: Position) = s"${p.getX}-${p.getY}-${p.getZ}"
 
   schedule(5000, StoreChunks)
 
@@ -303,6 +302,8 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
           events.put(position, new BlockUpdate(Block.create(id, typeId), Block.create(newTypeId)))
           blockBuffer(i) = blockFactory.getW(newTypeId).toByte
           isDirty = true
+          if(id != null)
+            positionMappingDirty = true
         }
       }
       if(isDirty) {
@@ -350,9 +351,13 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         val typeId = blockFactory.getBlockTypeId(old)
         if(filter.matches(typeId, blockFactory.getBlockType(typeId))) {
           val oldId = if(block.getId() != null) {
+            positionMappingDirty = true
             positionMapping.put(str(p), block.getId())
           } else {
-            positionMapping.remove(str(p))
+            val id = positionMapping.remove(str(p))
+            if(id != null)
+              positionMappingDirty = true
+            id
           }
           val oldBlock = Block.create(oldId, typeId)
           s ! new ReplaceBlockResult(p, oldBlock, true)
@@ -403,6 +408,12 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
 
 object ShardActor {
   case object StoreChunks
+
+  def shardId(shard: ShardPosition) = s"${shard.m}-${shard.n}-${shard.o}"
+
+  def positionMappingFile(shardId: String) = s"${shardId}-position-mapping"
+
+  def str(p: Position) = s"${p.getX}-${p.getY}-${p.getZ}"
 
   case class ReplaceBlocks(chunk: ChunkPosition,
     filter: BlockFilter, blocks: Map[Position, BlockTypeId])
