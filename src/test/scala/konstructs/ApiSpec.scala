@@ -6,7 +6,7 @@ import org.scalatest.{ Matchers, WordSpec }
 
 class ApiSpec extends WordSpec with Matchers {
 
-  val SomeType = new BlockType(Array(0,0,0,0,0,0), BlockType.SHAPE_BLOCK, false, false)
+  val SomeType = new BlockType(Array(0,0,0,0,0,0), BlockType.SHAPE_BLOCK, false, false, BlockType.STATE_SOLID)
 
   "A BlockFilter" should {
 
