@@ -3,6 +3,7 @@ package konstructs.plugin
 import java.lang.reflect.{ Method, Modifier }
 import java.io.File
 import scala.concurrent.Future
+import scala.language.existentials
 
 import akka.util.Timeout
 import akka.actor.{ Props, ActorRef, Actor, ActorSelection, Stash }

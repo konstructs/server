@@ -211,7 +211,7 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
     val isObstacle = booleanToInt(t.isObstacle)
     val isTransparent = booleanToInt(t.isTransparent)
     val faces = t.getFaces
-    send(pipe, s"W,$w,${t.getShape},$isObstacle,$isTransparent,${faces(0)},${faces(1)},${faces(2)},${faces(3)},${faces(4)},${faces(5)}")
+    send(pipe, s"W,$w,${t.getShape},${t.getState},$isObstacle,$isTransparent,${faces(0)},${faces(1)},${faces(2)},${faces(3)},${faces(4)},${faces(5)}")
   }
 
   def send(pipe: ActorRef, msg: ByteString) {
@@ -229,7 +229,7 @@ object ClientActor {
   val V = 'V'.toByte
   val P = 'P'.toByte
   val M = 'M'.toByte
-  val Version = 6
+  val Version = 7
   case object Setup
   def props(init: Init[WithinActorContext, ByteString, ByteString],
     universe: ActorRef, factory: BlockFactory, textures: Array[Byte]) =
