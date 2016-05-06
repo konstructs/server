@@ -15,7 +15,7 @@ val akkaVersion = "2.2.4"
 resolvers += "konstructs" at "http://dl.bintray.com/konstructs/maven"
 
 libraryDependencies ++= Seq(
-  "org.konstructs"         %  "konstructs-server-api" % "0.1.4",
+  "org.konstructs"         %  "konstructs-server-api" % "0.1.6",
   "com.typesafe.akka"      %% "akka-actor"            % akkaVersion,
   "commons-io"             %  "commons-io"            % "2.4",
   "com.google.code.gson"   %  "gson"                  % "2.6.2",

@@ -17,7 +17,7 @@ object Main extends App {
   // Run any global backwards compatibility scripts
   // Plugins should handle their own backwards compatibility
   Compatibility.process()
-  val loader = system.actorOf(PluginLoaderActor.props(conf.getConfig("konstructs")), "plugin-loader")
+  val loader = system.actorOf(PluginLoaderActor.props(conf), "plugin-loader")
   loader ! PluginLoaderActor.Start
 }
 
