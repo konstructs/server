@@ -9,6 +9,8 @@ import akka.util.Timeout
 import akka.actor.{ Props, ActorRef, Actor, ActorSelection, Stash }
 import com.typesafe.config.{ Config => TypesafeConfig, ConfigException, ConfigValueType }
 
+import konstructs.api.messages.GlobalConfig
+
 object Plugin {
   val StaticParameters = 2
   def nullAsEmpty[T](seq: Seq[T]): Seq[T] = if(seq == null) {
@@ -128,11 +130,14 @@ case class ConfiguredPlugin(name: String, method: Method,
 
 }
 
-class PluginLoaderActor(config: TypesafeConfig) extends Actor {
+class PluginLoaderActor(rootConfig: TypesafeConfig) extends Actor {
   import scala.collection.JavaConverters._
   import PluginLoaderActor._
   import context.dispatcher
   import UniverseProxyActor.SetUniverse
+
+  val config = rootConfig.getConfig("konstructs")
+  val globalConfig = new GlobalConfig(rootConfig.getDouble("globals.simulation-speed").toFloat)
 
   implicit val selectionTimeout = Timeout(1, java.util.concurrent.TimeUnit.SECONDS)
 
@@ -264,6 +269,7 @@ class PluginLoaderActor(config: TypesafeConfig) extends Actor {
             println("Universe started, updating proxy")
             universeProxy ! SetUniverse(actor)
           }
+          actor.tell(globalConfig, universeProxy)
           invokePlugins(tail)
         }
       case _ => Nil
