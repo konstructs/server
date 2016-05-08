@@ -25,7 +25,7 @@ class PlayerActor(
                  ) extends Actor with Stash with utils.Scheduled with JsonStorage {
 
   import PlayerActor._
-  import DbActor.BlockList
+  import DbActor.{ BlockList, ChunkUpdate }
 
   val ns = "players"
 
@@ -166,6 +166,16 @@ class PlayerActor(
       client ! InventoryUpdate(addBelt(view))
     case bl: BlockList =>
       client ! bl
+    case c: ChunkUpdate =>
+      val distance = c.chunk.distance(ChunkPosition(data.position.toApiPosition))
+      if(distance < 2) {
+        /* Force update chunks nearby */
+        client ! BlockList(c.chunk, c.data)
+      } else if(distance < 11){
+        client ! protocol.ChunkUpdate(c.chunk.p, c.chunk.q, c.chunk.k)
+      } else {
+        /* Discard any chunk update that is too far away from the client */
+      }
     case s: DbActor.SendBlocks =>
       db ! s
   }

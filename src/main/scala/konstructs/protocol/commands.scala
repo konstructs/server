@@ -13,3 +13,4 @@ case class Position(x: Float, y: Float, z: Float, rx: Float, ry: Float) {
 }
 case class Say(message: String)
 case class Time(seconds: Long)
+case class ChunkUpdate(p: Int, q: Int, k: Int)
