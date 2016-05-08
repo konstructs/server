@@ -67,8 +67,8 @@ class UniverseActor(
       allPlayers(except = Some(m.pid)).foreach(_ ! m)
     case l: PlayerActor.PlayerLogout =>
       allPlayers(except = Some(l.pid)).foreach(_ ! l)
-    case b: DbActor.BlockList =>
-      allPlayers().foreach(_ ! b)
+    case c: DbActor.ChunkUpdate =>
+      allPlayers().foreach(_ ! c)
     case s: Say =>
       val filters = chatFilters :+ self
       filters.head.forward(SayFilter(filters.tail, s))

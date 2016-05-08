@@ -73,12 +73,15 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
       }
     case b: BlockList =>
       universe ! b
+    case c: ChunkUpdate =>
+      universe ! c
   }
 }
 
 object DbActor {
   case class SendBlocks(chunk: ChunkPosition)
   case class BlockList(chunk: ChunkPosition, data: ChunkData)
+  case class ChunkUpdate(chunk: ChunkPosition, data: ChunkData)
 
   def splitList[T](placed: java.util.Map[Position, T]):
       Map[ChunkPosition, Map[Position, T]] = {

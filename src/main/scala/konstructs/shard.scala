@@ -155,7 +155,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       blockBuffer(i) = block
       val data = ChunkData(blockBuffer, compressionBuffer)
       chunks(index(chunk)) = Some(data)
-      db ! BlockList(chunk, data)
+      db ! ChunkUpdate(chunk, data)
     }
   }
 
@@ -181,7 +181,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       if(isDirty) {
         val data = ChunkData(blockBuffer, compressionBuffer)
         chunks(index(chunk)) = Some(data)
-        db ! BlockList(chunk, data)
+        db ! ChunkUpdate(chunk, data)
         sendEvent(events)
         dirty = dirty + chunk
       }

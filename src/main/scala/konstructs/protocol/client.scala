@@ -94,6 +94,8 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
       handle(player, command)
     case BlockList(chunk, data) =>
       sendBlocks(pipe, chunk, data.data)
+    case ChunkUpdate(p, q, k) =>
+      sendChunkUpdate(pipe, p, q, k)
     case b: SendBlock =>
       sendBlock(pipe, b)
     case BeltUpdate(items) =>
@@ -128,6 +130,10 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
 
   def sendTime(pipe: ActorRef, t: Long) {
     send(pipe, s"T,$t")
+  }
+
+  def sendChunkUpdate(pipe: ActorRef, p: Int, q: Int, k: Int) {
+    send(pipe, s"c,$p,$q,$k")
   }
 
   def sendSaid(pipe: ActorRef, msg: String) {
