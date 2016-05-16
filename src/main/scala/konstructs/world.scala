@@ -80,29 +80,7 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
       val height = map(global) + 32
       val gy = global.getY
       if(gy < height) {
-        if(gy < 10) {
-          w(Konstructs, "water")
-        } else if(gy < 12 ) {
-          w(Konstructs, "sand")
-        } else if(gy == height - 1) {
-          if(gy + random.nextInt(10) - 5 < 64)
-            w(Konstructs, "dirt")
-          else {
-            if(gy + random.nextInt(4) - 2 < 128) {
-              w(Konstructs, "snow-dirt")
-            } else {
-              w(Konstructs, "snow")
-            }
-          }
-        } else if(gy > height - 10) {
-          if(gy >= 128) {
-            w(Konstructs, "snow")
-          } else {
-            w(Konstructs, "dirt")
-          }
-        } else {
-          w(Konstructs, "stone")
-        }
+        w(Konstructs, "dirt")
       } else if (gy < 10) {
         w(Konstructs, "water")
       } else {
