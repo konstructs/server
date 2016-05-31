@@ -168,24 +168,24 @@ object BlockMetaActor {
       true
     }
     val shape = if(config.hasPath("shape")) {
-      config.getString("shape")
+      BlockShape.fromString(config.getString("shape"))
     } else {
-      BlockType.SHAPE_BLOCK
+      BlockShape.BLOCK
     }
 
     val state = if(config.hasPath("state")) {
-      config.getString("state")
+      BlockState.fromString(config.getString("state"))
     } else {
-      BlockType.STATE_SOLID
+      BlockState.SOLID
     }
 
     val blockType = if(config.hasPath("faces")) {
       val faces = config.getIntList("faces")
       if(faces.size != 6) throw new IllegalStateException("There must be exactly 6 faces")
-      new BlockType(faces.asScala.map(_ + texturePosition).toArray, shape, isObstacle, false, state)
+      new BlockType(faces.asScala.map(_ + texturePosition).toArray, shape, isObstacle, false, state, BlockType.NO_CLASSES)
     } else {
       /* Default is to assume only one texture for all faces */
-      new BlockType(Array(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition), shape, isObstacle, false, state)
+      new BlockType(Array(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition), shape, isObstacle, false, state, BlockType.NO_CLASSES)
     }
     typeId -> blockType
   }
