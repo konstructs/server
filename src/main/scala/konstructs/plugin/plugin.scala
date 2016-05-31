@@ -23,20 +23,20 @@ object Plugin {
 
 case class PluginConfigParameterMeta(name: String, configType: Class[_], optional: Boolean, listType: Option[Class[_]] = None)
 
-case class PluginConfigMeta(method: Method, parameters: Seq[PluginConfigParameterMeta])
+case class PluginConfigMeta(method: Method, parameters: Seq[PluginConfigParameterMeta], staticParameters: Int)
 
 object PluginConfigMeta {
-  def apply(m: Method): PluginConfigMeta = {
+  def apply(m: Method, staticParameters: Int): PluginConfigMeta = {
     val annotations = m
       .getParameterAnnotations
       .flatMap(_.filter { a => a.isInstanceOf[Config] || a.isInstanceOf[ListConfig] } )
-    val parameters = m.getParameterTypes.drop(Plugin.StaticParameters).zip(annotations).map {
+    val parameters = m.getParameterTypes.drop(staticParameters).zip(annotations).map {
       case (t, c: Config) =>
         PluginConfigParameterMeta(c.key, t, c.optional)
       case (t, c: ListConfig) =>
         PluginConfigParameterMeta(c.key, c.elementType, c.optional, Some(t))
     }
-    apply(m, parameters)
+    apply(m, parameters, staticParameters)
   }
 }
 
@@ -87,12 +87,21 @@ object PluginMeta {
     }
   }
 
-  private def allParametersAreAnnotated(m: Method): Boolean =
-    if(m.getParameterAnnotations.filter(_.exists { a => a.isInstanceOf[Config] || a.isInstanceOf[ListConfig] }).size == m.getParameterTypes.size - Plugin.StaticParameters) {
+  private def thirdArgIsConfig(m: Method): Boolean = {
+    val paramTypes = m.getParameterTypes()
+    if(paramTypes.size > 2 && paramTypes(2) == classOf[TypesafeConfig] && !m.getParameterAnnotations()(2).exists { a => a.isInstanceOf[Config] || a.isInstanceOf[ListConfig] } ) {
+      return true
+    } else {
+      return false
+    }
+  }
+
+  private def allParametersAreAnnotated(m: Method, staticParameters: Int): Boolean =
+    if(m.getParameterAnnotations.filter(_.exists { a => a.isInstanceOf[Config] || a.isInstanceOf[ListConfig] }).size == m.getParameterTypes.size - staticParameters) {
       return true
     } else {
       validationError(m)
-      println(s"Only the first two arguments, name and universe, are left without an @Config annotation.")
+      println(s"Only the first three arguments, name, universe and optionally config, are left without an @Config annotation.")
       println("All other arguments must be annotated.")
       return false
     }
@@ -100,16 +109,27 @@ object PluginMeta {
   def apply(className: String): PluginMeta = {
     val clazz = Class.forName(className)
 
-    val configs = clazz
+    val filteredMethods = clazz
       .getMethods
       .filter(_.getAnnotations.exists(_.isInstanceOf[PluginConstructor]))
       .filter(validateReturnType)
       .filter(validateStatic)
       .filter(validateFirstArgString)
       .filter(validateSecondArgActorRef)
-      .filter(allParametersAreAnnotated)
-      .map(PluginConfigMeta.apply)
-    apply(configs)
+
+    val methods = for(m <- filteredMethods) yield {
+      val staticParameters = if(thirdArgIsConfig(m)) {
+        Plugin.StaticParameters + 1
+      } else {
+        Plugin.StaticParameters
+      }
+
+      if(allParametersAreAnnotated(m, staticParameters))
+        Some(PluginConfigMeta(m, staticParameters))
+      else
+        None
+    }
+    apply(methods.flatten)
   }
 
 }
@@ -227,8 +247,11 @@ class PluginLoaderActor(rootConfig: TypesafeConfig) extends Actor {
         }
       }
     }
-    val staticArgs =
+    val staticArgs = if(c.staticParameters == 2) {
       Seq(Left[Object, Dependencies](name), Left[Object, Dependencies](universeProxy))
+    } else {
+      Seq(Left[Object, Dependencies](name), Left[Object, Dependencies](universeProxy), Left[Object, Dependencies](config))
+    }
     ConfiguredPlugin(name, c.method,
       staticArgs ++ args)
   }
