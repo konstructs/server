@@ -96,7 +96,8 @@ case class ReceiveStack(stack: Stack)
 case class MatchPattern(pattern: Pattern)
 case class PatternMatched(result: Stack)
 case class KonstructPattern(pattern: Pattern)
-case class PatternKonstructed(pattern: Pattern, result: Stack)
+case class PatternKonstructed(pattern: PatternTemplate, result: Stack)
+case object PatternNotKonstructed
 case class PatternKonstructedFilter(chain: Seq[ActorRef], message: PatternKonstructed, sender: ActorRef) extends Filter[PatternKonstructed] {
   def next(chain: Seq[ActorRef]) = copy(chain = chain, sender = sender)
   def next(chain: Seq[ActorRef], message: PatternKonstructed) = copy(chain = chain, message = message, sender = sender)

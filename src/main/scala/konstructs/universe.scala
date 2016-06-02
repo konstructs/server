@@ -92,7 +92,7 @@ class UniverseActor(
     case i: InteractSecondaryFilter =>
       if(i.message.pos != null) {
         if(i.message.block != null) {
-          db.tell(new ReplaceBlock(BlockFilterFactory.withState(BlockType.STATE_LIQUID).or(BlockFilterFactory.withState(BlockType.STATE_GAS)).or(BlockFilterFactory.VACUUM), i.message.pos, i.message.block), i.message.sender)
+          db.tell(new ReplaceBlock(BlockFilterFactory.withBlockState(BlockState.LIQUID).or(BlockFilterFactory.withBlockState(BlockState.GAS)).or(BlockFilterFactory.VACUUM), i.message.pos, i.message.block), i.message.sender)
         }
       } else {
         if(i.message.block != null) {

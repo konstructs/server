@@ -160,6 +160,14 @@ object BlockMetaActor {
     g.drawImage(texture, x, y, null)
   }
 
+  def readClasses(config: TypesafeConfig): Array[BlockClassId] = {
+    config.root.entrySet.asScala.map( e =>
+      Option(config.getString(e.getKey)).map { id =>
+        BlockClassId.fromString(id)
+      }
+    ).flatten.toArray
+  }
+
   def blockType(idString: String, config: TypesafeConfig, texturePosition: Int): (BlockTypeId, BlockType) = {
     val typeId = BlockTypeId.fromString(idString)
     val isObstacle = if(config.hasPath("obstacle")) {
@@ -168,24 +176,30 @@ object BlockMetaActor {
       true
     }
     val shape = if(config.hasPath("shape")) {
-      config.getString("shape")
+      BlockShape.fromString(config.getString("shape"))
     } else {
-      BlockType.SHAPE_BLOCK
+      BlockShape.BLOCK
     }
 
     val state = if(config.hasPath("state")) {
-      config.getString("state")
+      BlockState.fromString(config.getString("state"))
     } else {
-      BlockType.STATE_SOLID
+      BlockState.SOLID
+    }
+
+    val classes = if(config.hasPath("classes")) {
+      readClasses(config.getConfig("classes"))
+    } else {
+      BlockType.NO_CLASSES;
     }
 
     val blockType = if(config.hasPath("faces")) {
       val faces = config.getIntList("faces")
       if(faces.size != 6) throw new IllegalStateException("There must be exactly 6 faces")
-      new BlockType(faces.asScala.map(_ + texturePosition).toArray, shape, isObstacle, false, state)
+      new BlockType(faces.asScala.map(_ + texturePosition).toArray, shape, isObstacle, false, state, classes)
     } else {
       /* Default is to assume only one texture for all faces */
-      new BlockType(Array(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition), shape, isObstacle, false, state)
+      new BlockType(Array(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition), shape, isObstacle, false, state, classes)
     }
     typeId -> blockType
   }

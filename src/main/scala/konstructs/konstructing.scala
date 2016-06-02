@@ -8,22 +8,33 @@ import akka.actor.{ Actor, Props, ActorRef, Stash }
 import konstructs.api._
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 
-class KonstructingActor(konstructs: Set[Konstruct], konstructedFilters: Seq[ActorRef])
-    extends Actor {
+class KonstructingActor(universe: ActorRef, konstructs: Set[Konstruct], konstructedFilters: Seq[ActorRef])
+    extends Actor with Stash {
 
-  def bestMatch(pattern: Pattern): Option[Konstruct] = {
+  universe ! GetBlockFactory
+
+  def bestMatch(pattern: Pattern, factory: BlockFactory): Option[Konstruct] = {
     konstructs.filter { k =>
-      pattern.contains(k.getPattern)
+      pattern.contains(k.getPattern, factory)
     }.toSeq.sortWith(_.getPattern.getComplexity > _.getPattern.getComplexity).headOption
   }
 
   def receive = {
+    case factory: BlockFactory =>
+      context.become(initialized(factory))
+      unstashAll()
+    case _ =>
+      stash()
+  }
+
+
+  def initialized(factory: BlockFactory): Receive = {
     case MatchPattern(pattern: Pattern) =>
-      bestMatch(pattern).map { k =>
+      bestMatch(pattern, factory).map { k =>
         sender ! PatternMatched(k.getResult)
       }
     case KonstructPattern(pattern: Pattern) =>
-      bestMatch(pattern) match {
+      bestMatch(pattern, factory) match {
         case Some(k) =>
           val filters = konstructedFilters :+ self
           filters.head.forward(
@@ -33,7 +44,7 @@ class KonstructingActor(konstructs: Set[Konstruct], konstructedFilters: Seq[Acto
               sender)
           )
         case None =>
-          sender ! PatternKonstructed(pattern, null)
+          sender ! PatternNotKonstructed
         }
     case PatternKonstructedFilter(_, message, sender) =>
       sender ! message
@@ -55,13 +66,23 @@ object KonstructingActor {
       ((0 until amount).map { i => Block.create(blockId) }).toArray )
   }
 
-  def parsePattern(config: TypesafeConfig): Pattern = {
+def parseStackTemplate(config: TypesafeConfig): StackTemplate = {
+    val blockId = config.getString("id")
+    val amount = if(config.hasPath("amount")) {
+      config.getInt("amount")
+    } else {
+      1
+    }
+    new StackTemplate(BlockOrClassId.fromString(blockId), amount)
+  }
+
+  def parsePatternTemplate(config: TypesafeConfig): PatternTemplate = {
     if(config.hasPath("stack")) {
-      new Pattern(Array(parseStack(config.getConfig("stack"))), 1, 1)
+      new PatternTemplate(Array(parseStackTemplate(config.getConfig("stack"))), 1, 1)
     } else {
       val rows = config.getInt("rows")
       val columns = config.getInt("columns")
-      new Pattern(config.getConfigList("stacks").asScala.map(parseStack).toArray, rows, columns)
+      new PatternTemplate(config.getConfigList("stacks").asScala.map(parseStackTemplate).toArray, rows, columns)
     }
   }
 
@@ -70,7 +91,7 @@ object KonstructingActor {
       config.getConfig(e.getKey)
     }
     (for(konstruct <- konstructs) yield {
-      val pattern = parsePattern(konstruct.getConfig("match"))
+      val pattern = parsePatternTemplate(konstruct.getConfig("match"))
       val result = parseStack(konstruct.getConfig("result"))
       new Konstruct(pattern, result)
     }) toSet
@@ -78,24 +99,25 @@ object KonstructingActor {
 
   @PluginConstructor
   def props(
-    name: String, notUsed: ActorRef,
+    name: String, universe: ActorRef,
     @Config(key = "konstructs") konstructs: TypesafeConfig,
     @ListConfig(key = "konstructed-filters", elementType = classOf[ActorRef], optional = true) konstructedFilters: Seq[ActorRef]
   ): Props =
-    Props(classOf[KonstructingActor], parseKonstructs(konstructs),
+    Props(classOf[KonstructingActor], universe, parseKonstructs(konstructs),
       nullAsEmpty(konstructedFilters))
 }
 
 
 class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: UUID,
-                                inventoryView: InventoryView, konstructingView: InventoryView,
-                                resultView: InventoryView)
+                            inventoryView: InventoryView, konstructingView: InventoryView,
+                            resultView: InventoryView)
     extends Actor with Stash {
 
-  universe ! GetInventory(inventoryId)
+  universe ! GetBlockFactory
 
   var konstructing = Inventory.createEmpty(konstructingView.getRows * konstructingView.getColumns)
   var result = Inventory.createEmpty(resultView.getRows * resultView.getColumns)
+  var factory: BlockFactory = null
 
   private def view(inventory: Inventory) =
     View.EMPTY
@@ -112,6 +134,9 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
   }
 
   def receive = {
+    case f: BlockFactory =>
+      factory = f
+      universe ! GetInventory(inventoryId)
     case GetInventoryResponse(_, Some(inventory)) =>
       context.become(ready(inventory))
       player ! ConnectView(self, view(inventory))
@@ -134,7 +159,9 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
   def awaitKonstruction(inventory: Inventory): Receive = {
     case PatternKonstructed(pattern, stack) =>
       context.become(ready(inventory))
-      updateKonstructing(konstructing.removePattern(pattern))
+      val newKonstructing = konstructing.remove(pattern, factory)
+      if(newKonstructing != null)
+        updateKonstructing(newKonstructing)
       player ! ReceiveStack(stack)
       player ! UpdateView(view(inventory))
       unstashAll()
