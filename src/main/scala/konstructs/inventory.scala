@@ -54,11 +54,24 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
       null
     }
 
-  private def remove(blockId: UUID, slot: Int): Stack =
+  private def remove(blockId: UUID, slot: Int, amount: StackAmount): Stack =
     if(inventories.containsKey(blockId.toString)) {
       val i = inventories.get(blockId.toString)
-      inventories.put(blockId.toString, i.withoutSlot(slot))
-      i.getStack(slot)
+      val s = i.getStack(slot)
+      if(s == null)
+        return null
+      amount match {
+        case FullStack =>
+          inventories.put(blockId.toString, i.withoutSlot(slot))
+          s
+        case HalfStack =>
+          val halfSize = s.size() / 2
+          inventories.put(blockId.toString, i.withSlot(slot, s.drop(halfSize)))
+          s.take(halfSize)
+        case OneBlock =>
+          inventories.put(blockId.toString, i.withSlot(slot, s.getTail()))
+          Stack.createFromBlock(s.getHead())
+      }
     } else {
       null
     }
@@ -96,8 +109,8 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
       val leftovers = put(blockId, slot, stack)
       sender ! new ReceiveStack(leftovers)
 
-    case RemoveStack(blockId, slot) =>
-      sender ! new ReceiveStack(remove(blockId, slot))
+    case RemoveStack(blockId, slot, amount) =>
+      sender ! new ReceiveStack(remove(blockId, slot, amount))
 
     case GetStack(blockId, slot) =>
       sender ! GetStackResponse(blockId, slot, get(blockId, slot))

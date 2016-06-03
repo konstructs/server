@@ -2,20 +2,21 @@ package konstructs
 
 import java.util.UUID
 import scala.collection.JavaConverters._
+import scala.math.min
 
 import com.typesafe.config.{ Config => TypesafeConfig }
 import akka.actor.{ Actor, Props, ActorRef, Stash }
 import konstructs.api._
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 
-class KonstructingActor(universe: ActorRef, konstructs: Set[Konstruct], konstructedFilters: Seq[ActorRef])
+class KonstructingActor(universe: ActorRef, konstructs: Set[Konstruct])
     extends Actor with Stash {
 
   universe ! GetBlockFactory
 
   def bestMatch(pattern: Pattern, factory: BlockFactory): Option[Konstruct] = {
     konstructs.filter { k =>
-      pattern.contains(k.getPattern, factory)
+      pattern.contains(k.getPattern, factory) > 0
     }.toSeq.sortWith(_.getPattern.getComplexity > _.getPattern.getComplexity).headOption
   }
 
@@ -27,7 +28,6 @@ class KonstructingActor(universe: ActorRef, konstructs: Set[Konstruct], konstruc
       stash()
   }
 
-
   def initialized(factory: BlockFactory): Receive = {
     case MatchPattern(pattern: Pattern) =>
       bestMatch(pattern, factory).map { k =>
@@ -36,18 +36,11 @@ class KonstructingActor(universe: ActorRef, konstructs: Set[Konstruct], konstruc
     case KonstructPattern(pattern: Pattern) =>
       bestMatch(pattern, factory) match {
         case Some(k) =>
-          val filters = konstructedFilters :+ self
-          filters.head.forward(
-            PatternKonstructedFilter(
-              filters.tail,
-              PatternKonstructed(k.getPattern, k.getResult),
-              sender)
-          )
+          val maxNumberOfStacks = min(pattern.contains(k.getPattern, factory), Stack.MAX_SIZE / k.getResult.size)
+          sender ! PatternKonstructed(k.getPattern, k.getResult, maxNumberOfStacks)
         case None =>
           sender ! PatternNotKonstructed
-        }
-    case PatternKonstructedFilter(_, message, sender) =>
-      sender ! message
+      }
   }
 }
 
@@ -100,11 +93,9 @@ def parseStackTemplate(config: TypesafeConfig): StackTemplate = {
   @PluginConstructor
   def props(
     name: String, universe: ActorRef,
-    @Config(key = "konstructs") konstructs: TypesafeConfig,
-    @ListConfig(key = "konstructed-filters", elementType = classOf[ActorRef], optional = true) konstructedFilters: Seq[ActorRef]
+    @Config(key = "konstructs") konstructs: TypesafeConfig
   ): Props =
-    Props(classOf[KonstructingActor], universe, parseKonstructs(konstructs),
-      nullAsEmpty(konstructedFilters))
+    Props(classOf[KonstructingActor], universe, parseKonstructs(konstructs))
 }
 
 
@@ -156,13 +147,22 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
       stash()
   }
 
-  def awaitKonstruction(inventory: Inventory): Receive = {
-    case PatternKonstructed(pattern, stack) =>
+  def awaitKonstruction(inventory: Inventory, amount: StackAmount): Receive = {
+    case PatternKonstructed(pattern, stack, number) =>
       context.become(ready(inventory))
-      val newKonstructing = konstructing.remove(pattern, factory)
+      val toKonstruct = amount match {
+        case FullStack =>
+          number
+        case HalfStack =>
+          number / 2
+        case OneBlock =>
+          1
+      }
+
+      val newKonstructing = konstructing.remove(pattern, factory, toKonstruct)
       if(newKonstructing != null)
         updateKonstructing(newKonstructing)
-      player ! ReceiveStack(stack)
+      player ! ReceiveStack(Stack.createOfSize(stack.getTypeId, toKonstruct * stack.size))
       player ! UpdateView(view(inventory))
       unstashAll()
     case CloseInventory =>
@@ -202,21 +202,31 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
       } else {
         sender ! ReceiveStack(stack)
       }
-    case RemoveViewStack(from) =>
+    case RemoveViewStack(from, amount) =>
       if(inventoryView.contains(from)) {
         context.become(awaitInventory)
-        universe.forward(RemoveStack(inventoryId, inventoryView.translate(from)))
+        universe.forward(RemoveStack(inventoryId, inventoryView.translate(from), amount))
         universe ! GetInventory(inventoryId)
       } else if(konstructingView.contains(from)) {
         val stack = konstructing.getStack(konstructingView.translate(from))
-        updateKonstructing(konstructing.withoutSlot(konstructingView.translate(from)))
-        sender ! ReceiveStack(stack)
+        amount match {
+          case FullStack =>
+            updateKonstructing(konstructing.withoutSlot(konstructingView.translate(from)))
+            sender ! ReceiveStack(stack)
+          case HalfStack =>
+            val halfSize = stack.size() / 2
+            updateKonstructing(konstructing.withSlot(konstructingView.translate(from), stack.drop(halfSize)))
+            sender ! ReceiveStack(stack.take(halfSize))
+          case OneBlock =>
+            updateKonstructing(konstructing.withSlot(konstructingView.translate(from), stack.getTail()))
+            sender ! ReceiveStack(Stack.createFromBlock(stack.getHead()))
+        }
         player ! UpdateView(view(inventory))
       } else if(resultView.contains(from)) {
         val pattern = konstructing.getPattern(konstructingView)
         if(pattern != null) {
           if(!result.isEmpty) {
-            context.become(awaitKonstruction(inventory))
+            context.become(awaitKonstruction(inventory, amount))
             universe ! KonstructPattern(pattern)
           } else {
             sender ! ReceiveStack(null)
