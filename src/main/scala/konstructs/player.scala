@@ -131,6 +131,11 @@ class PlayerActor(
     ready orElse handleBasics
   }
 
+  def stashAll: Receive = {
+    case _ =>
+      stash()
+  }
+
   def handleBasics: Receive = {
     case p: protocol.Position =>
       update(p)
@@ -179,7 +184,7 @@ class PlayerActor(
     case ReceiveStack(stack) =>
       putInBelt(stack)
     case ConnectView(inventoryActor, view) =>
-      context.become(manageInventory(inventoryActor, view) orElse handleBasics)
+      context.become(manageInventory(inventoryActor, view) orElse handleBasics orElse stashAll)
       client ! InventoryUpdate(addBelt(view))
   }
 
@@ -200,36 +205,34 @@ class PlayerActor(
             if(oldStack.acceptsPartOf(stack)) {
               val r = oldStack.acceptPartOf(stack)
               if(r.getGiving != null) {
-                context.become(stackSelected(inventoryActor, view, r.getGiving) orElse handleBasics)
+                context.become(stackSelected(inventoryActor, view, r.getGiving) orElse handleBasics orElse stashAll)
               } else {
-                context.become(manageInventory(inventoryActor, view) orElse handleBasics)
+                context.become(manageInventory(inventoryActor, view) orElse handleBasics orElse stashAll)
               }
               update(data.inventory.withSlot(beltIndex, r.getAccepting))
             } else {
-              context.become(stackSelected(inventoryActor, view, oldStack) orElse handleBasics)
+              context.become(stackSelected(inventoryActor, view, oldStack) orElse handleBasics orElse stashAll)
               if(stack != null)
                 update(data.inventory.withSlot(beltIndex, stack))
             }
           } else {
             update(data.inventory.withSlot(beltIndex, stack))
-            context.become(manageInventory(inventoryActor, view) orElse handleBasics)
+            context.become(manageInventory(inventoryActor, view) orElse handleBasics orElse stashAll)
           }
           client ! InventoryUpdate(addBelt(view))
         } else {
-          context.become(manageInventory(inventoryActor, view) orElse handleBasics)
+          context.become(manageInventory(inventoryActor, view) orElse handleBasics orElse stashAll)
           inventoryActor ! PutViewStack(stack, index)
         }
         unstashAll()
       case UpdateView(view) =>
-        context.become(stackSelected(inventoryActor, view, stack) orElse handleBasics)
+        context.become(stackSelected(inventoryActor, view, stack) orElse handleBasics orElse stashAll)
         unstashAll()
         client ! InventoryUpdate(addBelt(view))
       case CloseInventory =>
         context.become(ready orElse handleBasics)
         inventoryActor ! CloseInventory
         unstashAll()
-      case _ =>
-        stash()
     }
     f
   }
@@ -246,14 +249,14 @@ class PlayerActor(
             button match {
               case 1 =>
                 update(data.inventory.withoutSlot(beltIndex))
-                context.become(stackSelected(inventoryActor, view, stack) orElse handleBasics)
+                context.become(stackSelected(inventoryActor, view, stack) orElse handleBasics orElse stashAll)
               case 2 =>
                 val halfSize = stack.size() / 2
                 update(data.inventory.withSlot(beltIndex, stack.drop(halfSize)))
-                context.become(stackSelected(inventoryActor, view, stack.take(halfSize)) orElse handleBasics)
+                context.become(stackSelected(inventoryActor, view, stack.take(halfSize)) orElse handleBasics orElse stashAll)
               case 3 =>
                 update(data.inventory.withSlot(beltIndex, stack.getTail()))
-                context.become(stackSelected(inventoryActor, view, Stack.createFromBlock(stack.getHead())) orElse handleBasics)
+                context.become(stackSelected(inventoryActor, view, Stack.createFromBlock(stack.getHead())) orElse handleBasics orElse stashAll)
             }
             client ! InventoryUpdate(addBelt(view))
           }
@@ -267,17 +270,15 @@ class PlayerActor(
           inventoryActor ! RemoveViewStack(index, stackAmount)
         }
       case UpdateView(view) =>
-        context.become(manageInventory(inventoryActor, view) orElse handleBasics)
+        context.become(manageInventory(inventoryActor, view) orElse handleBasics orElse stashAll)
         client ! InventoryUpdate(addBelt(view))
       case ReceiveStack(stack) =>
         if(stack != null)
-          context.become(stackSelected(inventoryActor, view, stack) orElse handleBasics)
+          context.become(stackSelected(inventoryActor, view, stack) orElse handleBasics orElse stashAll)
       case CloseInventory =>
         context.become(ready orElse handleBasics)
         inventoryActor ! CloseInventory
         unstashAll()
-      case _ =>
-        stash()
     }
     f
   }
