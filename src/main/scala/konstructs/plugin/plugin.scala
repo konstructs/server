@@ -302,16 +302,21 @@ class PluginLoaderActor(rootConfig: TypesafeConfig) extends Actor {
   def receive = {
     case Start =>
       val objs = config.root().entrySet.asScala.filter(_.getValue.valueType == com.typesafe.config.ConfigValueType.OBJECT)
-      val plugins = for(e <- objs) yield {
+      val plugins = (for(e <- objs) yield {
         val name = e.getKey
         val plugin = config.getConfig(name)
-        val clazz = plugin.getString("class")
-        val meta = PluginMeta(clazz)
+        if(plugin.hasPath("class")) {
+          val clazz = plugin.getString("class")
+          val meta = PluginMeta(clazz)
 
-        val pluginConf = configurePlugin(name, plugin, meta)
-        println(s"Validated configuration for $name")
-        pluginConf
-      }
+          val pluginConf = configurePlugin(name, plugin, meta)
+          println(s"Validated configuration for $name")
+          Some(pluginConf)
+        } else {
+          println(s"$name has no class set, ignoring")
+          None
+        }
+      }) flatten
 
       val pluginMap = plugins.map { p =>  (p.name, p) }.toMap
 
