@@ -82,11 +82,16 @@ case object GetTextures
 case class Textures(textures: Array[Byte])
 
 /* Manage inventories */
+sealed trait StackAmount
+case object FullStack extends StackAmount
+case object HalfStack extends StackAmount
+case object OneBlock extends StackAmount
+
 case class CreateInventory(blockId: UUID, size: Int)
 case class GetInventory(blockId: UUID)
 case class GetInventoryResponse(blockId: UUID, inventory: Option[Inventory])
 case class PutStack(blockId: UUID, slot: Int, stack: Stack)
-case class RemoveStack(blockId: UUID, slot: Int)
+case class RemoveStack(blockId: UUID, slot: Int, amount: StackAmount)
 case class GetStack(blockId: UUID, slot: Int)
 case class GetStackResponse(blockId: UUID, slot: Int, stack: Stack)
 case class DeleteInventory(blockId: UUID)
@@ -96,18 +101,14 @@ case class ReceiveStack(stack: Stack)
 case class MatchPattern(pattern: Pattern)
 case class PatternMatched(result: Stack)
 case class KonstructPattern(pattern: Pattern)
-case class PatternKonstructed(pattern: PatternTemplate, result: Stack)
+case class PatternKonstructed(pattern: PatternTemplate, result: Stack, number: Int)
 case object PatternNotKonstructed
-case class PatternKonstructedFilter(chain: Seq[ActorRef], message: PatternKonstructed, sender: ActorRef) extends Filter[PatternKonstructed] {
-  def next(chain: Seq[ActorRef]) = copy(chain = chain, sender = sender)
-  def next(chain: Seq[ActorRef], message: PatternKonstructed) = copy(chain = chain, message = message, sender = sender)
-}
 
 /* Manage player */
 case class ConnectView(manager: ActorRef, view: View)
 case class UpdateView(view: View)
 case class PutViewStack(stack: Stack, to: Int)
-case class RemoveViewStack(from: Int)
+case class RemoveViewStack(from: Int, amount: StackAmount)
 case object CloseInventory
 
 /* Messages for binary storage */

@@ -50,13 +50,11 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
     } else if(command.startsWith("T,")) {
       val message = command.substring(2)
       player.actor ! konstructs.protocol.Say(message)
-    } else if(command.startsWith("K")) {
-      player.actor ! Konstruct
     } else if(command.startsWith("I")) {
       player.actor ! CloseInventory
     } else if(command.startsWith("R,")) {
       val ints = readData(_.toInt, command.drop(2))
-      player.actor ! SelectItem(ints(0))
+      player.actor ! SelectItem(ints(0), ints(1))
     }
   }
 
@@ -235,7 +233,7 @@ object ClientActor {
   val V = 'V'.toByte
   val P = 'P'.toByte
   val M = 'M'.toByte
-  val Version = 7
+  val Version = 8
   case object Setup
   def props(init: Init[WithinActorContext, ByteString, ByteString],
     universe: ActorRef, factory: BlockFactory, textures: Array[Byte]) =
