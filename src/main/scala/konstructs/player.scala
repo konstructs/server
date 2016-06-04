@@ -250,11 +250,11 @@ class PlayerActor(
               case 1 =>
                 update(data.inventory.withoutSlot(beltIndex))
                 context.become(stackSelected(inventoryActor, view, stack) orElse handleBasics orElse stashAll)
-              case 2 =>
+              case 3 =>
                 val halfSize = stack.size() / 2
                 update(data.inventory.withSlot(beltIndex, stack.drop(halfSize)))
                 context.become(stackSelected(inventoryActor, view, stack.take(halfSize)) orElse handleBasics orElse stashAll)
-              case 3 =>
+              case 2 =>
                 update(data.inventory.withSlot(beltIndex, stack.getTail()))
                 context.become(stackSelected(inventoryActor, view, Stack.createFromBlock(stack.getHead())) orElse handleBasics orElse stashAll)
             }
@@ -263,8 +263,8 @@ class PlayerActor(
         } else {
           val stackAmount: StackAmount = button match {
             case 1 => FullStack
-            case 2 => HalfStack
-            case 3 => OneBlock
+            case 3 => HalfStack
+            case 2 => OneBlock
             case i => throw new IllegalStateException(s"Undefined button: $i")
           }
           inventoryActor ! RemoveViewStack(index, stackAmount)
