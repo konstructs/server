@@ -68,7 +68,7 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
         universe ! CreatePlayer(auth.name, auth.token)
         context.become(waitForPlayer(sender))
       } else {
-        sendSaid(sender, s"This server only supports protocol version $Version")
+        sendError(sender, s"This server only supports protocol version $Version")
         context.stop(self)
       }
     case _: Tcp.ConnectionClosed =>
@@ -120,6 +120,10 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
     case _: Tcp.ConnectionClosed =>
       player.actor ! PoisonPill
       context.stop(self)
+  }
+
+  def sendError(pipe: ActorRef, error: String) {
+    send(pipe, s"E,$error")
   }
 
   def sendPlayerNick(pipe: ActorRef, pid: Int, nick: String) {
