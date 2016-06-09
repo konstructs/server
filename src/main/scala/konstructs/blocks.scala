@@ -22,36 +22,41 @@ case class BlockFactoryImpl(blockTypeIdMapping: java.util.Map[BlockTypeId, Integ
   wMapping: java.util.Map[Integer, BlockTypeId], blockTypes: java.util.Map[BlockTypeId, BlockType])
     extends BlockFactory {
 
-  def createBlock(uuid: UUID, w: Int): Block = {
+  override def createBlock(uuid: UUID, w: Int, health: Int): Block = {
+    val t = wMapping.get(w)
+    new Block(uuid, t, Health.get(health))
+  }
+
+  override def createBlock(uuid: UUID, w: Int): Block = {
     val t = wMapping.get(w)
     new Block(uuid, t)
   }
 
-  def createBlock(w: Int): Block = {
+  override def createBlock(w: Int): Block = {
     val t = wMapping.get(w)
     new Block(null, t)
   }
 
-  def getW(block: Block) =
+  override def getW(block: Block) =
     blockTypeIdMapping.get(block.getType)
 
-  def getW(stack: Stack) =
+  override def getW(stack: Stack) =
     blockTypeIdMapping.get(stack.getTypeId)
 
-  def getW(typeId: BlockTypeId) =
+  override def getW(typeId: BlockTypeId) =
     blockTypeIdMapping.get(typeId)
 
-  def getBlockType(id: BlockTypeId): BlockType = {
+  override def getBlockType(id: BlockTypeId): BlockType = {
     blockTypes.get(id)
   }
 
-  def getBlockTypeId(w: Int) =
+  override def getBlockTypeId(w: Int) =
     wMapping.get(w)
 
-  def getBlockTypes() =
+  override def getBlockTypes() =
     blockTypes
 
-  def getWMapping() =
+  override def getWMapping() =
     wMapping
 
 }

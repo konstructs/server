@@ -65,12 +65,15 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
   }
 
   private def w(ns: String, name: String) =
-    factory.getW(new BlockTypeId(ns, name)).toByte
+    factory.getW(new BlockTypeId(ns, name))
+
+  val Pristine = Health.PRISTINE.getHealth()
 
   private val Konstructs = "org/konstructs"
   private val Flowers = Seq("flower-yellow", "flower-red", "flower-purple", "sunflower",
     "flower-white", "flower-blue")
-  private def blockSeq(chunk: ChunkPosition, map: HeightMap): Seq[Byte] = {
+
+  private def blockSeq(chunk: ChunkPosition, map: HeightMap): Seq[BlockData] = {
     for(
       z <- 0 until ChunkSize;
       y <- 0 until ChunkSize;
@@ -80,17 +83,23 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
       val height = map(global) + 32
       val gy = global.getY
       if(gy < height) {
-        w(Konstructs, "dirt")
+        BlockData(w(Konstructs, "dirt"), Pristine)
       } else if (gy < 10) {
-        w(Konstructs, "water")
+        BlockData(w(Konstructs, "water"), Pristine)
       } else {
-        w(Konstructs, "vacuum")
+        BlockData(w(Konstructs, "vacuum"), Pristine)
       }
     }
   }
 
-  private def blocks(chunk: ChunkPosition, map: HeightMap): Array[Byte] =
-    Array(blockSeq(chunk, map) :_*)
+  private def blocks(chunk: ChunkPosition, map: HeightMap): Array[Byte] = {
+    val data = new Array[Byte](Db.ChunkSize * Db.ChunkSize * Db.ChunkSize * Db.BlockSize)
+    val bs = blockSeq(chunk, map)
+    for(i <- 0 until Db.ChunkSize * Db.ChunkSize * Db.ChunkSize) {
+      bs(i).write(data, i)
+    }
+    data
+  }
 
   def ready(world: FlatWorld, map: HeightMap): Receive = {
     case Generate(real, chunk) =>

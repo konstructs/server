@@ -14,7 +14,17 @@ class GeneratorActor(jsonStorage: ActorRef, binaryStorage: ActorRef, factory: Bl
     )
   )
 
-  def EmptyChunk = new Array[Byte](Db.ChunkSize * Db.ChunkSize * Db.ChunkSize)
+  val Vacuum = factory.getW(BlockTypeId.VACUUM)
+
+  val Pristine = Health.PRISTINE.getHealth()
+
+  val EmptyChunk = {
+    val data = new Array[Byte](Db.ChunkSize * Db.ChunkSize * Db.ChunkSize * Db.BlockSize)
+    for(i <- 0 until Db.ChunkSize * Db.ChunkSize * Db.ChunkSize) {
+      BlockData.write(data, i, Vacuum, Pristine)
+    }
+    data
+  }
 
   def receive = {
     case Generate(chunk) =>
