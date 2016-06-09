@@ -37,15 +37,12 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
     } else if(command.startsWith("C,")) {
       val ints = readData(_.toInt, command.drop(2))
       player.actor ! DbActor.SendBlocks(ChunkPosition(ints(0), ints(1), ints(2)))
-    } else if(command.startsWith("A,")) {
-      val ints = readData(_.toInt, command.drop(2))
-      player.actor ! ActivateBeltItem(ints(0))
     } else if(command.startsWith("M,")) {
       val ints = readData(_.toInt, command.drop(2))
       if(ints(0) != 0) {
-        player.actor ! Action(new konstructs.api.Position(ints(1), ints(2), ints(3)), ints(4))
+        player.actor ! Action(new konstructs.api.Position(ints(1), ints(2), ints(3)), ints(4), ints(5))
       } else {
-        player.actor ! Action(null, ints(4))
+        player.actor ! Action(null, ints(4), ints(5))
       }
     } else if(command.startsWith("T,")) {
       val message = command.substring(2)
@@ -98,8 +95,6 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
       sendBlock(pipe, b)
     case BeltUpdate(items) =>
       sendBelt(pipe, items)
-    case BeltActiveUpdate(active) =>
-      sendBeltActive(pipe, active)
     case InventoryUpdate(view) =>
       sendInventory(pipe, view.getItems.asScala.toMap)
     case p: PlayerMovement =>
@@ -162,11 +157,6 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
 
   def sendHeldStack(pipe: ActorRef, size: Int, w: Int) {
     send(pipe, s"i,$size,$w")
-  }
-
-
-  def sendBeltActive(pipe: ActorRef, active: String) {
-    send(pipe, s"A,${active}")
   }
 
   def sendInventory(pipe: ActorRef, items: Map[Integer, Stack]) {

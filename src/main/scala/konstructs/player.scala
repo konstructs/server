@@ -11,7 +11,7 @@ import konstructs.api._
 import konstructs.api.messages._
 
 case class Player(nick: String, password: String, position: protocol.Position,
-  active: Int, inventory: Inventory)
+  inventory: Inventory)
 
 class PlayerActor(
                    pid: Int,
@@ -60,7 +60,7 @@ class PlayerActor(
       val inventoryBlock = Block.createWithId(ToolSackActor.BlockId)
       universe ! CreateInventory(inventoryBlock.getId, 16)
       val inventory = Inventory.createEmpty(9).withSlot(0, Stack.createFromBlock(inventoryBlock))
-      data = Player(nick, password, startingPosition, 0, inventory)
+      data = Player(nick, password, startingPosition, inventory)
       client ! PlayerInfo(pid, nick, self, data.position)
       context.become(sendBelt)
       unstashAll()
@@ -79,9 +79,8 @@ class PlayerActor(
 
   val random = new scala.util.Random
 
-  def getBeltBlock: Block = {
+  def getBeltBlock(active: Int): Block = {
     val inventory = data.inventory
-    val active = data.active
     val block = inventory.stackHead(active)
     if(block != null) {
       update(inventory.stackTail(active))
@@ -89,14 +88,14 @@ class PlayerActor(
     block
   }
 
-  def action(pos: Position, button: Int) = {
+  def action(pos: Position, button: Int, active: Int) = {
     button match {
       case 1 =>
-        universe ! InteractPrimary(self, nick, pos, getBeltBlock)
+        universe ! InteractPrimary(self, nick, pos, getBeltBlock(active))
       case 2 =>
-        universe ! InteractSecondary(self, nick, pos, getBeltBlock)
+        universe ! InteractSecondary(self, nick, pos, getBeltBlock(active))
       case 3 =>
-        universe ! InteractTertiary(self, nick, pos, getBeltBlock)
+        universe ! InteractTertiary(self, nick, pos, getBeltBlock(active))
     }
   }
 
@@ -125,7 +124,6 @@ class PlayerActor(
   def sendBelt: Receive = {
     /* Send belt*/
     client ! BeltUpdate(data.inventory.getStacks)
-    client ! BeltActiveUpdate(data.active.toString)
     /* Send time */
     client ! protocol.Time((new java.util.Date().getTime / 1000L) % 600)
     ready orElse handleBasics
@@ -172,11 +170,8 @@ class PlayerActor(
   }
 
   def ready: Receive = {
-    case ActivateBeltItem(newActive) if(newActive >= 0 && newActive < 9) =>
-      data = data.copy(active = newActive)
-      sender ! BeltActiveUpdate(data.active.toString)
-    case Action(pos, button) =>
-      action(pos, button)
+    case Action(pos, button, active) =>
+      action(pos, button, active)
     case r: ReplaceBlockResult =>
       if(!r.getBlock.getType.equals(BlockTypeId.VACUUM)) {
         putInBelt(Stack.createFromBlock(r.getBlock))
@@ -291,10 +286,8 @@ object PlayerActor {
   case class PlayerLogout(pid: Int)
   case class PlayerInfo(pid: Int, nick: String, actor: ActorRef, pos: protocol.Position)
   case class PlayerNick(pid: Int, nick: String)
-  case class ActivateBeltItem(activate: Int)
   case class BeltUpdate(items: Array[Stack])
-  case class BeltActiveUpdate(active: String)
-  case class Action(pos: Position, button: Int)
+  case class Action(pos: Position, button: Int, active: Int)
   case class SendInfo(to: ActorRef)
   case class InventoryUpdate(view: View)
   case class SelectItem(index: Int, button: Int)
