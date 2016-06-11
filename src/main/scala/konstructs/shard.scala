@@ -247,7 +247,8 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       val receivingType = blockFactory.getBlockType(receivingTypeId)
       val dealing = Option(d.getUsing()).getOrElse(VacuumBlock)
       val dealingType = blockFactory.getBlockType(dealing.getType())
-      val receivingHealth = Health.get(old.health).damage(dealingType.getDamage(), receivingType.getDurability())
+      val dealingDamage = dealingType.getDamageWithMultiplier(receivingTypeId, receivingType)
+      val receivingHealth = Health.get(old.health).damage(dealingDamage, receivingType.getDurability())
       val dealingHealth = dealing.getHealth().damage(receivingType.getDamage(), dealingType.getDurability() * toolDurabilityBonus)
       s ! new ReceiveStack(if(d.getUsing() == null || dealingHealth.isDestroyed) {
         null
