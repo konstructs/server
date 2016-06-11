@@ -25,10 +25,10 @@ case class BlockData(w: Int, health: Int) {
 object BlockData {
 
   def w(data: Array[Byte], i: Int): Int =
-    data(i * Db.BlockSize) & 0xFF + ((data(i * Db.BlockSize + 1) & 0xFF) << 8)
+    (data(i * Db.BlockSize) & 0xFF) + ((data(i * Db.BlockSize + 1) & 0xFF) << 8)
 
   def hp(data: Array[Byte], i: Int): Int =
-    data(i * Db.BlockSize + 2) & 0xFF + ((data(i * Db.BlockSize + 3) & 0x07) << 8)
+    (data(i * Db.BlockSize + 2) & 0xFF) + ((data(i * Db.BlockSize + 3) & 0x07) << 8)
 
   def apply(data: Array[Byte], i: Int): BlockData = {
     apply(w(data, i), hp(data, i))
