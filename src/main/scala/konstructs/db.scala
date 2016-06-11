@@ -9,10 +9,11 @@ import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ViewBlock,
                                  ReplaceBlocks, ReplaceBlock }
 
 object Db {
+  val BlockSize = 4
   val ChunkSize = 32
   val ShardSize = 8
   val Header = 2
-  val Version = 1.toByte
+  val Version = 2.toByte
 }
 
 case class ShardPosition(m: Int, n: Int, o: Int)
