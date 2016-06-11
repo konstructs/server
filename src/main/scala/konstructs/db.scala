@@ -6,7 +6,7 @@ import akka.actor.{ Actor, ActorRef, Props }
 
 import konstructs.api.{ Position, BlockFactory, Box, BlockTypeId }
 import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ViewBlock,
-                                 ReplaceBlocks, ReplaceBlock }
+                                 ReplaceBlocks, ReplaceBlock, DamageBlockWithBlock }
 
 object Db {
   val BlockSize = 4
@@ -62,6 +62,8 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
       getShardActor(v.getPosition) forward v
     case s: SendBlocks =>
       getShardActor(s.chunk) forward s
+    case d: DamageBlockWithBlock =>
+      getShardActor(d.getToDamage) forward d
     case q: BoxQuery =>
       val chunkBoxes = BoxChunking.chunked(q.getBox)
       val resultActor = context.actorOf(BoxQueryResultActor.props(sender, q, chunkBoxes, blockFactory))

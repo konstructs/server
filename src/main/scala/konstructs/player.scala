@@ -100,13 +100,15 @@ class PlayerActor(
   }
 
   def putInBelt(stack: Stack) {
-    val inventory = data.inventory
-    val r = inventory.acceptPartOf(stack)
-    if(r.getGiving == null) {
-      update(r.getAccepting)
-    } else {
-      update(r.getAccepting)
-      println(s"The following stack was destroyed: ${r.getGiving}")
+    if(stack != null) {
+      val inventory = data.inventory
+      val r = inventory.acceptPartOf(stack)
+      if(r.getGiving == null) {
+        update(r.getAccepting)
+      } else {
+        update(r.getAccepting)
+        println(s"The following stack was destroyed: ${r.getGiving}")
+      }
     }
   }
 

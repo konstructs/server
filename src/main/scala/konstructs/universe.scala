@@ -3,7 +3,8 @@ package konstructs
 import akka.actor.{ Actor, ActorRef, Props, Stash }
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 import konstructs.api._
-import konstructs.api.messages.{ ReplaceBlock, ViewBlock, ReplaceBlocks, BoxQuery }
+import konstructs.api.messages.{ ReplaceBlock, ViewBlock, ReplaceBlocks, BoxQuery,
+                                 DamageBlockWithBlock }
 import collection.JavaConversions._
 
 class UniverseActor(
@@ -81,10 +82,9 @@ class UniverseActor(
       filters.head.forward(InteractPrimaryFilter(filters.tail, i))
     case i: InteractPrimaryFilter =>
       if(i.message.pos != null) {
-        db.tell(new ReplaceBlock(BlockFilterFactory.EMPTY, i.message.pos, Block.create(BlockTypeId.VACUUM)), i.message.sender)
-      }
-      if(i.message.block != null) {
-        i.message.sender ! ReceiveStack(Stack.createFromBlock(i.message.block))
+        db.tell(new DamageBlockWithBlock(i.message.pos, i.message.block), i.message.sender)
+      } else if(i.message.block != null) {
+        i.message.sender ! new ReceiveStack(Stack.createFromBlock(i.message.block))
       }
     case i: InteractSecondary =>
       val filters = secondaryInteractionFilters :+ self
@@ -130,6 +130,8 @@ class UniverseActor(
       konstructing.forward(k)
     case q: BoxQuery =>
       db forward q
+    case d: DamageBlockWithBlock =>
+      db forward d
     case GetBlockFactory =>
       blockManager.forward(GetBlockFactory)
     case GetTextures =>

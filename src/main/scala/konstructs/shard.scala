@@ -10,10 +10,10 @@ import com.google.gson.reflect.TypeToken
 
 import konstructs.api.{ BinaryLoaded, Position, Block, GsonLoaded,
                         BlockTypeId, BlockFilter, BlockFactory,
-                        BlockUpdate, Health }
+                        BlockUpdate, Health, ReceiveStack, Stack }
 import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ReplaceBlock,
                                  ReplaceBlockResult, ViewBlock, ViewBlockResult,
-                                 BlockUpdateEvent }
+                                 BlockUpdateEvent, DamageBlockWithBlock }
 import konstructs.utils.compress
 
 case class BlockData(w: Int, health: Int) {
@@ -136,6 +136,10 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     ChunkPosition(pqk(0), pqk(1), pqk(2))
   }
 
+  private val VacuumData = new BlockData(blockFactory.getW(BlockTypeId.VACUUM), Health.PRISTINE.getHealth())
+  private val VacuumBlock = Block.create(BlockTypeId.VACUUM)
+  private val toolDurabilityBonus = 10.0f
+
   schedule(5000, StoreChunks)
 
   def sendEvent(events: java.util.Map[Position, BlockUpdate]) {
@@ -237,6 +241,33 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     }
   }
 
+  def damageBlock(d: DamageBlockWithBlock, s: ActorRef, positionMapping: java.util.Map[String, UUID]) {
+    updateChunk(d.getToDamage()) { old =>
+      val receivingTypeId = blockFactory.getBlockTypeId(old.w)
+      val receivingType = blockFactory.getBlockType(receivingTypeId)
+      val dealing = Option(d.getUsing()).getOrElse(VacuumBlock)
+      val dealingType = blockFactory.getBlockType(dealing.getType())
+      val receivingHealth = Health.get(old.health).damage(dealingType.getDamage(), receivingType.getDurability())
+      val dealingHealth = dealing.getHealth().damage(receivingType.getDamage(), dealingType.getDurability() * toolDurabilityBonus)
+      s ! new ReceiveStack(if(d.getUsing() == null || dealingHealth.isDestroyed) {
+        null
+      } else {
+        Stack.createFromBlock(new Block(dealing.getId(), dealing.getType(), dealingHealth))
+      })
+      if(receivingHealth.isDestroyed()) {
+        val id = positionMapping.remove(str(d.getToDamage()))
+        if(id != null)
+          positionMappingDirty = true
+        val oldBlock = new Block(id, receivingTypeId, Health.PRISTINE)
+        s ! new ReceiveStack(Stack.createFromBlock(oldBlock))
+        sendEvent(d.getToDamage(), oldBlock, VacuumBlock)
+        VacuumData
+      } else {
+        new BlockData(old.w, receivingHealth.getHealth())
+      }
+    }
+  }
+
   /*
    * Load id mapping for blocks
    */
@@ -263,6 +294,8 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       loadChunk(chunk).map { c =>
         s ! BlockList(chunk, c)
       }
+    case d: DamageBlockWithBlock =>
+      damageBlock(d, sender, positionMapping)
     case r: ReplaceBlock =>
       val s = sender
       val filter = r.getFilter
