@@ -107,9 +107,9 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
       sendSaid(pipe, text)
     case HeldStack(stack) =>
       if(stack != null)
-        sendHeldStack(pipe, stack.size, factory.getW(stack))
+        sendHeldStack(pipe, stack.size, factory.getW(stack), stack.getHead.getHealth.getHealth)
       else
-        sendHeldStack(pipe, 0, -1)
+        sendHeldStack(pipe, 0, -1, 0)
     case Time(t) =>
       sendTime(pipe, t)
     case _: Tcp.ConnectionClosed =>
@@ -148,23 +148,23 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
   def sendBelt(pipe: ActorRef, items: Array[Stack]) {
     for((stack, i) <- items.zipWithIndex) {
       if(stack != null) {
-        send(pipe, s"G,${i},${stack.size},${factory.getW(stack)}")
+        send(pipe, s"G,${i},${stack.size},${factory.getW(stack)},${stack.getHead.getHealth.getHealth}")
       } else {
-        send(pipe, s"G,${i},0,0")
+        send(pipe, s"G,${i},0,0,0")
       }
     }
   }
 
-  def sendHeldStack(pipe: ActorRef, size: Int, w: Int) {
-    send(pipe, s"i,$size,$w")
+  def sendHeldStack(pipe: ActorRef, size: Int, w: Int, health: Int) {
+    send(pipe, s"i,$size,$w,$health")
   }
 
   def sendInventory(pipe: ActorRef, items: Map[Integer, Stack]) {
     for((p, stack) <- items) {
       if(stack != null) {
-        send(pipe, s"I,${p},${stack.size},${factory.getW(stack)}")
+        send(pipe, s"I,${p},${stack.size},${factory.getW(stack)},${stack.getHead.getHealth.getHealth}")
       } else {
-        send(pipe, s"I,${p},0,0")
+        send(pipe, s"I,${p},0,0,0")
       }
     }
   }
