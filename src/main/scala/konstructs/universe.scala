@@ -82,30 +82,24 @@ class UniverseActor(
       filters.head.forward(InteractPrimaryFilter(filters.tail, i))
     case i: InteractPrimaryFilter =>
       if(i.message.pos != null) {
-        db.tell(new DamageBlockWithBlock(i.message.pos, i.message.block), i.message.sender)
-      } else if(i.message.block != null) {
-        i.message.sender ! new ReceiveStack(Stack.createFromBlock(i.message.block))
+        db.tell(DbActor.InteractPrimaryUpdate(i.message.pos, i.message.block), i.message.sender)
+      } else {
+        i.message.sender ! InteractResult(i.message.pos, i.message.block)
       }
     case i: InteractSecondary =>
       val filters = secondaryInteractionFilters :+ self
       filters.head.forward(InteractSecondaryFilter(filters.tail, i))
     case i: InteractSecondaryFilter =>
-      if(i.message.pos != null) {
-        if(i.message.block != null) {
-          db.tell(new ReplaceBlock(BlockFilterFactory.withBlockState(BlockState.LIQUID).or(BlockFilterFactory.withBlockState(BlockState.GAS)).or(BlockFilterFactory.VACUUM), i.message.pos, i.message.block), i.message.sender)
-        }
+      if(i.message.pos != null && i.message.block != null) {
+        db.tell(DbActor.InteractSecondaryUpdate(i.message.pos, i.message.block), i.message.sender)
       } else {
-        if(i.message.block != null) {
-          i.message.sender ! new ReceiveStack(Stack.createFromBlock(i.message.block))
-        }
+        i.message.sender ! InteractResult(i.message.pos, i.message.block)
       }
     case i: InteractTertiary =>
       val filters = tertiaryInteractionFilters :+ self
       filters.head.forward(InteractTertiaryFilter(filters.tail, i))
     case i: InteractTertiaryFilter =>
-      if(i.message.block != null) {
-        i.message.sender ! new ReceiveStack(Stack.createFromBlock(i.message.block))
-      }
+      i.message.sender ! InteractResult(i.message.pos, i.message.block)
     case p: ReplaceBlock =>
       db.forward(p)
     case v: ViewBlock =>

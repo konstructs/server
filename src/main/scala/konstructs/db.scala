@@ -4,7 +4,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import akka.actor.{ Actor, ActorRef, Props }
 
-import konstructs.api.{ Position, BlockFactory, Box, BlockTypeId }
+import konstructs.api.{ Position, BlockFactory, Box, BlockTypeId, Block }
 import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ViewBlock,
                                  ReplaceBlocks, ReplaceBlock, DamageBlockWithBlock }
 
@@ -56,6 +56,10 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
   }
 
   def receive = {
+    case i: InteractPrimaryUpdate =>
+      getShardActor(i.position) forward i
+    case i: InteractSecondaryUpdate =>
+      getShardActor(i.position) forward i
     case r: ReplaceBlock =>
       getShardActor(r.getPosition) forward r
     case v: ViewBlock =>
@@ -85,6 +89,9 @@ object DbActor {
   case class SendBlocks(chunk: ChunkPosition)
   case class BlockList(chunk: ChunkPosition, data: ChunkData)
   case class ChunkUpdate(chunk: ChunkPosition, data: ChunkData)
+
+  case class InteractPrimaryUpdate(position: Position, block: Block)
+  case class InteractSecondaryUpdate(position: Position, block: Block)
 
   def splitList[T](placed: java.util.Map[Position, T]):
       Map[ChunkPosition, Map[Position, T]] = {

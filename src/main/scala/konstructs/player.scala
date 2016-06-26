@@ -88,14 +88,73 @@ class PlayerActor(
     block
   }
 
-  def action(pos: Position, button: Int, active: Int) = {
+  def actionPrimary(pos: Position, block: Block, active: Int): Receive = {
+    case i: InteractResult =>
+      if(i.position == pos) {
+        if(i.block != null && block != null) {
+          /* We got our tool block back, possibly damaged */
+          val stack = data.inventory.getStack(active)
+          update(data.inventory.withSlot(active, stack.replaceHead(i.block)))
+        } else if(block != null && i.block == null) {
+          /* We didn't get our tool block back, it was destroyed */
+          update(data.inventory.stackTail(active))
+        } else {
+          /* We used a null tool, no need to update the stack (it's empty) */
+        }
+        context.become(ready orElse handleBasics)
+        unstashAll()
+      } else {
+        throw new IllegalStateException(s"Invalid primary interaction result position: ${i.position}")
+      }
+  }
+
+  def actionSecondary(pos: Position, block: Block, active: Int): Receive = {
+    case i: InteractResult =>
+      if(i.position == pos) {
+        if(i.block == null && block != null) {
+         /* We didn't get our block back, it was placed */
+          update(data.inventory.stackTail(active))
+        } else {
+          /* We got our block back, couldn't be placed */
+        }
+        context.become(ready orElse handleBasics)
+        unstashAll()
+      } else {
+        throw new IllegalStateException(s"Invalid secondary interaction result position: ${i.position}")
+      }
+  }
+
+  def actionTertiary(pos: Position, block: Block, active: Int): Receive = {
+    case i: InteractResult =>
+      if(i.position == pos) {
+        if(i.block == null && block != null) {
+          /* We didn't get our block back, server needed it */
+          update(data.inventory.stackTail(active))
+        } else {
+          /* We got our block back, wasn't needed */
+        }
+        context.become(ready orElse handleBasics)
+        unstashAll()
+      } else {
+        throw new IllegalStateException(s"Invalid tertiary interaction result position: ${i.position}")
+      }
+  }
+
+  def action(pos: Position, button: Int, active: Int): Receive = {
+    val block = data.inventory.stackHead(active)
     button match {
       case 1 =>
-        universe ! InteractPrimary(self, nick, pos, getBeltBlock(active))
+        val responseHandler = actionPrimary(pos, block, active)
+        universe ! InteractPrimary(self, nick, pos, block)
+        responseHandler
       case 2 =>
-        universe ! InteractSecondary(self, nick, pos, getBeltBlock(active))
+        val responseHandler = actionSecondary(pos, block, active)
+        universe ! InteractSecondary(self, nick, pos, block)
+        responseHandler
       case 3 =>
-        universe ! InteractTertiary(self, nick, pos, getBeltBlock(active))
+        val responseHandler = actionTertiary(pos, block, active)
+        universe ! InteractTertiary(self, nick, pos, block)
+        responseHandler
     }
   }
 
@@ -173,7 +232,7 @@ class PlayerActor(
 
   def ready: Receive = {
     case Action(pos, button, active) =>
-      action(pos, button, active)
+      context.become(action(pos, button, active) orElse handleBasics orElse stashAll)
     case r: ReplaceBlockResult =>
       if(!r.getBlock.getType.equals(BlockTypeId.VACUUM)) {
         putInBelt(Stack.createFromBlock(r.getBlock))

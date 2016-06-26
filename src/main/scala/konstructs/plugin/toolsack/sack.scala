@@ -12,7 +12,6 @@ class ToolSackActor(universe: ActorRef) extends Actor {
     case i: InteractTertiaryFilter =>
       i.message match {
         case InteractTertiary(sender, _, _, block) if block != null && block.getId != null && block.getType == BlockId =>
-          sender ! ReceiveStack(Stack.createFromBlock(i.message.block))
           context.actorOf(KonstructingViewActor.props(sender, universe, block.getId,
             SackView, KonstructingView, ResultView))
           i.drop

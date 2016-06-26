@@ -9,11 +9,12 @@ import akka.actor.{ Actor, Stash, ActorRef, Props }
 import com.google.gson.reflect.TypeToken
 
 import konstructs.api.{ BinaryLoaded, Position, Block, GsonLoaded,
-                        BlockTypeId, BlockFilter, BlockFactory,
+                        BlockTypeId, BlockFilter, BlockFilterFactory,
+                        BlockFactory, BlockState, InteractResult,
                         BlockUpdate, Health, ReceiveStack, Stack }
 import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ReplaceBlock,
                                  ReplaceBlockResult, ViewBlock, ViewBlockResult,
-                                 BlockUpdateEvent, DamageBlockWithBlock }
+                                 BlockUpdateEvent }
 import konstructs.utils.compress
 
 case class BlockData(w: Int, health: Int) {
@@ -115,7 +116,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
   import Db._
 
   val TypeOfPositionMapping = new TypeToken[java.util.Map[String, UUID]](){}.getType
-
+  val ReplaceFilter = BlockFilterFactory.withBlockState(BlockState.LIQUID).or(BlockFilterFactory.withBlockState(BlockState.GAS)).or(BlockFilterFactory.VACUUM)
   val ns = "chunks"
 
   private val blockBuffer = new Array[Byte](ChunkData.Size)
@@ -241,30 +242,56 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     }
   }
 
-  def damageBlock(d: DamageBlockWithBlock, s: ActorRef, positionMapping: java.util.Map[String, UUID]) {
-    updateChunk(d.getToDamage()) { old =>
+  def damageBlock(position: Position, dealing: Block,
+    positionMapping: java.util.Map[String, UUID])(ready: (Block, Block) => Unit) {
+    updateChunk(position) { old =>
       val receivingTypeId = blockFactory.getBlockTypeId(old.w)
       val receivingType = blockFactory.getBlockType(receivingTypeId)
-      val dealing = Option(d.getUsing()).getOrElse(VacuumBlock)
       val dealingType = blockFactory.getBlockType(dealing.getType())
       val dealingDamage = dealingType.getDamageWithMultiplier(receivingTypeId, receivingType)
       val receivingHealth = Health.get(old.health).damage(dealingDamage, receivingType.getDurability())
       val dealingHealth = dealing.getHealth().damage(receivingType.getDamage(), dealingType.getDurability() * toolDurabilityBonus)
-      s ! new ReceiveStack(if(d.getUsing() == null || dealingHealth.isDestroyed) {
+      val dealingBlock = if(dealingHealth.isDestroyed) {
         null
       } else {
-        Stack.createFromBlock(new Block(dealing.getId(), dealing.getType(), dealingHealth))
-      })
-      if(receivingHealth.isDestroyed()) {
-        val id = positionMapping.remove(str(d.getToDamage()))
+        new Block(dealing.getId(), dealing.getType(), dealingHealth)
+      }
+
+      val (receivingBlock, data) = if(receivingHealth.isDestroyed()) {
+        val id = positionMapping.remove(str(position))
         if(id != null)
           positionMappingDirty = true
         val oldBlock = new Block(id, receivingTypeId, Health.PRISTINE)
-        s ! new ReceiveStack(Stack.createFromBlock(oldBlock))
-        sendEvent(d.getToDamage(), oldBlock, VacuumBlock)
-        VacuumData
+        sendEvent(position, oldBlock, VacuumBlock)
+        (oldBlock, VacuumData)
       } else {
-        new BlockData(old.w, receivingHealth.getHealth())
+        (null, new BlockData(old.w, receivingHealth.getHealth()))
+      }
+      ready(dealingBlock, receivingBlock)
+      data
+    }
+  }
+
+  def replaceBlock(filter: BlockFilter, position: Position, block: Block,
+    positionMapping: java.util.Map[String, UUID])(ready: Block => Unit) = {
+    updateChunk(position) { old =>
+      val typeId = blockFactory.getBlockTypeId(old.w)
+      if(filter.matches(typeId, blockFactory.getBlockType(typeId))) {
+        val oldId = if(block.getId() != null) {
+          positionMappingDirty = true
+          positionMapping.put(str(position), block.getId())
+        } else {
+          val id = positionMapping.remove(str(position))
+          if(id != null)
+            positionMappingDirty = true
+          id
+        }
+        val oldBlock = new Block(oldId, typeId, Health.get(old.health))
+        ready(oldBlock)
+        sendEvent(position, oldBlock, block)
+        BlockData(blockFactory.getW(block), block.getHealth().getHealth())
+      } else {
+        old
       }
     }
   }
@@ -295,32 +322,34 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       loadChunk(chunk).map { c =>
         s ! BlockList(chunk, c)
       }
-    case d: DamageBlockWithBlock =>
-      damageBlock(d, sender, positionMapping)
+    case i: InteractPrimaryUpdate =>
+      val s = sender
+      val block = Option(i.block).getOrElse(VacuumBlock)
+      damageBlock(i.position, block, positionMapping) { (using, damaged) =>
+        if(damaged != null) {
+          s ! ReceiveStack(Stack.createFromBlock(damaged))
+        }
+        if(block != null)
+          s ! InteractResult(i.position, using)
+        else
+          s ! InteractResult(i.position, null)
+      }
+    case i: InteractSecondaryUpdate =>
+      val s = sender
+      replaceBlock(ReplaceFilter, i.position, i.block, positionMapping) { b =>
+        if(b == i.block) {
+          s ! InteractResult(i.position, i.block)
+        } else {
+          s ! InteractResult(i.position, null)
+        }
+      }
     case r: ReplaceBlock =>
       val s = sender
-      val filter = r.getFilter
-      val p = r.getPosition
-      val block = r.getBlock
-      updateChunk(p) { old =>
-        val typeId = blockFactory.getBlockTypeId(old.w)
-        if(filter.matches(typeId, blockFactory.getBlockType(typeId))) {
-          val oldId = if(block.getId() != null) {
-            positionMappingDirty = true
-            positionMapping.put(str(p), block.getId())
-          } else {
-            val id = positionMapping.remove(str(p))
-            if(id != null)
-              positionMappingDirty = true
-            id
-          }
-          val oldBlock = new Block(oldId, typeId, Health.get(old.health))
-          s ! new ReplaceBlockResult(p, oldBlock, true)
-          sendEvent(p, oldBlock, block)
-          BlockData(blockFactory.getW(block), block.getHealth().getHealth());
+      replaceBlock(r.getFilter, r.getPosition, r.getBlock, positionMapping) { b =>
+        if(b == r.getBlock) {
+          s ! new ReplaceBlockResult(r.getPosition, b, true)
         } else {
-          s ! new ReplaceBlockResult(p, block, false)
-          old
+          s ! new ReplaceBlockResult(r.getPosition, b, false)
         }
       }
     case ReplaceBlocks(chunk, filter, blocks) =>
