@@ -13,6 +13,7 @@ trait Filter[T] {
   def chain: Seq[ActorRef]
   def next(chain: Seq[ActorRef]): Filter[T]
   def next(chain: Seq[ActorRef], message: T): Filter[T]
+  def drop(): Unit
 
   /** Let next plugin in chain handle the unchanged message
     */
@@ -40,11 +41,6 @@ trait Filter[T] {
     chain.last ! next(chain = Seq(), message = newMessage)
   }
 
-  /** Drop the message
-    * (this is a no-op since the message is dropped if continue or
-    * skip is not called)
-    */
-  def drop() {}
 }
 
 /* Messages */
@@ -54,6 +50,7 @@ case class Say(player: String, text: String)
 case class SayFilter(chain: Seq[ActorRef], message: Say) extends Filter[Say] {
   def next(chain: Seq[ActorRef]) = copy(chain = chain)
   def next(chain: Seq[ActorRef], message: Say) = copy(chain = chain, message = message)
+  def drop() {}
 }
 case class Said(text: String)
 
@@ -62,19 +59,30 @@ case class InteractPrimary(sender: ActorRef, player: String, pos: Position, bloc
 case class InteractPrimaryFilter(chain: Seq[ActorRef], message: InteractPrimary) extends Filter[InteractPrimary] {
   def next(chain: Seq[ActorRef]) = copy(chain = chain)
   def next(chain: Seq[ActorRef], message: InteractPrimary) = copy(chain = chain, message = message)
+  def drop() {
+    message.sender ! InteractResult(message.pos, message.block)
+  }
 }
 
 case class InteractSecondary(sender: ActorRef, player: String, pos: Position, block: Block)
 case class InteractSecondaryFilter(chain: Seq[ActorRef], message: InteractSecondary) extends Filter[InteractSecondary] {
   def next(chain: Seq[ActorRef]) = copy(chain = chain)
   def next(chain: Seq[ActorRef], message: InteractSecondary) = copy(chain = chain, message = message)
+  def drop() {
+    message.sender ! InteractResult(message.pos, message.block)
+  }
 }
 
 case class InteractTertiary(sender: ActorRef, player: String, pos: Position, block: Block)
 case class InteractTertiaryFilter(chain: Seq[ActorRef], message: InteractTertiary) extends Filter[InteractTertiary] {
   def next(chain: Seq[ActorRef]) = copy(chain = chain)
   def next(chain: Seq[ActorRef], message: InteractTertiary) = copy(chain = chain, message = message)
+  def drop() {
+    message.sender ! InteractResult(message.pos, message.block)
+  }
 }
+
+case class InteractResult(position: Position, block: Block)
 
 /* Manage blocks */
 case object GetBlockFactory

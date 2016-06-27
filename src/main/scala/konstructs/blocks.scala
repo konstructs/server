@@ -101,7 +101,6 @@ object BlockFactoryImpl {
   }
 }
 
-
 class BlockMetaActor( val ns: String,
                       val jsonStorage: ActorRef,
                       configuredBlocks: Seq[(BlockTypeId, BlockType)],
@@ -150,6 +149,32 @@ object BlockMetaActor {
   val NumTextures = 16
   val TextureSize = 16
 
+  case class BlockClass(obstacle: Option[Boolean], shape: Option[BlockShape], state: Option[BlockState],
+    durability: Option[Float], damage: Option[Float], damageMultipliers: Map[BlockOrClassId, Float])
+  case class BlockDefault(obstacle: Boolean, shape: BlockShape, state: BlockState,
+    durability: Float, damage: Float, damageMultipliers: Map[BlockOrClassId, Float])
+  object BlockDefault {
+    def apply(classes: Array[BlockClassId], classMap: Map[BlockClassId, BlockClass]): BlockDefault = {
+      var obstacle = true
+      var shape = BlockShape.BLOCK
+      var state = BlockState.SOLID
+      var durability = BlockType.DEFAULT_DURABILITY
+      var damage = BlockType.DEFAULT_DAMAGE
+      var damageMultipliers: Map[BlockOrClassId, Float] = Map()
+      for(id <- classes.reverse) {
+        classMap.get(id) map { c =>
+          c.obstacle.map(obstacle = _)
+          c.shape.map(shape = _)
+          c.state.map(state = _)
+          c.durability.map(durability = _)
+          c.damage.map(damage = _)
+          damageMultipliers = damageMultipliers ++ c.damageMultipliers
+        }
+      }
+      apply(obstacle, shape, state, durability, damage, damageMultipliers)
+    }
+  }
+
   def textureFilename(idString: String): String =
     s"/textures/$idString.png"
 
@@ -165,46 +190,82 @@ object BlockMetaActor {
     g.drawImage(texture, x, y, null)
   }
 
-  def readClasses(config: TypesafeConfig): Array[BlockClassId] = {
-    config.root.entrySet.asScala.map( e =>
-      Option(config.getString(e.getKey)).map { id =>
+  def readClasses(config: TypesafeConfig): Array[BlockClassId] = if(config.hasPath("classes")) {
+    val classConfig = config.getConfig("classes")
+    classConfig.root.entrySet.asScala.map( e =>
+      Option(classConfig.getString(e.getKey)).map { id =>
         BlockClassId.fromString(id)
       }
     ).flatten.toArray
+  } else {
+    BlockType.NO_CLASSES;
   }
 
-  def blockType(idString: String, config: TypesafeConfig, texturePosition: Int): (BlockTypeId, BlockType) = {
+  def readDamageMultipliers(config: TypesafeConfig): Map[BlockOrClassId, Float] =
+    if(config.hasPath("damage-multipliers")) {
+      val damageConfig = config.getConfig("damage-multipliers")
+      damageConfig.root.entrySet.asScala.map( e =>
+        Option(damageConfig.getDouble(e.getKey)).map { multiplier =>
+          (BlockOrClassId.fromString(e.getKey), multiplier.toFloat)
+        }
+      ).flatten.toMap
+    } else {
+      Map.empty[BlockOrClassId, Float]
+    }
+
+
+
+  def readIsObstacle(config: TypesafeConfig): Option[Boolean] = if(config.hasPath("obstacle")) {
+    Some(config.getBoolean("obstacle"))
+  } else {
+    None
+  }
+
+  def readShape(config: TypesafeConfig): Option[BlockShape] = if(config.hasPath("shape")) {
+    Some(BlockShape.fromString(config.getString("shape")))
+  } else {
+    None
+  }
+
+  def readState(config: TypesafeConfig): Option[BlockState] = if(config.hasPath("state")) {
+    Some(BlockState.fromString(config.getString("state")))
+  } else {
+    None
+  }
+
+  def readDurability(config: TypesafeConfig): Option[Float] = if(config.hasPath("durability")) {
+    Some(config.getDouble("durability").toFloat)
+  } else {
+    None
+  }
+
+  def readDamage(config: TypesafeConfig): Option[Float] = if(config.hasPath("damage")) {
+    Some(config.getDouble("damage").toFloat)
+  } else {
+    None
+  }
+
+  def blockType(idString: String, config: TypesafeConfig, texturePosition: Int,
+                classMap: Map[BlockClassId, BlockClass]): (BlockTypeId, BlockType) = {
     val typeId = BlockTypeId.fromString(idString)
-    val isObstacle = if(config.hasPath("obstacle")) {
-      config.getBoolean("obstacle")
-    } else {
-      true
-    }
-    val shape = if(config.hasPath("shape")) {
-      BlockShape.fromString(config.getString("shape"))
-    } else {
-      BlockShape.BLOCK
-    }
-
-    val state = if(config.hasPath("state")) {
-      BlockState.fromString(config.getString("state"))
-    } else {
-      BlockState.SOLID
-    }
-
-    val classes = if(config.hasPath("classes")) {
-      readClasses(config.getConfig("classes"))
-    } else {
-      BlockType.NO_CLASSES;
-    }
+    val classes = readClasses(config)
+    val d = BlockDefault(classes, classMap)
+    val isObstacle = readIsObstacle(config).getOrElse(d.obstacle)
+    val shape = readShape(config).getOrElse(d.shape)
+    val state = readState(config).getOrElse(d.state)
+    val durability = readDurability(config).getOrElse(d.durability)
+    val damage = readDamage(config).getOrElse(d.damage)
+    val damageMultipliers = (for((k, v) <- (readDamageMultipliers(config) ++ d.damageMultipliers)) yield {
+      k -> Float.box(v)
+    }) asJava
 
     val blockType = if(config.hasPath("faces")) {
       val faces = config.getIntList("faces")
       if(faces.size != 6) throw new IllegalStateException("There must be exactly 6 faces")
-      new BlockType(faces.asScala.map(_ + texturePosition).toArray, shape, isObstacle, false, state, classes)
+      new BlockType(faces.asScala.map(_ + texturePosition).toArray, shape, isObstacle, false, state, classes, durability, damage, damageMultipliers)
     } else {
       /* Default is to assume only one texture for all faces */
-      new BlockType(Array(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition), shape, isObstacle, false, state, classes)
+      new BlockType(Array(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition), shape, isObstacle, false, state, classes, durability, damage, damageMultipliers)
     }
     typeId -> blockType
   }
@@ -218,7 +279,26 @@ object BlockMetaActor {
     return false
   }
 
-  def parseBlocks(config: TypesafeConfig): (Seq[(BlockTypeId, BlockType)], Array[Byte]) = {
+  def withTransparent(t: BlockType, transparent: Boolean): BlockType =
+    new BlockType(t.getFaces, t.getBlockShape, t.isObstacle, transparent, t.getBlockState, t.getClasses, t.getDurability, t.getDamage, t.getDamageMultipliers)
+
+  def parseClass(config: TypesafeConfig): BlockClass = {
+    val isObstacle = readIsObstacle(config)
+    val shape = readShape(config)
+    val state = readState(config)
+    val durability = readDurability(config)
+    val damage = readDamage(config)
+    val damageMultipliers = readDamageMultipliers(config)
+    BlockClass(isObstacle, shape, state, durability, damage, damageMultipliers)
+  }
+
+  def parseClasses(config: TypesafeConfig): Map[BlockClassId, BlockClass] = {
+    config.root.entrySet.asScala.map { e =>
+      BlockClassId.fromString(e.getKey) -> parseClass(config.getConfig(e.getKey))
+    } toMap
+  }
+
+  def parseBlocks(config: TypesafeConfig, classMap: Map[BlockClassId, BlockClass]): (Seq[(BlockTypeId, BlockType)], Array[Byte]) = {
     val blocks = config.root.entrySet.asScala.map { e =>
       e.getKey -> config.getConfig(e.getKey)
     }
@@ -229,7 +309,7 @@ object BlockMetaActor {
       BufferedImage.TYPE_INT_RGB)
     val texturesGraphics = textures.getGraphics()
     val blockSeq = (for((idString, block) <- blocks) yield {
-      val t = blockType(idString, block, texturePosition)
+      val t = blockType(idString, block, texturePosition, classMap)
       val maxIndex = t._2.getFaces().max + 1
       val numTextures = maxIndex - t._2.getFaces().min
       val img = loadTexture(idString)
@@ -240,7 +320,7 @@ object BlockMetaActor {
         insertTexture(texturePosition + i, texture, texturesGraphics)
       }
       texturePosition = maxIndex
-      t._1 -> t._2.withTransparent(transparent)
+      t._1 -> withTransparent(t._2, transparent)
     }) toSeq
     val texturesBinary = new ByteArrayOutputStream()
 
@@ -255,10 +335,16 @@ object BlockMetaActor {
   def props(
              name: String, universe: ActorRef,
              @Config(key = "json-storage") jsonStorage: ActorRef,
-             @Config(key = "blocks") blockConfig: TypesafeConfig
+             @Config(key = "blocks") blockConfig: TypesafeConfig,
+             @Config(key = "classes", optional = true) classConfig: TypesafeConfig
            ): Props = {
     print("Loading block data... ")
-    val (blocks, textures) = parseBlocks(blockConfig)
+    val classMap = if(classConfig != null) {
+      parseClasses(classConfig)
+    } else {
+      Map.empty[BlockClassId, BlockClass]
+    }
+    val (blocks, textures) = parseBlocks(blockConfig, classMap)
     println("done!")
     Props(
       classOf[BlockMetaActor],
