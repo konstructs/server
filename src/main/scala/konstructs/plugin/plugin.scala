@@ -195,12 +195,14 @@ class PluginLoaderActor(rootConfig: TypesafeConfig) extends Actor {
 
   private def keepString(s: String, config: TypesafeConfig): String = config.getString(s)
 
+  private def keyAsString(s: String, config: TypesafeConfig): String = s.replace("\"", "")
+
   private def toFile(s: String, config: TypesafeConfig): File = new File(config.getString(s))
 
   private def configToSeq[T](get: (String, TypesafeConfig) => T)(config: TypesafeConfig): Seq[T] =
-    config.entrySet.asScala.filterNot { e =>
+    config.root.entrySet.asScala.filter { e =>
       val v = e.getValue
-      v.valueType == ConfigValueType.NULL
+      v.valueType != ConfigValueType.NULL
     }.map { e =>
       val k = e.getKey
       get(k, config)
@@ -228,7 +230,7 @@ class PluginLoaderActor(rootConfig: TypesafeConfig) extends Actor {
         }
         case ActorRefType => try {
           if(p.listType.isDefined) {
-            Right(Dependencies(configToSeq(keepString)(config.getConfig(p.name)), p.listType.get))
+            Right(Dependencies(configToSeq(keyAsString)(config.getConfig(p.name)), p.listType.get))
           } else {
             Right(Dependencies(config.getString(p.name)))
           }
