@@ -5,15 +5,16 @@ import java.awt.image.BufferedImage
 import java.awt.Graphics
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
-import konstructs.plugin.Plugin._
 
 import scala.collection.JavaConverters._
+import scala.util.Try
 
-import com.typesafe.config.{ Config => TypesafeConfig }
+import com.typesafe.config.{ Config => TypesafeConfig, ConfigValueType }
 import akka.actor.{ Actor, Props, ActorRef, Stash }
 
 import com.google.gson.reflect.TypeToken
 
+import konstructs.plugin.Plugin._
 import konstructs.api._
 import konstructs.api.messages._
 import konstructs.plugin.{ListConfig, PluginConstructor, Config}
@@ -193,8 +194,10 @@ object BlockMetaActor {
   def readClasses(config: TypesafeConfig): Array[BlockClassId] = if(config.hasPath("classes")) {
     val classConfig = config.getConfig("classes")
     classConfig.root.entrySet.asScala.map( e =>
-      Option(classConfig.getString(e.getKey)).map { id =>
-        BlockClassId.fromString(id)
+      if(e.getValue.valueType != ConfigValueType.NULL) {
+        Some(BlockClassId.fromString(e.getKey.replace("\"", "")))
+      } else {
+        None
       }
     ).flatten.toArray
   } else {
