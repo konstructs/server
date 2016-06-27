@@ -1,6 +1,8 @@
 package konstructs
 
+import java.util
 import java.util.UUID
+
 import scala.collection.JavaConverters._
 import scala.math.min
 
@@ -75,7 +77,10 @@ def parseStackTemplate(config: TypesafeConfig): StackTemplate = {
     } else {
       val rows = config.getInt("rows")
       val columns = config.getInt("columns")
-      new PatternTemplate(config.getConfigList("stacks").asScala.map(parseStackTemplate).toArray, rows, columns)
+      val stacks = util.Arrays.copyOf(
+        config.getConfigList("stacks").asScala.map(parseStackTemplate).toArray, rows * columns
+      )
+      new PatternTemplate(stacks, rows, columns)
     }
   }
 
