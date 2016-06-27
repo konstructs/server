@@ -61,14 +61,18 @@ object KonstructingActor {
       ((0 until amount).map { i => Block.create(blockId) }).toArray )
   }
 
-def parseStackTemplate(config: TypesafeConfig): StackTemplate = {
-    val blockId = config.getString("id")
-    val amount = if(config.hasPath("amount")) {
-      config.getInt("amount")
+  def parseStackTemplate(config: TypesafeConfig): StackTemplate = {
+    if(config.hasPath("id")) {
+      val blockId = config.getString("id")
+      val amount = if(config.hasPath("amount")) {
+        config.getInt("amount")
+      } else {
+        1
+      }
+      new StackTemplate(BlockOrClassId.fromString(blockId), amount)
     } else {
-      1
+      null
     }
-    new StackTemplate(BlockOrClassId.fromString(blockId), amount)
   }
 
   def parsePatternTemplate(config: TypesafeConfig): PatternTemplate = {
