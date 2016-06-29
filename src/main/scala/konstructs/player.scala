@@ -2,9 +2,6 @@ package konstructs
 
 import konstructs.plugin.toolsack.ToolSackActor
 
-import scala.math.Ordering
-import scala.util.Sorting
-
 import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 
 import konstructs.api._
