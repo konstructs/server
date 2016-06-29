@@ -30,6 +30,7 @@ class PlayerActor(
   val ns = "players"
 
   var data: Player = null
+  var viewDistance = 10
 
   schedule(5000, StoreData)
 
@@ -221,13 +222,15 @@ class PlayerActor(
       if(distance < 2) {
         /* Force update chunks nearby */
         client ! BlockList(c.chunk, c.data)
-      } else if(distance < 11){
+      } else if(distance < viewDistance){
         client ! protocol.ChunkUpdate(c.chunk.p, c.chunk.q, c.chunk.k)
       } else {
         /* Discard any chunk update that is too far away from the client */
       }
     case s: DbActor.SendBlocks =>
       db ! s
+    case SetViewDistance(d) =>
+      viewDistance = d
   }
 
   def ready: Receive = {
@@ -353,6 +356,7 @@ object PlayerActor {
   case class InventoryUpdate(view: View)
   case class SelectItem(index: Int, button: Int)
   case class HeldStack(held: Stack)
+  case class SetViewDistance(distance: Int)
 
   def props(pid: Int, nick: String, password: String, client: ActorRef, db: ActorRef, universe: ActorRef, store: ActorRef, startingPosition: protocol.Position) = Props(classOf[PlayerActor], pid, nick, password, client, db, universe, store, startingPosition)
 
