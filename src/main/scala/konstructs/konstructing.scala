@@ -115,6 +115,7 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
 
   universe ! GetBlockFactory
 
+  val EmptyInventory = Inventory.createEmpty(0)
   var konstructing = Inventory.createEmpty(konstructingView.getRows * konstructingView.getColumns)
   var result = Inventory.createEmpty(resultView.getRows * resultView.getColumns)
   var factory: BlockFactory = null
@@ -136,7 +137,12 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
   def receive = {
     case f: BlockFactory =>
       factory = f
-      universe ! GetInventory(inventoryId)
+      if(inventoryId != null) {
+        universe ! GetInventory(inventoryId)
+      } else {
+        context.become(ready(EmptyInventory))
+        player ! ConnectView(self, view(EmptyInventory))
+      }
     case GetInventoryResponse(_, Some(inventory)) =>
       context.become(ready(inventory))
       player ! ConnectView(self, view(inventory))

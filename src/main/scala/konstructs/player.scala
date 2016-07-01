@@ -55,8 +55,7 @@ class PlayerActor(
         context.stop(self)
       }
     case GsonLoaded(_, _) =>
-      val inventoryBlock = Block.createWithId(ToolSackActor.BlockId)
-      universe ! CreateInventory(inventoryBlock.getId, 16)
+      val inventoryBlock = Block.create(ToolSackActor.BlockId)
       val inventory = Inventory.createEmpty(9).withSlot(0, Stack.createFromBlock(inventoryBlock))
       data = Player(nick, password, startingPosition, inventory)
       client ! PlayerInfo(pid, nick, self, data.position)
@@ -112,8 +111,10 @@ class PlayerActor(
         if(i.block == null && block != null) {
          /* We didn't get our block back, it was placed */
           update(data.inventory.stackTail(active))
-        } else {
-          /* We got our block back, couldn't be placed */
+        } else if(i.block != null) {
+          /* We got our block back, it couldn't be placed, possibly updated */
+          val stack = data.inventory.getStack(active)
+          update(data.inventory.withSlot(active, stack.replaceHead(i.block)))
         }
         context.become(ready orElse handleBasics)
         unstashAll()
@@ -128,8 +129,10 @@ class PlayerActor(
         if(i.block == null && block != null) {
           /* We didn't get our block back, server needed it */
           update(data.inventory.stackTail(active))
-        } else {
-          /* We got our block back, wasn't needed */
+        } else if(i.block != null) {
+          /* We got our block back, possibly updated */
+          val stack = data.inventory.getStack(active)
+          update(data.inventory.withSlot(active, stack.replaceHead(i.block)))
         }
         context.become(ready orElse handleBasics)
         unstashAll()
