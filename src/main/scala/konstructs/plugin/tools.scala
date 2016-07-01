@@ -5,6 +5,7 @@ import akka.actor.{ Actor, Props, ActorRef }
 import konstructs.plugin.PluginConstructor
 import konstructs.KonstructingViewActor
 import konstructs.api._
+import konstructs.plugin.toolsack.ToolSackActor
 
 class WorkTableActor(universe: ActorRef) extends Actor {
   import WorkTableActor._
@@ -13,8 +14,13 @@ class WorkTableActor(universe: ActorRef) extends Actor {
     case i: InteractTertiaryFilter =>
       i.message match {
         case InteractTertiary(sender, player, pos, block, blockAtPosition, true) if blockAtPosition != null && blockAtPosition.getType == BlockId =>
-          context.actorOf(KonstructingViewActor.props(sender, universe, null,
-            EmptyView, KonstructingView, ResultView))
+          if(block != null && block.getType() == ToolSackActor.BlockId && block.getId() != null) {
+            context.actorOf(KonstructingViewActor.props(sender, universe, block.getId,
+              ToolSackActor.SackView, KonstructingView, ResultView))
+          } else {
+            context.actorOf(KonstructingViewActor.props(sender, universe, null,
+              EmptyView, KonstructingView, ResultView))
+          }
           i.drop
         case _ =>
           i.continue
