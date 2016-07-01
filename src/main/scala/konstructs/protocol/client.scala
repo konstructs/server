@@ -52,6 +52,9 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
     } else if(command.startsWith("R,")) {
       val ints = readData(_.toInt, command.drop(2))
       player.actor ! SelectItem(ints(0), ints(1))
+    } else if(command.startsWith("D,")) {
+      val ints = readData(_.toInt, command.drop(2))
+      player.actor ! SetViewDistance(ints(0))
     }
   }
 
