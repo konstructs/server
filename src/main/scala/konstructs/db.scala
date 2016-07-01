@@ -4,7 +4,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import akka.actor.{ Actor, ActorRef, Props }
 
-import konstructs.api.{ Position, BlockFactory, Box, BlockTypeId, Block }
+import konstructs.api.{ Position, BlockFactory, Box, BlockTypeId, Block, InteractTertiary }
 import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ViewBlock,
                                  ReplaceBlocks, ReplaceBlock, DamageBlockWithBlock }
 
@@ -33,7 +33,8 @@ object ShardPosition {
 }
 
 class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
-  jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef], blockFactory: BlockFactory)
+  jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef], blockFactory: BlockFactory,
+  tertiaryInteractionFilters: Seq[ActorRef])
     extends Actor {
   import DbActor._
 
@@ -51,7 +52,7 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
       case Some(a) => a
       case None =>
         context.actorOf(ShardActor.props(self, shard, binaryStorage, jsonStorage, blockUpdateEvents,
-          generator, blockFactory), rid)
+          generator, blockFactory, tertiaryInteractionFilters, universe), rid)
     }
   }
 
@@ -60,6 +61,8 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
       getShardActor(i.position) forward i
     case i: InteractSecondaryUpdate =>
       getShardActor(i.position) forward i
+    case i: InteractTertiaryUpdate =>
+      getShardActor(i.message.position) forward i
     case r: ReplaceBlock =>
       getShardActor(r.getPosition) forward r
     case v: ViewBlock =>
@@ -92,6 +95,7 @@ object DbActor {
 
   case class InteractPrimaryUpdate(position: Position, block: Block)
   case class InteractSecondaryUpdate(position: Position, block: Block)
+  case class InteractTertiaryUpdate(filters: Seq[ActorRef], message: InteractTertiary)
 
   def splitList[T](placed: java.util.Map[Position, T]):
       Map[ChunkPosition, Map[Position, T]] = {
@@ -110,8 +114,10 @@ object DbActor {
   }
 
   def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
-    jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef], blockFactory: BlockFactory) =
-    Props(classOf[DbActor], universe, generator, binaryStorage, jsonStorage, blockUpdateEvents, blockFactory)
+    jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef], blockFactory: BlockFactory,
+    tertiaryInteractionFilters: Seq[ActorRef]) =
+    Props(classOf[DbActor], universe, generator, binaryStorage, jsonStorage, blockUpdateEvents,
+      blockFactory, tertiaryInteractionFilters)
 }
 
 class BoxQueryResultActor(initiator: ActorRef, blockFactory: BlockFactory,

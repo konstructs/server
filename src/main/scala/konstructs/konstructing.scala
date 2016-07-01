@@ -1,6 +1,8 @@
 package konstructs
 
+import java.util
 import java.util.UUID
+
 import scala.collection.JavaConverters._
 import scala.math.min
 
@@ -59,14 +61,18 @@ object KonstructingActor {
       ((0 until amount).map { i => Block.create(blockId) }).toArray )
   }
 
-def parseStackTemplate(config: TypesafeConfig): StackTemplate = {
-    val blockId = config.getString("id")
-    val amount = if(config.hasPath("amount")) {
-      config.getInt("amount")
+  def parseStackTemplate(config: TypesafeConfig): StackTemplate = {
+    if(config.hasPath("id")) {
+      val blockId = config.getString("id")
+      val amount = if(config.hasPath("amount")) {
+        config.getInt("amount")
+      } else {
+        1
+      }
+      new StackTemplate(BlockOrClassId.fromString(blockId), amount)
     } else {
-      1
+      null
     }
-    new StackTemplate(BlockOrClassId.fromString(blockId), amount)
   }
 
   def parsePatternTemplate(config: TypesafeConfig): PatternTemplate = {
@@ -75,7 +81,10 @@ def parseStackTemplate(config: TypesafeConfig): StackTemplate = {
     } else {
       val rows = config.getInt("rows")
       val columns = config.getInt("columns")
-      new PatternTemplate(config.getConfigList("stacks").asScala.map(parseStackTemplate).toArray, rows, columns)
+      val stacks = util.Arrays.copyOf(
+        config.getConfigList("stacks").asScala.map(parseStackTemplate).toArray, rows * columns
+      )
+      new PatternTemplate(stacks, rows, columns)
     }
   }
 
@@ -106,6 +115,7 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
 
   universe ! GetBlockFactory
 
+  val EmptyInventory = Inventory.createEmpty(0)
   var konstructing = Inventory.createEmpty(konstructingView.getRows * konstructingView.getColumns)
   var result = Inventory.createEmpty(resultView.getRows * resultView.getColumns)
   var factory: BlockFactory = null
@@ -127,7 +137,12 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
   def receive = {
     case f: BlockFactory =>
       factory = f
-      universe ! GetInventory(inventoryId)
+      if(inventoryId != null) {
+        universe ! GetInventory(inventoryId)
+      } else {
+        context.become(ready(EmptyInventory))
+        player ! ConnectView(self, view(EmptyInventory))
+      }
     case GetInventoryResponse(_, Some(inventory)) =>
       context.become(ready(inventory))
       player ! ConnectView(self, view(inventory))

@@ -54,7 +54,8 @@ class UniverseActor(
   def receive = {
     case factory: BlockFactory =>
       generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage, factory))
-      db = context.actorOf(DbActor.props(self, generator, binaryStorage, jsonStorage, blockUpdateEvents, factory))
+      db = context.actorOf(DbActor.props(self, generator, binaryStorage, jsonStorage, blockUpdateEvents, factory,
+        tertiaryInteractionFilters))
       context.become(ready)
       unstashAll()
     case _ =>
@@ -84,7 +85,7 @@ class UniverseActor(
       if(i.message.pos != null) {
         db.tell(DbActor.InteractPrimaryUpdate(i.message.pos, i.message.block), i.message.sender)
       } else {
-        i.message.sender ! InteractResult(i.message.pos, i.message.block)
+        i.message.sender ! InteractResult(i.message.pos, i.message.block, null)
       }
     case i: InteractSecondary =>
       val filters = secondaryInteractionFilters :+ self
@@ -93,13 +94,17 @@ class UniverseActor(
       if(i.message.pos != null && i.message.block != null) {
         db.tell(DbActor.InteractSecondaryUpdate(i.message.pos, i.message.block), i.message.sender)
       } else {
-        i.message.sender ! InteractResult(i.message.pos, i.message.block)
+        i.message.sender ! InteractResult(i.message.pos, i.message.block, null)
       }
     case i: InteractTertiary =>
-      val filters = tertiaryInteractionFilters :+ self
-      filters.head.forward(InteractTertiaryFilter(filters.tail, i))
-    case i: InteractTertiaryFilter =>
-      i.message.sender ! InteractResult(i.message.pos, i.message.block)
+      if(i.position != null) {
+        db ! DbActor.InteractTertiaryUpdate(tertiaryInteractionFilters, i)
+      } else {
+        val filters = tertiaryInteractionFilters :+ self
+        filters.head ! InteractTertiaryFilter(filters.tail, i)
+      }
+    case i: InteractTertiaryFilter if !i.message.worldPhase =>
+      i.message.sender ! InteractResult(i.message.position, i.message.block, i.message.blockAtPosition)
     case p: ReplaceBlock =>
       db.forward(p)
     case v: ViewBlock =>
