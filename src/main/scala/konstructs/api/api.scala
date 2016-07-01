@@ -61,10 +61,10 @@ case class InteractPrimaryFilter(chain: Seq[ActorRef], message: InteractPrimary)
   def next(chain: Seq[ActorRef]) = copy(chain = chain)
   def next(chain: Seq[ActorRef], message: InteractPrimary) = copy(chain = chain, message = message)
   def drop() {
-    message.sender ! InteractResult(message.pos, message.block)
+    message.sender ! InteractResult(message.pos, message.block, null)
   }
   def dropWith(message: InteractPrimary) {
-    message.sender ! InteractResult(message.pos, message.block)
+    message.sender ! InteractResult(message.pos, message.block, null)
   }
 }
 
@@ -73,26 +73,26 @@ case class InteractSecondaryFilter(chain: Seq[ActorRef], message: InteractSecond
   def next(chain: Seq[ActorRef]) = copy(chain = chain)
   def next(chain: Seq[ActorRef], message: InteractSecondary) = copy(chain = chain, message = message)
   def drop() {
-    message.sender ! InteractResult(message.pos, message.block)
+    message.sender ! InteractResult(message.pos, message.block, null)
   }
   def dropWith(message: InteractSecondary) {
-    message.sender ! InteractResult(message.pos, message.block)
+    message.sender ! InteractResult(message.pos, message.block, null)
   }
 }
 
-case class InteractTertiary(sender: ActorRef, player: String, pos: Position, block: Block)
+case class InteractTertiary(sender: ActorRef, player: String, position: Position, block: Block, blockAtPosition: Block, worldPhase: Boolean)
 case class InteractTertiaryFilter(chain: Seq[ActorRef], message: InteractTertiary) extends Filter[InteractTertiary] {
   def next(chain: Seq[ActorRef]) = copy(chain = chain)
   def next(chain: Seq[ActorRef], message: InteractTertiary) = copy(chain = chain, message = message)
   def drop() {
-    message.sender ! InteractResult(message.pos, message.block)
+    message.sender ! InteractResult(message.position, message.block, message.blockAtPosition)
   }
   def dropWith(message: InteractTertiary) {
-    message.sender ! InteractResult(message.pos, message.block)
+    message.sender ! InteractResult(message.position, message.block, message.blockAtPosition)
   }
 }
 
-case class InteractResult(position: Position, block: Block)
+case class InteractResult(position: Position, block: Block, blockAtPosition: Block)
 
 /* Manage blocks */
 case object GetBlockFactory

@@ -11,7 +11,8 @@ import com.google.gson.reflect.TypeToken
 import konstructs.api.{ BinaryLoaded, Position, Block, GsonLoaded,
                         BlockTypeId, BlockFilter, BlockFilterFactory,
                         BlockFactory, BlockState, InteractResult,
-                        BlockUpdate, Health, ReceiveStack, Stack }
+                        BlockUpdate, Health, ReceiveStack, Stack,
+                        InteractTertiaryFilter }
 import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ReplaceBlock,
                                  ReplaceBlockResult, ViewBlock, ViewBlockResult,
                                  BlockUpdateEvent }
@@ -108,7 +109,8 @@ object ChunkData {
 
 class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef,
                  val jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef],
-                 chunkGenerator: ActorRef, blockFactory: BlockFactory)
+                 chunkGenerator: ActorRef, blockFactory: BlockFactory,
+                 tertiaryInteractionFilters: Seq[ActorRef], universe: ActorRef)
     extends Actor with Stash with utils.Scheduled with BinaryStorage with JsonStorage {
   import ShardActor.{ ReplaceBlocks, index, StoreChunks, str }
   import GeneratorActor._
@@ -330,19 +332,30 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
           s ! ReceiveStack(Stack.createFromBlock(damaged))
         }
         if(block != null)
-          s ! InteractResult(i.position, using)
+          s ! InteractResult(i.position, using, damaged)
         else
-          s ! InteractResult(i.position, null)
+          s ! InteractResult(i.position, null, damaged)
       }
     case i: InteractSecondaryUpdate =>
       val s = sender
       replaceBlock(ReplaceFilter, i.position, i.block, positionMapping) { b =>
         if(b == i.block) {
-          s ! InteractResult(i.position, i.block)
+          s ! InteractResult(i.position, i.block, null)
         } else {
-          s ! InteractResult(i.position, null)
+          s ! InteractResult(i.position, null, null)
         }
       }
+    case i: InteractTertiaryUpdate =>
+      val filters = tertiaryInteractionFilters :+ self
+      val p = i.message.position
+      readChunk(p) { w =>
+        val b = blockFactory.createBlock(positionMapping.get(str(p)), w.toInt)
+        val filters = tertiaryInteractionFilters :+ self
+        filters.head ! InteractTertiaryFilter(filters.tail, i.message.copy(blockAtPosition = b, worldPhase = true))
+      }
+    case i: InteractTertiaryFilter if i.message.worldPhase =>
+      val filters = tertiaryInteractionFilters :+ universe
+      filters.head ! InteractTertiaryFilter(filters.tail, i.message.copy(worldPhase = false))
     case r: ReplaceBlock =>
       val s = sender
       replaceBlock(r.getFilter, r.getPosition, r.getBlock, positionMapping) { b =>
@@ -418,7 +431,9 @@ object ShardActor {
   def props(db: ActorRef, shard: ShardPosition,
     binaryStorage: ActorRef, jsonStorage: ActorRef,
     blockUpdateEvents: Seq[ActorRef], chunkGenerator: ActorRef,
-    blockFactory: BlockFactory) =
+    blockFactory: BlockFactory, tertiaryInteractionFilters: Seq[ActorRef],
+    universe: ActorRef) =
     Props(classOf[ShardActor], db, shard, binaryStorage, jsonStorage,
-      blockUpdateEvents, chunkGenerator, blockFactory)
+      blockUpdateEvents, chunkGenerator, blockFactory, tertiaryInteractionFilters,
+      universe)
 }

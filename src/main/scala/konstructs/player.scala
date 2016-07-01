@@ -154,7 +154,7 @@ class PlayerActor(
         responseHandler
       case 3 =>
         val responseHandler = actionTertiary(pos, block, active)
-        universe ! InteractTertiary(self, nick, pos, block)
+        universe ! InteractTertiary(self, nick, pos, block, null, false)
         responseHandler
     }
   }

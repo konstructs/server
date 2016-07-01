@@ -12,7 +12,7 @@ class WorkTableActor(universe: ActorRef) extends Actor {
   def receive = {
     case i: InteractTertiaryFilter =>
       i.message match {
-        case InteractTertiary(sender, player, pos, block) if block != null && block.getType == BlockId =>
+        case InteractTertiary(sender, player, pos, block, blockAtPosition, true) if blockAtPosition != null && blockAtPosition.getType == BlockId =>
           context.actorOf(KonstructingViewActor.props(sender, universe, null,
             EmptyView, KonstructingView, ResultView))
           i.drop
