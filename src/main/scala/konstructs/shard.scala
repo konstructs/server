@@ -359,6 +359,17 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     case i: InteractTertiaryFilter if i.getMessage.isWorldPhase =>
       val filters = tertiaryInteractionFilters :+ self
       filters.head ! new InteractTertiaryFilter(filters.tail.toArray, i.getMessage.withWorldPhase(false))
+    case s: InteractTertiaryFilter.Skipped =>
+      // If first phase was skipped, update the world and return to user
+      // This avoids running the second phase
+      val i = s.getFilter
+      val message = i.getMessage
+      val position = message.getPosition
+      val blockAtPosition = message.getBlockAtPosition
+      /* Update the block with any changes made by the filter */
+      replaceBlock(BlockFilterFactory.EVERYTHING, position, blockAtPosition, positionMapping) { b =>
+        message.getSender ! new InteractResult(position, message.getBlock, blockAtPosition)
+      }
     case i: InteractTertiaryFilter if !i.getMessage.isWorldPhase =>
       val message = i.getMessage
       val position = message.getPosition
