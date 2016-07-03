@@ -87,12 +87,12 @@ class PlayerActor(
 
   def actionPrimary(pos: Position, block: Block, active: Int): Receive = {
     case i: InteractResult =>
-      if(i.position == pos) {
-        if(i.block != null && block != null) {
+      if(i.getPosition == pos) {
+        if(i.getBlock != null && block != null) {
           /* We got our tool block back, possibly damaged */
           val stack = data.inventory.getStack(active)
-          update(data.inventory.withSlot(active, stack.replaceHead(i.block)))
-        } else if(block != null && i.block == null) {
+          update(data.inventory.withSlot(active, stack.replaceHead(i.getBlock)))
+        } else if(block != null && i.getBlock == null) {
           /* We didn't get our tool block back, it was destroyed */
           update(data.inventory.stackTail(active))
         } else {
@@ -101,43 +101,43 @@ class PlayerActor(
         context.become(ready orElse handleBasics)
         unstashAll()
       } else {
-        throw new IllegalStateException(s"Invalid primary interaction result position: ${i.position}")
+        throw new IllegalStateException(s"Invalid primary interaction result position: ${i.getPosition}")
       }
   }
 
   def actionSecondary(pos: Position, block: Block, active: Int): Receive = {
     case i: InteractResult =>
-      if(i.position == pos) {
-        if(i.block == null && block != null) {
+      if(i.getPosition == pos) {
+        if(i.getBlock == null && block != null) {
          /* We didn't get our block back, it was placed */
           update(data.inventory.stackTail(active))
-        } else if(i.block != null) {
+        } else if(i.getBlock != null) {
           /* We got our block back, it couldn't be placed, possibly updated */
           val stack = data.inventory.getStack(active)
-          update(data.inventory.withSlot(active, stack.replaceHead(i.block)))
+          update(data.inventory.withSlot(active, stack.replaceHead(i.getBlock)))
         }
         context.become(ready orElse handleBasics)
         unstashAll()
       } else {
-        throw new IllegalStateException(s"Invalid secondary interaction result position: ${i.position}")
+        throw new IllegalStateException(s"Invalid secondary interaction result position: ${i.getPosition}")
       }
   }
 
   def actionTertiary(pos: Position, block: Block, active: Int): Receive = {
     case i: InteractResult =>
-      if(i.position == pos) {
-        if(i.block == null && block != null) {
+      if(i.getPosition == pos) {
+        if(i.getBlock == null && block != null) {
           /* We didn't get our block back, server needed it */
           update(data.inventory.stackTail(active))
-        } else if(i.block != null) {
+        } else if(i.getBlock != null) {
           /* We got our block back, possibly updated */
           val stack = data.inventory.getStack(active)
-          update(data.inventory.withSlot(active, stack.replaceHead(i.block)))
+          update(data.inventory.withSlot(active, stack.replaceHead(i.getBlock)))
         }
         context.become(ready orElse handleBasics)
         unstashAll()
       } else {
-        throw new IllegalStateException(s"Invalid tertiary interaction result position: ${i.position}")
+        throw new IllegalStateException(s"Invalid tertiary interaction result position: ${i.getPosition}")
       }
   }
 
@@ -146,15 +146,15 @@ class PlayerActor(
     button match {
       case 1 =>
         val responseHandler = actionPrimary(pos, block, active)
-        universe ! InteractPrimary(self, nick, pos, block)
+        universe ! new InteractPrimary(self, nick, pos, block)
         responseHandler
       case 2 =>
         val responseHandler = actionSecondary(pos, block, active)
-        universe ! InteractSecondary(self, nick, pos, block)
+        universe ! new InteractSecondary(self, nick, pos, block)
         responseHandler
       case 3 =>
         val responseHandler = actionTertiary(pos, block, active)
-        universe ! InteractTertiary(self, nick, pos, block, null, false)
+        universe ! new InteractTertiary(self, nick, pos, block, null, false)
         responseHandler
     }
   }
@@ -212,7 +212,7 @@ class PlayerActor(
     case l: PlayerLogout =>
       client ! l
     case protocol.Say(msg) =>
-      universe ! Say(nick, msg)
+      universe ! new Say(nick, msg)
     case s: Said =>
       client.forward(s)
     case bl: BlockList =>

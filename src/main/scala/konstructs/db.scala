@@ -4,9 +4,10 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import akka.actor.{ Actor, ActorRef, Props }
 
-import konstructs.api.{ Position, BlockFactory, Box, BlockTypeId, Block, InteractTertiary }
+import konstructs.api.{ Position, BlockFactory, Box, BlockTypeId, Block }
 import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ViewBlock,
-                                 ReplaceBlocks, ReplaceBlock, DamageBlockWithBlock }
+                                 ReplaceBlocks, ReplaceBlock, DamageBlockWithBlock,
+                                 InteractTertiary}
 
 object Db {
   val BlockSize = 4
@@ -62,7 +63,7 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
     case i: InteractSecondaryUpdate =>
       getShardActor(i.position) forward i
     case i: InteractTertiaryUpdate =>
-      getShardActor(i.message.position) forward i
+      getShardActor(i.message.getPosition) forward i
     case r: ReplaceBlock =>
       getShardActor(r.getPosition) forward r
     case v: ViewBlock =>
