@@ -5,38 +5,39 @@ import akka.actor.{ Actor, Props, ActorRef }
 import konstructs.plugin.PluginConstructor
 import konstructs.KonstructingViewActor
 import konstructs.api._
-
+import konstructs.api.messages._
 class ToolSackActor(universe: ActorRef) extends Actor {
   import ToolSackActor._
 
   def receive = {
-    case i: InteractTertiaryFilter =>
-      i.message match {
-        case InteractTertiary(sender, player, pos, block, blockAtPosition, false) if block != null && block.getType == BlockId =>
-          val b = if(block.getId == null) {
-            val newBlock = block.withId(UUID.randomUUID)
+    case f: InteractTertiaryFilter =>
+      f.getMessage match {
+        case i: InteractTertiary
+            if !i.isWorldPhase && i.getBlock != null && i.getBlock.getType == BlockId =>
+          val b = if(i.getBlock.getId == null) {
+            val newBlock = i.getBlock.withId(UUID.randomUUID)
             universe ! CreateInventory(newBlock.getId, 16)
             newBlock
           } else {
-            block
+            i.getBlock
           }
-          context.actorOf(KonstructingViewActor.props(sender, universe, b.getId,
+          context.actorOf(KonstructingViewActor.props(i.getSender, universe, b.getId,
             SackView, KonstructingView, ResultView))
-          i.dropWith(InteractTertiary(sender, player, pos, b, blockAtPosition, false))
-        case InteractTertiary(sender, player, pos, block, blockAtPosition, true)
-            if blockAtPosition != null && blockAtPosition.getType == BlockId =>
-          val b = if(blockAtPosition.getId == null) {
-            val newBlock = blockAtPosition.withId(UUID.randomUUID)
+          f.skipWith(self, i.withBlock(b))
+        case i: InteractTertiary
+            if i.isWorldPhase && i.getBlockAtPosition != null && i.getBlockAtPosition.getType == BlockId =>
+          val b = if(i.getBlockAtPosition.getId == null) {
+            val newBlock = i.getBlockAtPosition.withId(UUID.randomUUID)
             universe ! CreateInventory(newBlock.getId, 16)
             newBlock
           } else {
-            blockAtPosition
+            i.getBlockAtPosition
           }
-          context.actorOf(KonstructingViewActor.props(sender, universe, b.getId,
+          context.actorOf(KonstructingViewActor.props(i.getSender, universe, b.getId,
             SackView, KonstructingView, ResultView))
-          i.dropWith(InteractTertiary(sender, player, pos, block, b, true))
+          f.skipWith(self, i.withBlockAtPosition(b))
         case _ =>
-          i.continue
+          f.next(self)
       }
   }
 }

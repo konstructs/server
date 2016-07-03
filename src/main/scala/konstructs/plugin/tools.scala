@@ -5,25 +5,26 @@ import akka.actor.{ Actor, Props, ActorRef }
 import konstructs.plugin.PluginConstructor
 import konstructs.KonstructingViewActor
 import konstructs.api._
+import konstructs.api.messages._
 import konstructs.plugin.toolsack.ToolSackActor
 
 class WorkTableActor(universe: ActorRef) extends Actor {
   import WorkTableActor._
 
   def receive = {
-    case i: InteractTertiaryFilter =>
-      i.message match {
-        case InteractTertiary(sender, player, pos, block, blockAtPosition, true) if blockAtPosition != null && blockAtPosition.getType == BlockId =>
-          if(block != null && block.getType() == ToolSackActor.BlockId && block.getId() != null) {
-            context.actorOf(KonstructingViewActor.props(sender, universe, block.getId,
+    case f: InteractTertiaryFilter =>
+      f.getMessage match {
+        case i: InteractTertiary if i.isWorldPhase && i.getBlockAtPosition != null && i.getBlockAtPosition.getType == BlockId =>
+          if(i.getBlock != null && i.getBlock.getType == ToolSackActor.BlockId && i.getBlock.getId() != null) {
+            context.actorOf(KonstructingViewActor.props(i.getSender, universe, i.getBlock.getId,
               ToolSackActor.SackView, KonstructingView, ResultView))
           } else {
-            context.actorOf(KonstructingViewActor.props(sender, universe, null,
+            context.actorOf(KonstructingViewActor.props(i.getSender, universe, null,
               EmptyView, KonstructingView, ResultView))
           }
-          i.drop
+          f.skip(self)
         case _ =>
-          i.continue
+          f.next(self)
       }
   }
 }

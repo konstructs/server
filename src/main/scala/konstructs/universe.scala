@@ -3,8 +3,7 @@ package konstructs
 import akka.actor.{ Actor, ActorRef, Props, Stash }
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 import konstructs.api._
-import konstructs.api.messages.{ ReplaceBlock, ViewBlock, ReplaceBlocks, BoxQuery,
-                                 DamageBlockWithBlock }
+import konstructs.api.messages._
 import collection.JavaConversions._
 
 class UniverseActor(
@@ -73,38 +72,41 @@ class UniverseActor(
       allPlayers().foreach(_ ! c)
     case s: Say =>
       val filters = chatFilters :+ self
-      filters.head.forward(SayFilter(filters.tail, s))
+      filters.head.forward(new SayFilter(filters.tail.toArray, s))
     case s: SayFilter =>
-      allPlayers().foreach(_.forward(Said(s.message.text)))
+      allPlayers().foreach(_.forward(new Said(s.getMessage.getText)))
     case s: Said =>
       allPlayers().foreach(_.forward(s))
     case i: InteractPrimary =>
       val filters = primaryInteractionFilters :+ self
-      filters.head.forward(InteractPrimaryFilter(filters.tail, i))
+      filters.head.forward(new InteractPrimaryFilter(filters.tail.toArray, i))
     case i: InteractPrimaryFilter =>
-      if(i.message.pos != null) {
-        db.tell(DbActor.InteractPrimaryUpdate(i.message.pos, i.message.block), i.message.sender)
+      val message = i.getMessage
+      if(message.getPosition != null) {
+        db.tell(DbActor.InteractPrimaryUpdate(message.getPosition, message.getBlock), message.getSender)
       } else {
-        i.message.sender ! InteractResult(i.message.pos, i.message.block, null)
+        message.getSender ! new InteractResult(message.getPosition, message.getBlock, null)
       }
     case i: InteractSecondary =>
       val filters = secondaryInteractionFilters :+ self
-      filters.head.forward(InteractSecondaryFilter(filters.tail, i))
+      filters.head.forward(new InteractSecondaryFilter(filters.tail.toArray, i))
     case i: InteractSecondaryFilter =>
-      if(i.message.pos != null && i.message.block != null) {
-        db.tell(DbActor.InteractSecondaryUpdate(i.message.pos, i.message.block), i.message.sender)
+      val message = i.getMessage
+      if(message.getPosition != null && message.getBlock != null) {
+        db.tell(DbActor.InteractSecondaryUpdate(message.getPosition, message.getBlock), message.getSender)
       } else {
-        i.message.sender ! InteractResult(i.message.pos, i.message.block, null)
+        message.getSender ! new InteractResult(message.getPosition, message.getBlock, null)
       }
     case i: InteractTertiary =>
-      if(i.position != null) {
+      if(i.getPosition != null) {
         db ! DbActor.InteractTertiaryUpdate(tertiaryInteractionFilters, i)
       } else {
         val filters = tertiaryInteractionFilters :+ self
-        filters.head ! InteractTertiaryFilter(filters.tail, i)
+        filters.head ! new InteractTertiaryFilter(filters.tail.toArray, i)
       }
-    case i: InteractTertiaryFilter if !i.message.worldPhase =>
-      i.message.sender ! InteractResult(i.message.position, i.message.block, i.message.blockAtPosition)
+    case i: InteractTertiaryFilter if !i.getMessage.isWorldPhase =>
+      val message = i.getMessage
+      message.getSender ! new InteractResult(message.getPosition, message.getBlock, message.getBlockAtPosition)
     case p: ReplaceBlock =>
       db.forward(p)
     case v: ViewBlock =>

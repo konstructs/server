@@ -7,7 +7,7 @@ import akka.io.TcpPipelineHandler.{Init, WithinActorContext}
 import akka.util.ByteString
 import konstructs.{ PlayerActor, UniverseActor, DbActor, ChunkPosition }
 import konstructs.api._
-
+import konstructs.api.messages.Said
 class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef,
                   factory: BlockFactory, textures: Array[Byte])
     extends Actor with Stash {
@@ -46,7 +46,7 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
       }
     } else if(command.startsWith("T,")) {
       val message = command.substring(2)
-      player.actor ! konstructs.protocol.Say(message)
+      player.actor ! Say(message)
     } else if(command.startsWith("I")) {
       player.actor ! CloseInventory
     } else if(command.startsWith("R,")) {
@@ -106,8 +106,8 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
       sendPlayerNick(pipe, pid, nick)
     case PlayerLogout(pid) =>
       sendPlayerLogout(pipe, pid)
-    case Said(text) =>
-      sendSaid(pipe, text)
+    case s: Said =>
+      sendSaid(pipe, s.getText)
     case HeldStack(stack) =>
       if(stack != null)
         sendHeldStack(pipe, stack.size, factory.getW(stack), stack.getHead.getHealth.getHealth)

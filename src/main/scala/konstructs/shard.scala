@@ -10,12 +10,12 @@ import com.google.gson.reflect.TypeToken
 
 import konstructs.api.{ BinaryLoaded, Position, Block, GsonLoaded,
                         BlockTypeId, BlockFilter, BlockFilterFactory,
-                        BlockFactory, BlockState, InteractResult,
-                        BlockUpdate, Health, ReceiveStack, Stack,
-                        InteractTertiaryFilter }
+                        BlockFactory, BlockState,
+                        BlockUpdate, Health, ReceiveStack, Stack }
 import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ReplaceBlock,
                                  ReplaceBlockResult, ViewBlock, ViewBlockResult,
-                                 BlockUpdateEvent }
+                                 BlockUpdateEvent, InteractResult, InteractTertiaryFilter,
+                                 InteractTertiary }
 import konstructs.utils.compress
 
 case class BlockData(w: Int, health: Int) {
@@ -332,30 +332,41 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
           s ! ReceiveStack(Stack.createFromBlock(damaged))
         }
         if(block != null)
-          s ! InteractResult(i.position, using, damaged)
+          s ! new InteractResult(i.position, using, damaged)
         else
-          s ! InteractResult(i.position, null, damaged)
+          s ! new InteractResult(i.position, null, damaged)
       }
     case i: InteractSecondaryUpdate =>
       val s = sender
       replaceBlock(ReplaceFilter, i.position, i.block, positionMapping) { b =>
         if(b == i.block) {
-          s ! InteractResult(i.position, i.block, null)
+          s ! new InteractResult(i.position, i.block, null)
         } else {
-          s ! InteractResult(i.position, null, null)
+          s ! new InteractResult(i.position, null, null)
         }
       }
     case i: InteractTertiaryUpdate =>
       val filters = tertiaryInteractionFilters :+ self
-      val p = i.message.position
+      val message = i.message
+      val p = message.getPosition
       readChunk(p) { w =>
         val b = blockFactory.createBlock(positionMapping.get(str(p)), w.toInt)
         val filters = tertiaryInteractionFilters :+ self
-        filters.head ! InteractTertiaryFilter(filters.tail, i.message.copy(blockAtPosition = b, worldPhase = true))
+        filters.head ! new InteractTertiaryFilter(
+          filters.tail.toArray,
+          message.withBlockAtPosition(b).withWorldPhase(true))
       }
-    case i: InteractTertiaryFilter if i.message.worldPhase =>
-      val filters = tertiaryInteractionFilters :+ universe
-      filters.head ! InteractTertiaryFilter(filters.tail, i.message.copy(worldPhase = false))
+    case i: InteractTertiaryFilter if i.getMessage.isWorldPhase =>
+      val filters = tertiaryInteractionFilters :+ self
+      filters.head ! new InteractTertiaryFilter(filters.tail.toArray, i.getMessage.withWorldPhase(false))
+    case i: InteractTertiaryFilter if !i.getMessage.isWorldPhase =>
+      val message = i.getMessage
+      val position = message.getPosition
+      val blockAtPosition = message.getBlockAtPosition
+      /* Update the block with any changes made by the filter */
+      replaceBlock(BlockFilterFactory.EVERYTHING, position, blockAtPosition, positionMapping) { b =>
+        message.getSender ! new InteractResult(position, message.getBlock, blockAtPosition)
+      }
     case r: ReplaceBlock =>
       val s = sender
       replaceBlock(r.getFilter, r.getPosition, r.getBlock, positionMapping) { b =>
