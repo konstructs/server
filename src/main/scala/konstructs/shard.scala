@@ -1,6 +1,7 @@
 package konstructs
 
 import java.util.UUID
+import java.nio.{ ByteBuffer, ByteOrder }
 
 import scala.collection.mutable
 
@@ -74,20 +75,30 @@ object ChunkData {
   val InitialRevision = 1
   val Size = Db.ChunkSize * Db.ChunkSize * Db.ChunkSize * Db.BlockSize
 
-  def writeRevision(data: Array[Byte], revision: Int, offset: Int) {
+  /* Writes revision as a Little Endian 4 byte unsigned integer
+   * Long is required since all Java types are signed
+   */
+  def writeRevision(data: Array[Byte], revision: Long, offset: Int) {
+    if(revision > 4294967295L) {
+      throw new IllegalArgumentException("Must be smaller than 4294967295")
+    }
     data(offset + 0) = (revision & 0xFF).toByte
     data(offset + 1) = ((revision >> 8) & 0xFF).toByte
     data(offset + 2) = ((revision >> 16) & 0xFF).toByte
-    data(offset + 3) = ((revision >> 24) & 0x7F).toByte
+    data(offset + 3) = ((revision >> 24) & 0xFF).toByte
   }
 
-  def readRevision(data: Array[Byte], offset: Int): Int =
-    (data(offset + 0) & 0xFF) +
-      ((data(offset + 1) & 0xFF) << 8) +
-      ((data(offset + 2) & 0xFF) << 16) +
-      ((data(offset + 3) & 0x7F) << 24)
+  /* Read revision as a Little Endian 4 byte unsigned integer
+   * Returns long as all Java types are signed
+   */
+  def readRevision(data: Array[Byte], offset: Int): Long = {
+    (data(offset + 0) & 0xFF).toLong +
+      ((data(offset + 1) & 0xFF) << 8).toLong +
+      ((data(offset + 2) & 0xFF) << 16).toLong +
+      ((data(offset + 3) & 0x7F) << 24).toLong
+  }
 
-  def apply(revision: Int, blocks: Array[Byte], buffer: Array[Byte]): ChunkData = {
+  def apply(revision: Long, blocks: Array[Byte], buffer: Array[Byte]): ChunkData = {
     val compressed = compress.deflate(blocks, buffer, Db.Header)
     compressed(0) = Db.Version
     compressed(1) = 0.toByte
