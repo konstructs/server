@@ -83,11 +83,11 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
       val height = map(global) + 32
       val gy = global.getY
       if(gy < height) {
-        BlockData(w(Konstructs, "dirt"), Pristine)
+        BlockData(w(Konstructs, "dirt"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
       } else if (gy < 10) {
-        BlockData(w(Konstructs, "water"), Pristine)
+        BlockData(w(Konstructs, "water"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
       } else {
-        BlockData(w(Konstructs, "vacuum"), Pristine)
+        BlockData(w(Konstructs, "vacuum"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
       }
     }
   }

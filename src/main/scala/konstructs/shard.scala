@@ -11,7 +11,8 @@ import com.google.gson.reflect.TypeToken
 
 import konstructs.api.{ BinaryLoaded, Position, Block, GsonLoaded,
                         BlockTypeId, BlockFilter, BlockFilterFactory,
-                        BlockFactory, BlockState,
+                        BlockFactory, BlockState, Direction, Rotation,
+                        Orientation,
                         BlockUpdate, Health, ReceiveStack, Stack }
 import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ReplaceBlock,
                                  ReplaceBlockResult, ViewBlock, ViewBlockResult,
@@ -19,10 +20,13 @@ import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ReplaceBlock,
                                  InteractTertiary }
 import konstructs.utils.compress
 
-case class BlockData(w: Int, health: Int) {
+case class BlockData(w: Int, health: Int, direction: Int, rotation: Int) {
   def write(data: Array[Byte], i: Int) {
-    BlockData.write(data, i, w, health)
+    BlockData.write(data, i, w, health, direction, rotation)
   }
+
+  def block(id: UUID, blockTypeId: BlockTypeId) =
+    new Block(id, blockTypeId, Health.get(health), Orientation.create(direction, rotation))
 }
 
 object BlockData {
@@ -33,13 +37,30 @@ object BlockData {
   def hp(data: Array[Byte], i: Int): Int =
     (data(i * Db.BlockSize + 2) & 0xFF) + ((data(i * Db.BlockSize + 3) & 0x07) << 8)
 
+  def direction(data: Array[Byte], i: Int): Int =
+    ((data(i * Db.BlockSize + 3) & 0xE0) >> 5)
+
+  def rotation(data: Array[Byte], i: Int): Int =
+    ((data(i * Db.BlockSize + 3) & 0x18) >> 3)
+
   def apply(data: Array[Byte], i: Int): BlockData = {
-    apply(w(data, i), hp(data, i))
+    apply(w(data, i), hp(data, i), direction(data, i), rotation(data, i))
   }
 
-  def write(data: Array[Byte], i: Int, w: Int, health: Int) {
+  def apply(w: Int, block: Block): BlockData = {
+    apply(w, block.getHealth.getHealth,
+      block.getOrientation.getDirection.getEncoding, block.getOrientation.getRotation.getEncoding)
+  }
+
+  def write(data: Array[Byte], i: Int, w: Int, health: Int, direction: Int, rotation: Int) {
     writeW(data, i, w)
-    writeHealth(data, i, health)
+    writeHealthAndOrientation(data, i, health, direction, rotation)
+  }
+
+  def write(data: Array[Byte], i: Int, w: Int, block: Block) {
+    write(data, i, w, block.getHealth.getHealth,
+      block.getOrientation.getDirection.getEncoding,
+      block.getOrientation.getRotation.getEncoding)
   }
 
   def writeW(data: Array[Byte], i: Int, w: Int) {
@@ -47,9 +68,10 @@ object BlockData {
     data(i * Db.BlockSize + 1) = ((w >> 8) & 0xFF).toByte
   }
 
-  def writeHealth(data: Array[Byte], i: Int, health: Int) {
+  def writeHealthAndOrientation(data: Array[Byte], i: Int, health: Int, direction: Int, rotation: Int) {
     data(i * Db.BlockSize + 2) = (health & 0xFF).toByte
-    data(i * Db.BlockSize + 3) = ((health >> 8) & 0x07).toByte
+    val b = (((direction << 5) & 0xE0) + ((rotation << 3) & 0x18) + ((health >> 8) & 0x07)).toByte
+    data(i * Db.BlockSize + 3) = b
   }
 
 }
@@ -64,9 +86,9 @@ case class ChunkData(version: Int, data: Array[Byte]) {
     val size = compress.inflate(data, blockBuffer, Header, data.size - Header)
   }
 
-  def block(c: ChunkPosition, p: Position, blockBuffer: Array[Byte]): Byte = {
+  def block(c: ChunkPosition, p: Position, blockBuffer: Array[Byte]): BlockData = {
     unpackTo(blockBuffer)
-    blockBuffer(index(c, p) * Db.BlockSize)
+    BlockData(blockBuffer, index(c, p))
   }
 
 }
@@ -167,7 +189,12 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     ChunkPosition(pqk(0), pqk(1), pqk(2))
   }
 
-  private val VacuumData = new BlockData(blockFactory.getW(BlockTypeId.VACUUM), Health.PRISTINE.getHealth())
+  private val VacuumData = BlockData(
+    blockFactory.getW(BlockTypeId.VACUUM),
+    Health.PRISTINE.getHealth(),
+    Direction.UP_ENCODING,
+    Rotation.IDENTITY_ENCODING
+  )
   private val VacuumBlock = Block.create(BlockTypeId.VACUUM)
   private val toolDurabilityBonus = 10.0f
 
@@ -220,7 +247,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     }
   }
 
-  def readChunk(pos: Position)(read: Byte => Unit) = {
+  def readChunk(pos: Position)(read: BlockData => Unit) = {
     val chunk = ChunkPosition(pos)
     loadChunk(chunk).map { c =>
       val block = c.block(chunk, pos, blockBuffer)
@@ -255,8 +282,10 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         val typeId = blockFactory.getBlockTypeId(BlockData.w(blockBuffer, i))
         if(filter.matches(typeId, blockFactory.getBlockType(typeId))) {
           val id = positionMapping.remove(str(position))
-          events.put(position, new BlockUpdate(Block.create(id, typeId), Block.create(newTypeId)))
-          BlockData.writeW(blockBuffer, i, blockFactory.getW(newTypeId))
+          val oldBlock = BlockData(blockBuffer, i).block(id, typeId)
+          val newBlock = Block.create(newTypeId)
+          events.put(position, new BlockUpdate(oldBlock, newBlock))
+          BlockData.write(blockBuffer, i, blockFactory.getW(newTypeId), newBlock)
           isDirty = true
           if(id != null)
             positionMappingDirty = true
@@ -284,18 +313,18 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       val dealingBlock = if(dealingHealth.isDestroyed) {
         null
       } else {
-        new Block(dealing.getId(), dealing.getType(), dealingHealth)
+        dealing.withHealth(dealingHealth)
       }
-
+      val id = positionMapping.remove(str(position))
+      val oldBlock = old.block(id, receivingTypeId)
       val (receivingBlock, data) = if(receivingHealth.isDestroyed()) {
-        val id = positionMapping.remove(str(position))
         if(id != null)
           positionMappingDirty = true
-        val oldBlock = new Block(id, receivingTypeId, Health.PRISTINE)
-        sendEvent(position, oldBlock, VacuumBlock)
-        (oldBlock, VacuumData)
+        val block = oldBlock.withHealth(Health.PRISTINE)
+        sendEvent(position, block, VacuumBlock)
+        (block, VacuumData)
       } else {
-        (null, new BlockData(old.w, receivingHealth.getHealth()))
+        (null, BlockData(old.w, oldBlock.withHealth(receivingHealth)))
       }
       ready(dealingBlock, receivingBlock)
       data
@@ -316,10 +345,10 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
             positionMappingDirty = true
           id
         }
-        val oldBlock = new Block(oldId, typeId, Health.get(old.health))
+        val oldBlock = old.block(oldId, typeId)
         ready(oldBlock)
         sendEvent(position, oldBlock, block)
-        BlockData(blockFactory.getW(block), block.getHealth().getHealth())
+        BlockData(blockFactory.getW(block), block)
       } else {
         old
       }
@@ -377,8 +406,8 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       val filters = tertiaryInteractionFilters :+ self
       val message = i.message
       val p = message.getPosition
-      readChunk(p) { w =>
-        val b = blockFactory.createBlock(positionMapping.get(str(p)), w.toInt)
+      readChunk(p) { block =>
+        val b = block.block(positionMapping.get(str(p)), blockFactory.getBlockTypeId(block.w))
         val filters = tertiaryInteractionFilters :+ self
         filters.head ! new InteractTertiaryFilter(
           filters.tail.toArray,
@@ -420,8 +449,9 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     case v: ViewBlock =>
       val s = sender
       val p = v.getPosition
-      readChunk(p) { w =>
-        s ! new ViewBlockResult(p, blockFactory.createBlock(positionMapping.get(str(p)), w.toInt))
+      readChunk(p) { block =>
+        val b = block.block(positionMapping.get(str(p)), blockFactory.getBlockTypeId(block.w))
+        s ! new ViewBlockResult(p, b)
       }
     case q: BoxQuery =>
       runQuery(q, sender)
