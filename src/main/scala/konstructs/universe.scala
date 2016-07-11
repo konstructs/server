@@ -48,7 +48,7 @@ class UniverseActor(
     nextPid = nextPid + 1
   }
 
-  blockManager ! GetBlockFactory
+  blockManager ! GetBlockFactory.MESSAGE
 
   def receive = {
     case factory: BlockFactory =>
@@ -133,8 +133,8 @@ class UniverseActor(
       db forward q
     case d: DamageBlockWithBlock =>
       db forward d
-    case GetBlockFactory =>
-      blockManager.forward(GetBlockFactory)
+    case GetBlockFactory.MESSAGE =>
+      blockManager.forward(GetBlockFactory.MESSAGE)
     case GetTextures =>
       blockManager.forward(GetTextures)
   }

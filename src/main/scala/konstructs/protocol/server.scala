@@ -4,7 +4,8 @@ import akka.actor.{ Actor, ActorRef, Props, ActorLogging, Stash }
 import akka.io._
 import java.net.InetSocketAddress
 import konstructs.plugin.PluginConstructor
-import konstructs.api.{ BlockFactory, GetBlockFactory, GetTextures, Textures }
+import konstructs.api.{ BlockFactory, GetTextures, Textures }
+import konstructs.api.messages.GetBlockFactory
 
 class Server(name: String, universe: ActorRef)
     extends Actor with ActorLogging with Stash {
@@ -18,7 +19,7 @@ class Server(name: String, universe: ActorRef)
   def receive = {
     case Textures(textures) =>
       context.become(getFactory(textures))
-      universe ! GetBlockFactory
+      universe ! GetBlockFactory.MESSAGE
       unstashAll()
     case _ =>
       stash()

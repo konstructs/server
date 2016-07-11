@@ -138,7 +138,7 @@ class BlockMetaActor( val ns: String,
   }
 
   def ready(factory: BlockFactoryImpl): Receive = {
-    case GetBlockFactory =>
+    case GetBlockFactory.MESSAGE =>
       sender ! factory
     case GetTextures =>
       sender ! Textures(textures)
