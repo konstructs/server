@@ -20,7 +20,7 @@ object Plugin {
     seq
   }
   def nullAsEmpty[T](list: java.util.List[T]): java.util.List[T] = if(list == null) {
-    java.util.List.empty[T]
+    java.util.Collections.emptyList[T]
   } else {
     list
   }
