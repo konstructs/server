@@ -4,6 +4,7 @@ import java.lang.reflect.{ Method, Modifier }
 import java.io.File
 import scala.concurrent.Future
 import scala.language.existentials
+import scala.util.Try
 
 import akka.util.Timeout
 import akka.actor.{ Props, ActorRef, Actor, ActorSelection, Stash }
@@ -18,7 +19,11 @@ object Plugin {
   } else {
     seq
   }
-
+  def nullAsEmpty[T](list: java.util.List[T]): java.util.List[T] = if(list == null) {
+    java.util.List.empty[T]
+  } else {
+    list
+  }
 }
 
 case class PluginConfigParameterMeta(name: String, configType: Class[_], optional: Boolean, listType: Option[Class[_]] = None)
@@ -134,10 +139,13 @@ object PluginMeta {
 
 }
 
-case class Dependencies(names: Seq[String], t: Class[_])
+case class Dependency(name: String, config: Option[TypesafeConfig])
+
+case class Dependencies(dependencies: Seq[Dependency], t: Class[_], isPluginRef: Boolean)
 
 object Dependencies {
-  def apply(dep: String): Dependencies = apply(Seq(dep), classOf[ActorRef])
+  def apply(dep: String, config: Option[TypesafeConfig], t: Class[_], isPluginRef: Boolean): Dependencies =
+    apply(Seq(Dependency(dep, config)), t, isPluginRef)
 }
 
 case class ConfiguredPlugin(name: String, method: Method,
@@ -145,7 +153,7 @@ case class ConfiguredPlugin(name: String, method: Method,
 
   val dependencyEdges =
     args.collect {
-      case Right(deps) => deps.names.map((name, _))
+      case Right(deps) => deps.dependencies.map { d => (name, d.name) }
     } flatten
 
 }
@@ -165,6 +173,7 @@ class PluginLoaderActor(rootConfig: TypesafeConfig) extends Actor {
   val IntegerType = classOf[Int]
   val FileType = classOf[File]
   val ActorRefType = classOf[ActorRef]
+  val PluginRefType = classOf[PluginRef]
   val SeqType = classOf[Seq[_]]
   val ListType = classOf[java.util.List[_]]
   val ConfigType = classOf[TypesafeConfig]
@@ -176,6 +185,7 @@ class PluginLoaderActor(rootConfig: TypesafeConfig) extends Actor {
     case SeqType => seq
     case ListType => seq.toList.asJava
     case ActorRefType => seq.head
+    case PluginRefType => seq.head
   }
 
   private def getOptional(optional: Boolean)(f: => Object): Object = {
@@ -193,9 +203,16 @@ class PluginLoaderActor(rootConfig: TypesafeConfig) extends Actor {
   private def toConfig(s: String, config: TypesafeConfig): TypesafeConfig =
     config.getConfig(s)
 
+  private def toOptionalConfig(s: String, config: TypesafeConfig): Option[TypesafeConfig] = Try {
+    config.getConfig(s)
+  } toOption
+
+  private def asDependency(key: String, config: TypesafeConfig): Dependency =
+    Dependency(keyAsString(key), toOptionalConfig(key, config))
+
   private def keepString(s: String, config: TypesafeConfig): String = config.getString(s)
 
-  private def keyAsString(s: String, config: TypesafeConfig): String = s.replace("\"", "")
+  private def keyAsString(s: String): String = s.replace("\"", "")
 
   private def toFile(s: String, config: TypesafeConfig): File = new File(config.getString(s))
 
@@ -230,9 +247,22 @@ class PluginLoaderActor(rootConfig: TypesafeConfig) extends Actor {
         }
         case ActorRefType => try {
           if(p.listType.isDefined) {
-            Right(Dependencies(configToSeq(keyAsString)(config.getConfig(p.name)), p.listType.get))
+            Right(Dependencies(configToSeq(asDependency)(config.getConfig(p.name)), p.listType.get, false))
           } else {
-            Right(Dependencies(config.getString(p.name)))
+            Right(Dependencies(config.getString(p.name), toOptionalConfig(p.name, config), ActorRefType, false))
+          }
+        } catch {
+          case e: ConfigException.Missing => if(p.optional) {
+            Left(null)
+          } else {
+            throw e
+          }
+        }
+        case PluginRefType => try {
+          if(p.listType.isDefined) {
+            Right(Dependencies(configToSeq(asDependency)(config.getConfig(p.name)), p.listType.get, true))
+          } else {
+            Right(Dependencies(config.getString(p.name), toOptionalConfig(p.name, config), PluginRefType, true))
           }
         } catch {
           case e: ConfigException.Missing => if(p.optional) {
@@ -278,8 +308,15 @@ class PluginLoaderActor(rootConfig: TypesafeConfig) extends Actor {
       case head :: tail =>
         val args = Future.sequence(head.args.map {
           case Right(d) =>
-            Future.sequence(d.names.map { dep =>
-              ActorSelection(self, actorName(dep)).resolveOne
+            Future.sequence(d.dependencies.map { dep =>
+              val selection = ActorSelection(self, actorName(dep.name)).resolveOne
+              if(d.isPluginRef) {
+                selection.map { ref =>
+                  new PluginRef(ref, dep.config.getOrElse(null))
+                }
+              } else {
+                selection
+              }
             }).map { as => listType(d.t, as) }
           case Left(obj) => Future.successful(obj)
         })
