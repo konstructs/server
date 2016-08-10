@@ -40,9 +40,10 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
     } else if(command.startsWith("M,")) {
       val ints = readData(_.toInt, command.drop(2))
       if(ints(0) != 0) {
-        player.actor ! Action(new konstructs.api.Position(ints(1), ints(2), ints(3)), ints(4), ints(5))
+        player.actor ! Action(new konstructs.api.Position(ints(1), ints(2), ints(3)),
+          Orientation.create(Direction.get(ints(6)), Rotation.get(ints(7))), ints(4), ints(5))
       } else {
-        player.actor ! Action(null, ints(4), ints(5))
+        player.actor ! Action(null, null, ints(4), ints(5))
       }
     } else if(command.startsWith("T,")) {
       val message = command.substring(2)

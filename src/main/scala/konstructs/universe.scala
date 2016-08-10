@@ -93,7 +93,7 @@ class UniverseActor(
     case i: InteractSecondaryFilter =>
       val message = i.getMessage
       if(message.getPosition != null && message.getBlock != null) {
-        db.tell(DbActor.InteractSecondaryUpdate(message.getPosition, message.getBlock), message.getSender)
+        db.tell(DbActor.InteractSecondaryUpdate(message.getPosition, message.getOrientation, message.getBlock), message.getSender)
       } else {
         message.getSender ! new InteractResult(message.getPosition, message.getBlock, null)
       }

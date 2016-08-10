@@ -395,8 +395,14 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       }
     case i: InteractSecondaryUpdate =>
       val s = sender
-      replaceBlock(ReplaceFilter, i.position, i.block, positionMapping) { b =>
-        if(b == i.block) {
+      val blockType = blockFactory.getBlockType(i.block.getType)
+      val rb = if(true) {
+        i.block.withOrientation(i.orientation)
+      } else {
+        i.block
+      }
+      replaceBlock(ReplaceFilter, i.position, rb, positionMapping) { b =>
+        if(b == rb) {
           s ! new InteractResult(i.position, i.block, null)
         } else {
           s ! new InteractResult(i.position, null, null)
