@@ -151,9 +151,10 @@ object BlockMetaActor {
   val TextureSize = 16
 
   case class BlockClass(obstacle: Option[Boolean], shape: Option[BlockShape], state: Option[BlockState],
-    durability: Option[Float], damage: Option[Float], damageMultipliers: Map[BlockOrClassId, Float])
+    durability: Option[Float], damage: Option[Float], damageMultipliers: Map[BlockOrClassId, Float],
+    orientable: Option[Boolean])
   case class BlockDefault(obstacle: Boolean, shape: BlockShape, state: BlockState,
-    durability: Float, damage: Float, damageMultipliers: Map[BlockOrClassId, Float])
+    durability: Float, damage: Float, damageMultipliers: Map[BlockOrClassId, Float], orientable: Boolean)
   object BlockDefault {
     def apply(classes: Array[BlockClassId], classMap: Map[BlockClassId, BlockClass]): BlockDefault = {
       var obstacle = true
@@ -162,6 +163,7 @@ object BlockMetaActor {
       var durability = BlockType.DEFAULT_DURABILITY
       var damage = BlockType.DEFAULT_DAMAGE
       var damageMultipliers: Map[BlockOrClassId, Float] = Map()
+      var orientable = false
       for(id <- classes.reverse) {
         classMap.get(id) map { c =>
           c.obstacle.map(obstacle = _)
@@ -170,9 +172,10 @@ object BlockMetaActor {
           c.durability.map(durability = _)
           c.damage.map(damage = _)
           damageMultipliers = damageMultipliers ++ c.damageMultipliers
+          c.orientable.map(orientable = _)
         }
       }
-      apply(obstacle, shape, state, durability, damage, damageMultipliers)
+      apply(obstacle, shape, state, durability, damage, damageMultipliers, orientable)
     }
   }
 
@@ -248,6 +251,12 @@ object BlockMetaActor {
     None
   }
 
+  def readOrientable(config: TypesafeConfig): Option[Boolean] = if(config.hasPath("orientable")) {
+    Some(config.getBoolean("orientable"))
+  } else {
+    None
+  }
+
   def blockType(idString: String, config: TypesafeConfig, texturePosition: Int,
                 classMap: Map[BlockClassId, BlockClass]): (BlockTypeId, BlockType) = {
     val typeId = BlockTypeId.fromString(idString)
@@ -261,14 +270,15 @@ object BlockMetaActor {
     val damageMultipliers = (for((k, v) <- (readDamageMultipliers(config) ++ d.damageMultipliers)) yield {
       k -> Float.box(v)
     }) asJava
+    val orientable = readOrientable(config).getOrElse(d.orientable)
 
     val blockType = if(config.hasPath("faces")) {
       val faces = config.getIntList("faces")
       if(faces.size != 6) throw new IllegalStateException("There must be exactly 6 faces")
-      new BlockType(faces.asScala.map(_ + texturePosition).toArray, shape, isObstacle, false, state, classes, durability, damage, damageMultipliers)
+      new BlockType(faces.asScala.map(_ + texturePosition).toArray, shape, isObstacle, false, state, classes, durability, damage, damageMultipliers, orientable)
     } else {
       /* Default is to assume only one texture for all faces */
-      new BlockType(Array(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition), shape, isObstacle, false, state, classes, durability, damage, damageMultipliers)
+      new BlockType(Array(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition), shape, isObstacle, false, state, classes, durability, damage, damageMultipliers, orientable)
     }
     typeId -> blockType
   }
@@ -283,7 +293,7 @@ object BlockMetaActor {
   }
 
   def withTransparent(t: BlockType, transparent: Boolean): BlockType =
-    new BlockType(t.getFaces, t.getBlockShape, t.isObstacle, transparent, t.getBlockState, t.getClasses, t.getDurability, t.getDamage, t.getDamageMultipliers)
+    new BlockType(t.getFaces, t.getBlockShape, t.isObstacle, transparent, t.getBlockState, t.getClasses, t.getDurability, t.getDamage, t.getDamageMultipliers, t.isOrientable)
 
   def parseClass(config: TypesafeConfig): BlockClass = {
     val isObstacle = readIsObstacle(config)
@@ -292,7 +302,8 @@ object BlockMetaActor {
     val durability = readDurability(config)
     val damage = readDamage(config)
     val damageMultipliers = readDamageMultipliers(config)
-    BlockClass(isObstacle, shape, state, durability, damage, damageMultipliers)
+    val orientable = readOrientable(config)
+    BlockClass(isObstacle, shape, state, durability, damage, damageMultipliers, orientable)
   }
 
   def parseClasses(config: TypesafeConfig): Map[BlockClassId, BlockClass] = {

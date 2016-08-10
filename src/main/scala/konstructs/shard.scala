@@ -320,7 +320,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       val (receivingBlock, data) = if(receivingHealth.isDestroyed()) {
         if(id != null)
           positionMappingDirty = true
-        val block = oldBlock.withHealth(Health.PRISTINE)
+        val block = oldBlock.withOrientation(Orientation.NORMAL).withHealth(Health.PRISTINE)
         sendEvent(position, block, VacuumBlock)
         (block, VacuumData)
       } else {
@@ -396,7 +396,8 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     case i: InteractSecondaryUpdate =>
       val s = sender
       val blockType = blockFactory.getBlockType(i.block.getType)
-      val rb = if(true) {
+
+      val rb = if(blockType.isOrientable) {
         i.block.withOrientation(i.orientation)
       } else {
         i.block

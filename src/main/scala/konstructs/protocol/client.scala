@@ -212,8 +212,9 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
   def sendBlockType(pipe: ActorRef, w: Int, t: BlockType) {
     val isObstacle = booleanToInt(t.isObstacle)
     val isTransparent = booleanToInt(t.isTransparent)
+    val isOrientable = booleanToInt(t.isOrientable)
     val faces = t.getFaces
-    send(pipe, s"W,$w,${t.getBlockShape.getShape},${t.getBlockState.getState},$isObstacle,$isTransparent,${faces(0)},${faces(1)},${faces(2)},${faces(3)},${faces(4)},${faces(5)}")
+    send(pipe, s"W,$w,${t.getBlockShape.getShape},${t.getBlockState.getState},$isObstacle,$isTransparent,${faces(0)},${faces(1)},${faces(2)},${faces(3)},${faces(4)},${faces(5)},${isOrientable}")
   }
 
   def send(pipe: ActorRef, msg: ByteString) {
