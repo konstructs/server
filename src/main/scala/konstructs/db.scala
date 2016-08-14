@@ -13,7 +13,10 @@ object Db {
   val BlockSize = 4
   val ChunkSize = 32
   val ShardSize = 8
-  val Header = 2
+  val RevisionSize = 4
+  val Version2Header = 2 + RevisionSize
+  val Version1Header = 2
+  val Header = Version2Header
   val Version = 2.toByte
 }
 

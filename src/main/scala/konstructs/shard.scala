@@ -1,6 +1,7 @@
 package konstructs
 
 import java.util.UUID
+import java.nio.{ ByteBuffer, ByteOrder }
 
 import scala.collection.mutable
 
@@ -57,6 +58,8 @@ case class ChunkData(version: Int, data: Array[Byte]) {
   import ChunkData._
   import Db._
 
+  val revision = readRevision(data, 2)
+
   def unpackTo(blockBuffer: Array[Byte]) {
     val size = compress.inflate(data, blockBuffer, Header, data.size - Header)
   }
@@ -69,19 +72,44 @@ case class ChunkData(version: Int, data: Array[Byte]) {
 }
 
 object ChunkData {
+  val InitialRevision = 1
   val Size = Db.ChunkSize * Db.ChunkSize * Db.ChunkSize * Db.BlockSize
 
-  def apply(blocks: Array[Byte], buffer: Array[Byte]): ChunkData = {
+  /* Writes revision as a Little Endian 4 byte unsigned integer
+   * Long is required since all Java types are signed
+   */
+  def writeRevision(data: Array[Byte], revision: Long, offset: Int) {
+    if(revision > 4294967295L) {
+      throw new IllegalArgumentException("Must be smaller than 4294967295")
+    }
+    data(offset + 0) = (revision & 0xFF).toByte
+    data(offset + 1) = ((revision >> 8) & 0xFF).toByte
+    data(offset + 2) = ((revision >> 16) & 0xFF).toByte
+    data(offset + 3) = ((revision >> 24) & 0xFF).toByte
+  }
+
+  /* Read revision as a Little Endian 4 byte unsigned integer
+   * Returns long as all Java types are signed
+   */
+  def readRevision(data: Array[Byte], offset: Int): Long = {
+    (data(offset + 0) & 0xFF).toLong +
+      ((data(offset + 1) & 0xFF) << 8).toLong +
+      ((data(offset + 2) & 0xFF) << 16).toLong +
+      ((data(offset + 3) & 0x7F) << 24).toLong
+  }
+
+  def apply(revision: Long, blocks: Array[Byte], buffer: Array[Byte]): ChunkData = {
     val compressed = compress.deflate(blocks, buffer, Db.Header)
     compressed(0) = Db.Version
     compressed(1) = 0.toByte
+    writeRevision(compressed, revision, 2)
     apply(Db.Version, compressed)
   }
 
   def loadOldFormat(version: Int, data: Array[Byte], blockBuffer: Array[Byte], compressionBuffer: Array[Byte]): ChunkData = {
-    val size = compress.inflate(data, blockBuffer, Db.Header, data.size - Db.Header)
+    val size = compress.inflate(data, blockBuffer, Db.Version1Header, data.size - Db.Version1Header)
     convertFromOldFormat(blockBuffer, size)
-    apply(blockBuffer, compressionBuffer)
+    apply(0, blockBuffer, compressionBuffer)
   }
 
   private def convertFromOldFormat(buf: Array[Byte], size: Int) {
@@ -209,7 +237,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       val oldBlock = BlockData(blockBuffer, i)
       val block = update(oldBlock)
       block.write(blockBuffer, i)
-      val data = ChunkData(blockBuffer, compressionBuffer)
+      val data = ChunkData(c.revision + 1, blockBuffer, compressionBuffer)
       chunks(index(chunk)) = Some(data)
       db ! ChunkUpdate(chunk, data)
     }
@@ -235,7 +263,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         }
       }
       if(isDirty) {
-        val data = ChunkData(blockBuffer, compressionBuffer)
+        val data = ChunkData(c.revision + 1, blockBuffer, compressionBuffer)
         chunks(index(chunk)) = Some(data)
         db ! ChunkUpdate(chunk, data)
         sendEvent(events)
@@ -413,7 +441,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
           chunkGenerator ! Generate(chunk)
       }
     case Generated(position, data) =>
-      chunks(index(position)) = Some(ChunkData(data, compressionBuffer))
+      chunks(index(position)) = Some(ChunkData(ChunkData.InitialRevision, data, compressionBuffer))
       dirty = dirty + position
       unstashAll()
     case StoreChunks =>
