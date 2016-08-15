@@ -26,7 +26,7 @@ case class BlockData(w: Int, health: Int, direction: Int, rotation: Int) {
   }
 
   def block(id: UUID, blockTypeId: BlockTypeId) =
-    new Block(id, blockTypeId, Health.get(health), Orientation.create(direction, rotation))
+    new Block(id, blockTypeId, Health.get(health), Orientation.get(direction, rotation))
 }
 
 object BlockData {
