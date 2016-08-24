@@ -1,7 +1,7 @@
 package konstructs
 
 import akka.actor.{ Actor, ActorRef, Props, Stash }
-import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
+import konstructs.plugin.{ PluginConstructor, Config, ListConfig, PluginRef }
 import konstructs.api._
 import konstructs.api.messages._
 import collection.JavaConversions._
@@ -17,7 +17,8 @@ class UniverseActor(
                      blockUpdateEvents: Seq[ActorRef],
                      primaryInteractionFilters: Seq[ActorRef],
                      secondaryInteractionFilters: Seq[ActorRef],
-                     tertiaryInteractionFilters: Seq[ActorRef]
+                     tertiaryInteractionFilters: Seq[ActorRef],
+                     listeners: Map[EventTypeId, Seq[ActorRef]]
                    ) extends Actor with Stash {
 
   import UniverseActor._
@@ -62,6 +63,8 @@ class UniverseActor(
   }
 
   def ready: Receive = {
+    case s: SendEvent =>
+      listeners getOrElse(s.getId, Seq()) foreach (_ forward s.getMessage)
     case CreatePlayer(nick, password) =>
       player(nick, password)
     case m: PlayerActor.PlayerMovement =>
@@ -145,6 +148,25 @@ object UniverseActor {
 
   import konstructs.plugin.Plugin.nullAsEmpty
 
+  def parseEventId(plugin: PluginRef)(id: String): (EventTypeId, PluginRef) =
+    (EventTypeId.fromString(id), plugin)
+
+  def parseEventIds(plugin: PluginRef): Seq[(EventTypeId, PluginRef)] =
+    plugin.getConfig.root.keySet map parseEventId(plugin) toSeq
+
+  def tag(entry: (EventTypeId, PluginRef)): EventTypeId = entry._1
+
+  def getActorRef(plugins: Seq[(EventTypeId, konstructs.plugin.PluginRef)]): Seq[ActorRef] =
+    plugins map {
+      case (_, plugin) => plugin.getPlugin
+    }
+
+  def parseListeners(listeners: Seq[PluginRef]): Map[EventTypeId, Seq[ActorRef]] = {
+    val tagged: Seq[(EventTypeId, PluginRef)] = listeners map parseEventIds flatten
+    val grouped = tagged groupBy tag
+    grouped mapValues getActorRef
+  }
+
   @PluginConstructor
   def props(
              name: String,
@@ -185,7 +207,13 @@ object UniverseActor {
                key = "tertiary-interaction-listeners",
                elementType = classOf[ActorRef],
                optional = true
-             ) tertiaryListeners: Seq[ActorRef]
+             ) tertiaryListeners: Seq[ActorRef],
+
+             @ListConfig(
+               key = "listeners",
+               elementType = classOf[PluginRef],
+               optional = true
+             ) listeners: Seq[PluginRef]
 
            ): Props = Props(
                              classOf[UniverseActor],
@@ -199,6 +227,7 @@ object UniverseActor {
                              nullAsEmpty(blockUpdateEvents),
                              nullAsEmpty(primaryListeners),
                              nullAsEmpty(secondaryListeners),
-                             nullAsEmpty(tertiaryListeners)
+                             nullAsEmpty(tertiaryListeners),
+                             parseListeners(nullAsEmpty(listeners))
                            )
 }
