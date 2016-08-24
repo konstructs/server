@@ -321,7 +321,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         if(id != null)
           positionMappingDirty = true
         val block = oldBlock.withOrientation(Orientation.NORMAL).withHealth(Health.PRISTINE)
-        sendEvent(position, block, VacuumBlock)
+        sendEvent(position, oldBlock, VacuumBlock)
         (block, VacuumData)
       } else {
         (null, BlockData(old.w, oldBlock.withHealth(receivingHealth)))
