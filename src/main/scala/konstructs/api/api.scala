@@ -8,7 +8,6 @@ import com.google.gson.JsonElement
 import konstructs.protocol
 
 /* Manage blocks */
-case object GetBlockFactory
 case object GetTextures
 case class Textures(textures: Array[Byte])
 

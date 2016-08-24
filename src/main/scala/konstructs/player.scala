@@ -141,20 +141,20 @@ class PlayerActor(
       }
   }
 
-  def action(pos: Position, button: Int, active: Int): Receive = {
+  def action(pos: Position, orientation: Orientation, button: Int, active: Int): Receive = {
     val block = data.inventory.stackHead(active)
     button match {
       case 1 =>
         val responseHandler = actionPrimary(pos, block, active)
-        universe ! new InteractPrimary(self, nick, pos, block)
+        universe ! new InteractPrimary(self, nick, pos, orientation, block)
         responseHandler
       case 2 =>
         val responseHandler = actionSecondary(pos, block, active)
-        universe ! new InteractSecondary(self, nick, pos, block)
+        universe ! new InteractSecondary(self, nick, pos, orientation, block)
         responseHandler
       case 3 =>
         val responseHandler = actionTertiary(pos, block, active)
-        universe ! new InteractTertiary(self, nick, pos, block, null, false)
+        universe ! new InteractTertiary(self, nick, pos, orientation, block, null, false)
         responseHandler
     }
   }
@@ -234,8 +234,8 @@ class PlayerActor(
   }
 
   def ready: Receive = {
-    case Action(pos, button, active) =>
-      context.become(action(pos, button, active) orElse handleBasics orElse stashAll)
+    case Action(pos, orientation, button, active) =>
+      context.become(action(pos, orientation, button, active) orElse handleBasics orElse stashAll)
     case r: ReplaceBlockResult =>
       if(!r.getBlock.getType.equals(BlockTypeId.VACUUM)) {
         putInBelt(Stack.createFromBlock(r.getBlock))
@@ -351,7 +351,7 @@ object PlayerActor {
   case class PlayerInfo(pid: Int, nick: String, actor: ActorRef, pos: protocol.Position)
   case class PlayerNick(pid: Int, nick: String)
   case class BeltUpdate(items: Array[Stack])
-  case class Action(pos: Position, button: Int, active: Int)
+  case class Action(pos: Position, orientation: Orientation, button: Int, active: Int)
   case class SendInfo(to: ActorRef)
   case class InventoryUpdate(view: View)
   case class SelectItem(index: Int, button: Int)

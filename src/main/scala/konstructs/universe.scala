@@ -48,7 +48,7 @@ class UniverseActor(
     nextPid = nextPid + 1
   }
 
-  blockManager ! GetBlockFactory
+  blockManager ! GetBlockFactory.MESSAGE
 
   def receive = {
     case factory: BlockFactory =>
@@ -93,7 +93,7 @@ class UniverseActor(
     case i: InteractSecondaryFilter =>
       val message = i.getMessage
       if(message.getPosition != null && message.getBlock != null) {
-        db.tell(DbActor.InteractSecondaryUpdate(message.getPosition, message.getBlock), message.getSender)
+        db.tell(DbActor.InteractSecondaryUpdate(message.getPosition, message.getOrientation, message.getBlock), message.getSender)
       } else {
         message.getSender ! new InteractResult(message.getPosition, message.getBlock, null)
       }
@@ -133,8 +133,8 @@ class UniverseActor(
       db forward q
     case d: DamageBlockWithBlock =>
       db forward d
-    case GetBlockFactory =>
-      blockManager.forward(GetBlockFactory)
+    case GetBlockFactory.MESSAGE =>
+      blockManager.forward(GetBlockFactory.MESSAGE)
     case GetTextures =>
       blockManager.forward(GetTextures)
   }

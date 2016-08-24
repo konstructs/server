@@ -9,12 +9,13 @@ import scala.math.min
 import com.typesafe.config.{ Config => TypesafeConfig }
 import akka.actor.{ Actor, Props, ActorRef, Stash }
 import konstructs.api._
+import konstructs.api.messages.GetBlockFactory
 import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
 
 class KonstructingActor(universe: ActorRef, konstructs: Set[Konstruct])
     extends Actor with Stash {
 
-  universe ! GetBlockFactory
+  universe ! GetBlockFactory.MESSAGE
 
   def bestMatch(pattern: Pattern, factory: BlockFactory): Option[Konstruct] = {
     konstructs.filter { k =>
@@ -113,7 +114,7 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
                             resultView: InventoryView)
     extends Actor with Stash {
 
-  universe ! GetBlockFactory
+  universe ! GetBlockFactory.MESSAGE
 
   val EmptyInventory = Inventory.createEmpty(0)
   var konstructing = Inventory.createEmpty(konstructingView.getRows * konstructingView.getColumns)
