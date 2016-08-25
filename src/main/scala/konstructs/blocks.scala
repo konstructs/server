@@ -38,17 +38,21 @@ case class BlockFactoryImpl(blockTypeIdMapping: java.util.Map[BlockTypeId, Integ
     new Block(null, t)
   }
 
+  private def validate[T](w: Integer, t: BlockTypeId): Integer =
+    if(w != null) w else throw new IndexOutOfBoundsException(s"Block type $t is not registered")
+
   override def getW(block: Block) =
-    blockTypeIdMapping.get(block.getType)
+   validate(blockTypeIdMapping.get(block.getType), block.getType)
 
   override def getW(stack: Stack) =
-    blockTypeIdMapping.get(stack.getTypeId)
+    validate(blockTypeIdMapping.get(stack.getTypeId), stack.getTypeId)
 
   override def getW(typeId: BlockTypeId) =
-    blockTypeIdMapping.get(typeId)
+    validate(blockTypeIdMapping.get(typeId), typeId)
 
   override def getBlockType(id: BlockTypeId): BlockType = {
-    blockTypes.get(id)
+    val t = blockTypes.get(id)
+    if(t != null) t else throw new IndexOutOfBoundsException(s"Block type $id is not registered")
   }
 
   override def getBlockTypeId(w: Int) =
