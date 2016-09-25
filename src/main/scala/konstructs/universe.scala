@@ -134,6 +134,8 @@ class UniverseActor(
       konstructing.forward(k)
     case q: BoxQuery =>
       db forward q
+    case q: BoxShapeQuery =>
+      db forward q
     case d: DamageBlockWithBlock =>
       db forward d
     case GetBlockFactory.MESSAGE =>
