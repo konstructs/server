@@ -5,9 +5,11 @@ import scala.collection.mutable
 import akka.actor.{ Actor, ActorRef, Props }
 
 import konstructs.api.{ Position, BlockFactory, Box, BlockTypeId, Block, Orientation }
-import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ViewBlock,
-                                 ReplaceBlocks, ReplaceBlock, DamageBlockWithBlock,
-                                 InteractTertiary}
+import konstructs.api.messages.{ BoxQuery, BoxShapeQuery,
+                                 BoxQueryResult, BoxShapeQueryResult,
+                                 ViewBlock, ReplaceBlocks,
+                                 ReplaceBlock, DamageBlockWithBlock,
+                                 InteractTertiary }
 
 object Db {
   val BlockSize = 4
@@ -77,7 +79,13 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
       getShardActor(d.getToDamage) forward d
     case q: BoxQuery =>
       val chunkBoxes = BoxChunking.chunked(q.getBox)
-      val resultActor = context.actorOf(BoxQueryResultActor.props(sender, q, chunkBoxes, blockFactory))
+      val resultActor = context.actorOf(BoxQueryResultActor.props(sender, Left(q), chunkBoxes, blockFactory))
+      chunkBoxes.foreach { box =>
+        getShardActor(box.getFrom).tell(new BoxQuery(box), resultActor)
+      }
+    case q: BoxShapeQuery =>
+      val chunkBoxes = BoxChunking.chunked(q.getBox.getBox)
+      val resultActor = context.actorOf(BoxQueryResultActor.props(sender, Right(q), chunkBoxes, blockFactory))
       chunkBoxes.foreach { box =>
         getShardActor(box.getFrom).tell(new BoxQuery(box), resultActor)
       }
@@ -125,21 +133,31 @@ object DbActor {
 }
 
 class BoxQueryResultActor(initiator: ActorRef, blockFactory: BlockFactory,
-  query: BoxQuery, boxes: Set[Box])
+  query: Either[BoxQuery, BoxShapeQuery], boxes: Set[Box])
     extends Actor {
   var receivedBoxes: Set[BoxQueryResult] = Set()
+
+  private val box = query match {
+    case Left(q) => q.getBox
+    case Right(q) => q.getBox.getBox
+  }
 
   def receive = {
     case r: BoxQueryResult =>
       receivedBoxes += r
       if(receivedBoxes.map(_.getBox) == boxes) {
-        val data = new Array[BlockTypeId](query.getBox.getNumberOfBlocks)
+        val data = new Array[BlockTypeId](box.getNumberOfBlocks)
         for(subData <- receivedBoxes) {
           for((position, typeId)  <- subData.getAsMap.asScala) {
-            data(query.getBox.arrayIndex(position)) = typeId
+            data(box.arrayIndex(position)) = typeId
           }
         }
-        initiator ! new BoxQueryResult(query.getBox, data)
+        query match {
+          case Left(q) =>
+            initiator ! new BoxQueryResult(q.getBox, data)
+          case Right(q) =>
+            initiator ! new BoxShapeQueryResult(q.getBox, data)
+        }
         context.stop(self)
       }
   }
@@ -147,7 +165,7 @@ class BoxQueryResultActor(initiator: ActorRef, blockFactory: BlockFactory,
 }
 
 object BoxQueryResultActor {
-  def props(initiator: ActorRef, query: BoxQuery, boxes: Set[Box],
+  def props(initiator: ActorRef, query: Either[BoxQuery, BoxShapeQuery], boxes: Set[Box],
     blockFactory: BlockFactory) =
     Props(classOf[BoxQueryResultActor], initiator, blockFactory, query, boxes)
 }

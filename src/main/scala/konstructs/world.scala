@@ -82,7 +82,9 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
       val global = chunk.position(x, y, z)
       val height = map(global) + 32
       val gy = global.getY
-      if(gy < height) {
+      if(gy < height - (3 + random.nextInt(1))) {
+        BlockData(w(Konstructs, "stone"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
+      } else if(gy < height) {
         BlockData(w(Konstructs, "dirt"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
       } else if (gy < 10) {
         BlockData(w(Konstructs, "water"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)

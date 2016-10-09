@@ -348,7 +348,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         val oldBlock = old.block(oldId, typeId)
         ready(oldBlock)
         sendEvent(position, oldBlock, block)
-        BlockData(blockFactory.getW(block), block)
+        BlockData(blockFactory.getW(block.getType()), block)
       } else {
         old
       }
