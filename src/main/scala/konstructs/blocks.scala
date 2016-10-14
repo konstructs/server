@@ -9,7 +9,7 @@ import javax.imageio.ImageIO
 import scala.collection.JavaConverters._
 import scala.util.Try
 
-import com.typesafe.config.{ Config => TypesafeConfig, ConfigValueType }
+import com.typesafe.config.{ Config => TypesafeConfig, ConfigValueType, ConfigObject }
 import akka.actor.{ Actor, Props, ActorRef, Stash }
 
 import com.google.gson.reflect.TypeToken
@@ -206,11 +206,19 @@ object BlockMetaActor {
     val classConfig = config.getConfig("classes")
     classConfig.root.entrySet.asScala.map( e =>
       if(e.getValue.valueType != ConfigValueType.NULL) {
-        Some(BlockClassId.fromString(e.getKey.replace("\"", "")))
+        if(e.getValue.valueType == ConfigValueType.OBJECT) {
+          val innerConfig = e.getValue.asInstanceOf[ConfigObject].toConfig
+          if(innerConfig.hasPath("order"))
+            Some((BlockClassId.fromString(e.getKey.replace("\"", "")), innerConfig.getInt("order")))
+          else
+            Some((BlockClassId.fromString(e.getKey.replace("\"", "")), 0))
+        } else {
+          Some((BlockClassId.fromString(e.getKey.replace("\"", "")), 0))
+        }
       } else {
         None
       }
-    ).flatten.toArray
+    ).flatten.toSeq.sortWith(_._2 < _._2).map(_._1).toArray
   } else {
     BlockType.NO_CLASSES;
   }
