@@ -160,7 +160,7 @@ class PlayerActor(
   }
 
   def putInBelt(stack: Stack) {
-    if(stack != null) {
+    if(stack != null && stack.getTypeId != BlockTypeId.VACUUM) {
       val inventory = data.inventory
       val r = inventory.acceptPartOf(stack)
       if(r.getGiving == null) {

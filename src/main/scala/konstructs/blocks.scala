@@ -9,7 +9,7 @@ import javax.imageio.ImageIO
 import scala.collection.JavaConverters._
 import scala.util.Try
 
-import com.typesafe.config.{ Config => TypesafeConfig, ConfigValueType }
+import com.typesafe.config.{ Config => TypesafeConfig, ConfigValueType, ConfigObject }
 import akka.actor.{ Actor, Props, ActorRef, Stash }
 
 import com.google.gson.reflect.TypeToken
@@ -156,9 +156,11 @@ object BlockMetaActor {
 
   case class BlockClass(obstacle: Option[Boolean], shape: Option[BlockShape], state: Option[BlockState],
     durability: Option[Float], damage: Option[Float], damageMultipliers: Map[BlockOrClassId, Float],
-    orientable: Option[Boolean])
+    orientable: Option[Boolean], destroyedAs: Option[BlockTypeId])
   case class BlockDefault(obstacle: Boolean, shape: BlockShape, state: BlockState,
-    durability: Float, damage: Float, damageMultipliers: Map[BlockOrClassId, Float], orientable: Boolean)
+    durability: Float, damage: Float, damageMultipliers: Map[BlockOrClassId, Float], orientable: Boolean,
+    destroyedAs: BlockTypeId)
+
   object BlockDefault {
     def apply(classes: Array[BlockClassId], classMap: Map[BlockClassId, BlockClass]): BlockDefault = {
       var obstacle = true
@@ -168,6 +170,7 @@ object BlockMetaActor {
       var damage = BlockType.DEFAULT_DAMAGE
       var damageMultipliers: Map[BlockOrClassId, Float] = Map()
       var orientable = false
+      var destroyedAs = BlockTypeId.SELF
       for(id <- classes.reverse) {
         classMap.get(id) map { c =>
           c.obstacle.map(obstacle = _)
@@ -177,9 +180,10 @@ object BlockMetaActor {
           c.damage.map(damage = _)
           damageMultipliers = damageMultipliers ++ c.damageMultipliers
           c.orientable.map(orientable = _)
+          c.destroyedAs.map(destroyedAs = _)
         }
       }
-      apply(obstacle, shape, state, durability, damage, damageMultipliers, orientable)
+      apply(obstacle, shape, state, durability, damage, damageMultipliers, orientable, destroyedAs)
     }
   }
 
@@ -202,11 +206,19 @@ object BlockMetaActor {
     val classConfig = config.getConfig("classes")
     classConfig.root.entrySet.asScala.map( e =>
       if(e.getValue.valueType != ConfigValueType.NULL) {
-        Some(BlockClassId.fromString(e.getKey.replace("\"", "")))
+        if(e.getValue.valueType == ConfigValueType.OBJECT) {
+          val innerConfig = e.getValue.asInstanceOf[ConfigObject].toConfig
+          if(innerConfig.hasPath("order"))
+            Some((BlockClassId.fromString(e.getKey.replace("\"", "")), innerConfig.getInt("order")))
+          else
+            Some((BlockClassId.fromString(e.getKey.replace("\"", "")), 0))
+        } else {
+          Some((BlockClassId.fromString(e.getKey.replace("\"", "")), 0))
+        }
       } else {
         None
       }
-    ).flatten.toArray
+    ).flatten.toSeq.sortWith(_._2 < _._2).map(_._1).toArray
   } else {
     BlockType.NO_CLASSES;
   }
@@ -261,6 +273,12 @@ object BlockMetaActor {
     None
   }
 
+  def readDestroyedAs(config: TypesafeConfig): Option[BlockTypeId] = if(config.hasPath("destroyed-as")) {
+    Some(BlockTypeId.fromString(config.getString("destroyed-as")))
+  } else {
+    None
+  }
+
   def blockType(idString: String, config: TypesafeConfig, texturePosition: Int,
                 classMap: Map[BlockClassId, BlockClass]): (BlockTypeId, BlockType) = {
     val typeId = BlockTypeId.fromString(idString)
@@ -275,14 +293,14 @@ object BlockMetaActor {
       k -> Float.box(v)
     }) asJava
     val orientable = readOrientable(config).getOrElse(d.orientable)
-
+    val destroyedAs = readDestroyedAs(config).getOrElse(d.destroyedAs)
     val blockType = if(config.hasPath("faces")) {
       val faces = config.getIntList("faces")
       if(faces.size != 6) throw new IllegalStateException("There must be exactly 6 faces")
-      new BlockType(faces.asScala.map(_ + texturePosition).toArray, shape, isObstacle, false, state, classes, durability, damage, damageMultipliers, orientable)
+      new BlockType(faces.asScala.map(_ + texturePosition).toArray, shape, isObstacle, false, state, classes, durability, damage, damageMultipliers, orientable, destroyedAs)
     } else {
       /* Default is to assume only one texture for all faces */
-      new BlockType(Array(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition), shape, isObstacle, false, state, classes, durability, damage, damageMultipliers, orientable)
+      new BlockType(Array(texturePosition,texturePosition,texturePosition,texturePosition,texturePosition,texturePosition), shape, isObstacle, false, state, classes, durability, damage, damageMultipliers, orientable, destroyedAs)
     }
     typeId -> blockType
   }
@@ -297,7 +315,7 @@ object BlockMetaActor {
   }
 
   def withTransparent(t: BlockType, transparent: Boolean): BlockType =
-    new BlockType(t.getFaces, t.getBlockShape, t.isObstacle, transparent, t.getBlockState, t.getClasses, t.getDurability, t.getDamage, t.getDamageMultipliers, t.isOrientable)
+    new BlockType(t.getFaces, t.getBlockShape, t.isObstacle, transparent, t.getBlockState, t.getClasses, t.getDurability, t.getDamage, t.getDamageMultipliers, t.isOrientable, t.getDestroyedAs)
 
   def parseClass(config: TypesafeConfig): BlockClass = {
     val isObstacle = readIsObstacle(config)
@@ -307,7 +325,8 @@ object BlockMetaActor {
     val damage = readDamage(config)
     val damageMultipliers = readDamageMultipliers(config)
     val orientable = readOrientable(config)
-    BlockClass(isObstacle, shape, state, durability, damage, damageMultipliers, orientable)
+    val destroyedAs = readDestroyedAs(config)
+    BlockClass(isObstacle, shape, state, durability, damage, damageMultipliers, orientable, destroyedAs)
   }
 
   def parseClasses(config: TypesafeConfig): Map[BlockClassId, BlockClass] = {
