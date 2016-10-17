@@ -12,4 +12,13 @@ notifications:
 
 script:
   - sbt test assembly doc
-  - ./bintray
+
+deploy:
+  provider: releases
+  api_key:
+    secure: EgJ7RuEBzNjcKBuQP4jtwPU1hp8LzoacGufAaimOfG4+3pTfbPFttXjMXjb/8HP4QF1vcFH3BemPyZng20qTTP1LuoNvU3Ae4ZakCFDS0F9KfajibcmJRCqoJ7LSI6olFS/zyMWNVWkEUiBcOcLIafBTz1HB6M0ucxanN6/dUS4=
+  file: "target/scala-*/konstructs-server-assembly-*.jar"
+  file_glob: true
+  on:
+    repo: konstructs/server
+    tags: true
