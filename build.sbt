@@ -38,3 +38,5 @@ releaseProcess := Seq[ReleaseStep](
   commitNextVersion,
   pushChanges
 )
+
+assemblyJarName in assembly := s"${name.value}-${version.value}.jar"
