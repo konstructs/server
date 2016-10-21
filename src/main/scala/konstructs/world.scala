@@ -83,13 +83,17 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
       val height = map(global) + 32
       val gy = global.getY
       if(gy < height - (3 + random.nextInt(1))) {
-        BlockData(w(Konstructs, "stone"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
+        BlockData(w(Konstructs, "stone"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
+          LightLevel.DARK_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
       } else if(gy < height) {
-        BlockData(w(Konstructs, "dirt"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
+        BlockData(w(Konstructs, "dirt"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
+          LightLevel.DARK_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
       } else if (gy < 10) {
-        BlockData(w(Konstructs, "water"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
+        BlockData(w(Konstructs, "water"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
+          LightLevel.FULL_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
       } else {
-        BlockData(w(Konstructs, "vacuum"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
+        BlockData(w(Konstructs, "vacuum"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
+          LightLevel.FULL_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
       }
     }
   }

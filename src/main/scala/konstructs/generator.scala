@@ -21,7 +21,8 @@ class GeneratorActor(jsonStorage: ActorRef, binaryStorage: ActorRef, factory: Bl
   val EmptyChunk = {
     val data = new Array[Byte](Db.ChunkSize * Db.ChunkSize * Db.ChunkSize * Db.BlockSize)
     for(i <- 0 until Db.ChunkSize * Db.ChunkSize * Db.ChunkSize) {
-      BlockData.write(data, i, Vacuum, Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
+      BlockData.write(data, i, Vacuum, Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
+        LightLevel.FULL_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
     }
     data
   }

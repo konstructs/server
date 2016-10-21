@@ -12,14 +12,14 @@ import konstructs.api.messages.{ BoxQuery, BoxShapeQuery,
                                  InteractTertiary }
 
 object Db {
-  val BlockSize = 4
+  val BlockSize = 7
   val ChunkSize = 32
   val ShardSize = 8
   val RevisionSize = 4
   val Version2Header = 2 + RevisionSize
   val Version1Header = 2
   val Header = Version2Header
-  val Version = 2.toByte
+  val Version = 3.toByte
 }
 
 case class ShardPosition(m: Int, n: Int, o: Int)

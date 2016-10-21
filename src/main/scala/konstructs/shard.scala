@@ -12,7 +12,7 @@ import com.google.gson.reflect.TypeToken
 import konstructs.api.{ BinaryLoaded, Position, Block, GsonLoaded,
                         BlockTypeId, BlockFilter, BlockFilterFactory,
                         BlockFactory, BlockState, Direction, Rotation,
-                        Orientation,
+                        Orientation, LightLevel, Colour,
                         BlockUpdate, Health, ReceiveStack, Stack }
 import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ReplaceBlock,
                                  ReplaceBlockResult, ViewBlock, ViewBlockResult,
@@ -20,9 +20,10 @@ import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ReplaceBlock,
                                  InteractTertiary }
 import konstructs.utils.compress
 
-case class BlockData(w: Int, health: Int, direction: Int, rotation: Int) {
+case class BlockData(w: Int, health: Int, direction: Int, rotation: Int, ambient: Int,
+  red: Int, green: Int, blue: Int, light: Int) {
   def write(data: Array[Byte], i: Int) {
-    BlockData.write(data, i, w, health, direction, rotation)
+    BlockData.write(data, i, w, health, direction, rotation, ambient, red, green, blue, light)
   }
 
   def block(id: UUID, blockTypeId: BlockTypeId) =
@@ -43,24 +44,65 @@ object BlockData {
   def rotation(data: Array[Byte], i: Int): Int =
     ((data(i * Db.BlockSize + 3) & 0x18) >> 3)
 
+  def ambientLight(data: Array[Byte], i: Int): Int =
+    ((data(i * Db.BlockSize + 4) & 0x0F))
+
+  def red(data: Array[Byte], i: Int): Int =
+    ((data(i * Db.BlockSize + 4) & 0xF0) >> 4)
+
+  def green(data: Array[Byte], i: Int): Int =
+    ((data(i * Db.BlockSize + 5) & 0x0F))
+
+  def blue(data: Array[Byte], i: Int): Int =
+    ((data(i * Db.BlockSize + 5) & 0xF0) >> 4)
+
+  def light(data: Array[Byte], i: Int): Int =
+    ((data(i * Db.BlockSize + 6) & 0x0F))
+
   def apply(data: Array[Byte], i: Int): BlockData = {
-    apply(w(data, i), hp(data, i), direction(data, i), rotation(data, i))
+    apply(
+      w(data, i),
+      hp(data, i),
+      direction(data, i),
+      rotation(data, i),
+      ambientLight(data, i),
+      red(data, i),
+      green(data, i),
+      blue(data, i),
+      light(data, i))
   }
 
-  def apply(w: Int, block: Block): BlockData = {
-    apply(w, block.getHealth.getHealth,
-      block.getOrientation.getDirection.getEncoding, block.getOrientation.getRotation.getEncoding)
+  def apply(w: Int, block: Block, ambient: Int, colour: Colour, level: LightLevel): BlockData = {
+    apply(
+      w,
+      block.getHealth.getHealth,
+      block.getOrientation.getDirection.getEncoding,
+      block.getOrientation.getRotation.getEncoding,
+      ambient,
+      colour.getRed,
+      colour.getGreen,
+      colour.getBlue,
+      level.getLevel
+    )
   }
 
-  def write(data: Array[Byte], i: Int, w: Int, health: Int, direction: Int, rotation: Int) {
+  def write(data: Array[Byte], i: Int, w: Int, health: Int, direction: Int, rotation: Int, ambient: Int,
+    red: Int, green: Int, blue: Int, light: Int) {
     writeW(data, i, w)
     writeHealthAndOrientation(data, i, health, direction, rotation)
+    writeLight(data, i, ambient, red, green, blue, light)
   }
 
-  def write(data: Array[Byte], i: Int, w: Int, block: Block) {
+  def write(data: Array[Byte], i: Int, w: Int, block: Block, ambientLight: LightLevel, colour: Colour, light: LightLevel) {
     write(data, i, w, block.getHealth.getHealth,
       block.getOrientation.getDirection.getEncoding,
-      block.getOrientation.getRotation.getEncoding)
+      block.getOrientation.getRotation.getEncoding,
+      ambientLight.getLevel,
+      colour.getRed,
+      colour.getGreen,
+      colour.getBlue,
+      light.getLevel
+    )
   }
 
   def writeW(data: Array[Byte], i: Int, w: Int) {
@@ -72,6 +114,14 @@ object BlockData {
     data(i * Db.BlockSize + 2) = (health & 0xFF).toByte
     val b = (((direction << 5) & 0xE0) + ((rotation << 3) & 0x18) + ((health >> 8) & 0x07)).toByte
     data(i * Db.BlockSize + 3) = b
+  }
+
+  def writeLight(data: Array[Byte], i: Int, ambient: Int, red: Int, green: Int, blue: Int, light: Int) {
+    val b4 = ((ambient & 0x0F) + ((red << 4) & 0xF0)).toByte
+    data(i * Db.BlockSize + 4) = b4
+    val b5 = ((green & 0x0F) + ((blue << 4) & 0xF0)).toByte
+    data(i * Db.BlockSize + 5) = b5
+    data(i * Db.BlockSize + 6) = (light & 0x0F).toByte
   }
 
 }
@@ -129,21 +179,42 @@ object ChunkData {
   }
 
   def loadOldFormat(version: Int, data: Array[Byte], blockBuffer: Array[Byte], compressionBuffer: Array[Byte]): ChunkData = {
-    val size = compress.inflate(data, blockBuffer, Db.Version1Header, data.size - Db.Version1Header)
-    convertFromOldFormat(blockBuffer, size)
+
+    if(version == 1) {
+      val size = compress.inflate(data, blockBuffer, Db.Version1Header, data.size - Db.Version1Header)
+      convertFromOldFormat1(blockBuffer, size)
+    } else {
+      val size = compress.inflate(data, blockBuffer, Db.Header, data.size - Db.Header)
+      convertFromOldFormat2(blockBuffer, size)
+    }
     apply(0, blockBuffer, compressionBuffer)
   }
 
-  private def convertFromOldFormat(buf: Array[Byte], size: Int) {
+  private def convertFromOldFormat1(buf: Array[Byte], size: Int) {
     val tmp = java.util.Arrays.copyOf(buf, size)
     for(i <- 0 until size) {
-      buf(i * 4) = tmp(i)
-      buf(i * 4 + 1) = 0.toByte
-      buf(i * 4 + 2) = 0xFF.toByte
-      buf(i * 4 + 3) = 0x07.toByte
+      buf(i * Db.BlockSize) = tmp(i)
+      buf(i * Db.BlockSize + 1) = 0.toByte
+      buf(i * Db.BlockSize + 2) = 0xFF.toByte
+      buf(i * Db.BlockSize + 3) = 0x07.toByte
+      buf(i * Db.BlockSize + 4) = 0x00.toByte
+      buf(i * Db.BlockSize + 5) = 0x00.toByte
+      buf(i * Db.BlockSize + 6) = 0x00.toByte
     }
   }
 
+  private def convertFromOldFormat2(buf: Array[Byte], size: Int) {
+    val tmp = java.util.Arrays.copyOf(buf, size)
+    for(i <- 0 until (size / 4)) {
+      buf(i * Db.BlockSize) = tmp(i * 4)
+      buf(i * Db.BlockSize + 1) = tmp(i * 4 + 1)
+      buf(i * Db.BlockSize + 2) = tmp(i * 4 + 2)
+      buf(i * Db.BlockSize + 3) = tmp(i * 4 + 3)
+      buf(i * Db.BlockSize + 4) = 0x00.toByte
+      buf(i * Db.BlockSize + 5) = 0x00.toByte
+      buf(i * Db.BlockSize + 6) = 0x00.toByte
+    }
+  }
 
   def index(x: Int, y: Int, z: Int): Int =
     x + y * Db.ChunkSize + z * Db.ChunkSize * Db.ChunkSize
@@ -193,7 +264,10 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     blockFactory.getW(BlockTypeId.VACUUM),
     Health.PRISTINE.getHealth(),
     Direction.UP_ENCODING,
-    Rotation.IDENTITY_ENCODING
+    Rotation.IDENTITY_ENCODING,
+    LightLevel.FULL_ENCODING,
+    0, 0, 0,
+    LightLevel.DARK_ENCODING
   )
   private val VacuumBlock = Block.create(BlockTypeId.VACUUM)
   private val toolDurabilityBonus = 10.0f
@@ -264,6 +338,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       val oldBlock = BlockData(blockBuffer, i)
       val block = update(oldBlock)
       block.write(blockBuffer, i)
+      updateLight(pos, chunk)
       val data = ChunkData(c.revision + 1, blockBuffer, compressionBuffer)
       chunks(index(chunk)) = Some(data)
       db ! ChunkUpdate(chunk, data)
@@ -285,7 +360,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
           val oldBlock = BlockData(blockBuffer, i).block(id, typeId)
           val newBlock = Block.create(newTypeId)
           events.put(position, new BlockUpdate(oldBlock, newBlock))
-          BlockData.write(blockBuffer, i, blockFactory.getW(newTypeId), newBlock)
+          BlockData.write(blockBuffer, i, blockFactory.getW(newTypeId), newBlock, LightLevel.FULL, Colour.BLACK, LightLevel.DARK)
           isDirty = true
           if(id != null)
             positionMappingDirty = true
@@ -333,7 +408,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         sendEvent(position, oldBlock, VacuumBlock)
         (block, VacuumData)
       } else {
-        (null, BlockData(old.w, oldBlock.withHealth(receivingHealth)))
+        (null, old.copy(health = receivingHealth.getHealth()))
       }
       ready(dealingBlock, receivingBlock)
       data
@@ -344,7 +419,8 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     positionMapping: java.util.Map[String, UUID])(ready: Block => Unit) = {
     updateChunk(position) { old =>
       val typeId = blockFactory.getBlockTypeId(old.w)
-      if(filter.matches(typeId, blockFactory.getBlockType(typeId))) {
+      val blockType = blockFactory.getBlockType(typeId)
+      if(filter.matches(typeId, blockType)) {
         val oldId = if(block.getId() != null) {
           positionMappingDirty = true
           positionMapping.put(str(position), block.getId())
@@ -357,11 +433,39 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         val oldBlock = old.block(oldId, typeId)
         ready(oldBlock)
         sendEvent(position, oldBlock, block)
-        BlockData(blockFactory.getW(block.getType()), block)
+        val newBlockType =  blockFactory.getBlockType(block.getType)
+        println(newBlockType)
+        BlockData(blockFactory.getW(block.getType()), block, old.ambient,
+          newBlockType.getLightColour, newBlockType.getLightLevel)
       } else {
         old
       }
     }
+  }
+
+  def updateLight(block: Position, chunk: ChunkPosition): Set[Position] = {
+    val queue = mutable.Queue[Position](block)
+    val buffer = mutable.ArrayBuffer[Position]()
+
+    while(!queue.isEmpty) {
+      val pos = queue.dequeue
+      val b = BlockData(blockBuffer, ChunkData.index(chunk, pos))
+      for(adj <- pos.getAdjacent()) {
+        if(chunk.contains(adj)) {
+          val i = ChunkData.index(chunk, adj)
+          val a = BlockData(blockBuffer, i)
+          val aType = blockFactory.getBlockType(blockFactory.getBlockTypeId(a.w))
+          if(aType.isTransparent && a.light + 1 < b.light) {
+            a.copy(light = b.light - 1, red = b.red, green = b.green, blue = b.blue).write(blockBuffer, i)
+            queue.enqueue(adj)
+          }
+        } else {
+          buffer+=adj
+        }
+      }
+
+    }
+    buffer.toSet
   }
 
   /*
@@ -506,6 +610,8 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
 }
 
 object ShardActor {
+
+  case class LightUpdate(updated: Set[ChunkPosition], update: Seq[(Position, LightLevel)])
   case object StoreChunks
 
   def shardId(shard: ShardPosition) = s"${shard.m}-${shard.n}-${shard.o}"
