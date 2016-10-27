@@ -4,6 +4,7 @@ import java.util.UUID
 import java.nio.{ ByteBuffer, ByteOrder }
 
 import scala.collection.mutable
+import scala.collection.JavaConverters._
 
 import akka.actor.{ Actor, Stash, ActorRef, Props }
 
@@ -12,7 +13,7 @@ import com.google.gson.reflect.TypeToken
 import konstructs.api.{ BinaryLoaded, Position, Block, GsonLoaded,
                         BlockTypeId, BlockFilter, BlockFilterFactory,
                         BlockFactory, BlockState, Direction, Rotation,
-                        Orientation, LightLevel, Colour,
+                        Orientation, LightLevel, Colour, BlockType,
                         BlockUpdate, Health, ReceiveStack, Stack }
 import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ReplaceBlock,
                                  ReplaceBlockResult, ViewBlock, ViewBlockResult,
@@ -233,7 +234,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
                  chunkGenerator: ActorRef, blockFactory: BlockFactory,
                  tertiaryInteractionFilters: Seq[ActorRef], universe: ActorRef)
     extends Actor with Stash with utils.Scheduled with BinaryStorage with JsonStorage {
-  import ShardActor.{ ReplaceBlocks, index, StoreChunks, str }
+  import ShardActor._
   import GeneratorActor._
   import DbActor._
   import Db._
@@ -305,8 +306,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
   def runQuery(query: BoxQuery, sender: ActorRef) = {
     val box = query.getBox
     val chunk = ChunkPosition(box.getFrom)
-    loadChunk(chunk).map { c =>
-      c.unpackTo(blockBuffer)
+    updateChunk(chunk) { () =>
       val data = new Array[BlockTypeId](box.getNumberOfBlocks + 1)
       for(
         x <- box.getFrom.getX until box.getUntil.getX;
@@ -318,10 +318,11 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
 
       }
       sender ! new BoxQueryResult(box, data)
+      false /* Indicate that we did not update the chunk */
     }
   }
 
-  def readChunk(pos: Position)(read: BlockData => Unit) = {
+  def readBlock(pos: Position)(read: BlockData => Unit) = {
     val chunk = ChunkPosition(pos)
     loadChunk(chunk).map { c =>
       val block = c.block(chunk, pos, blockBuffer)
@@ -329,28 +330,22 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     }
   }
 
-  def updateChunk(pos: Position)(update: BlockData => BlockData) {
-    val chunk = ChunkPosition(pos)
+  def updateChunk(chunk: ChunkPosition)(update: () => Boolean) {
     loadChunk(chunk).map { c =>
-      dirty = dirty + chunk
       c.unpackTo(blockBuffer)
-      val i = ChunkData.index(chunk, pos)
-      val oldBlock = BlockData(blockBuffer, i)
-      val block = update(oldBlock)
-      block.write(blockBuffer, i)
-      updateLight(pos, chunk)
-      val data = ChunkData(c.revision + 1, blockBuffer, compressionBuffer)
-      chunks(index(chunk)) = Some(data)
-      db ! ChunkUpdate(chunk, data)
+      if(update()) {
+        dirty = dirty + chunk
+        val data = ChunkData(c.revision + 1, blockBuffer, compressionBuffer)
+        chunks(index(chunk)) = Some(data)
+        db ! ChunkUpdate(chunk, data)
+      }
     }
   }
 
   def replaceBlocks(chunk: ChunkPosition,
     filter: BlockFilter, blocks: Map[Position, BlockTypeId],
     positionMapping: java.util.Map[String, UUID]) {
-    loadChunk(chunk).map { c =>
-      var isDirty = false
-      c.unpackTo(blockBuffer)
+    updateChunk(chunk) { () =>
       val events = new java.util.HashMap[Position, BlockUpdate]()
       for((position, newTypeId) <- blocks) {
         val i = ChunkData.index(chunk, position)
@@ -361,24 +356,26 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
           val newBlock = Block.create(newTypeId)
           events.put(position, new BlockUpdate(oldBlock, newBlock))
           BlockData.write(blockBuffer, i, blockFactory.getW(newTypeId), newBlock, LightLevel.FULL, Colour.BLACK, LightLevel.DARK)
-          isDirty = true
           if(id != null)
             positionMappingDirty = true
         }
       }
-      if(isDirty) {
-        val data = ChunkData(c.revision + 1, blockBuffer, compressionBuffer)
-        chunks(index(chunk)) = Some(data)
-        db ! ChunkUpdate(chunk, data)
+      if(!events.isEmpty) {
         sendEvent(events)
-        dirty = dirty + chunk
+        updateLight(events, chunk)
+        true // We updated the chunk
+      } else {
+        false // We didn't update the chunk
       }
     }
   }
 
   def damageBlock(position: Position, dealing: Block,
     positionMapping: java.util.Map[String, UUID])(ready: (Block, Block) => Unit) {
-    updateChunk(position) { old =>
+    val chunk = ChunkPosition(position)
+    updateChunk(chunk) { () =>
+      val i = ChunkData.index(chunk, position)
+      val old = BlockData(blockBuffer, i)
       val receivingTypeId = blockFactory.getBlockTypeId(old.w)
       val receivingType = blockFactory.getBlockType(receivingTypeId)
       val dealingType = blockFactory.getBlockType(dealing.getType())
@@ -392,7 +389,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       }
       val id = positionMapping.remove(str(position))
       val oldBlock = old.block(id, receivingTypeId)
-      val (receivingBlock, data) = if(receivingHealth.isDestroyed()) {
+      if(receivingHealth.isDestroyed()) {
         if(id != null)
           positionMappingDirty = true
         val block = if(receivingType.getDestroyedAs() == BlockTypeId.SELF) {
@@ -406,18 +403,23 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
             .withType(receivingType.getDestroyedAs())
         }
         sendEvent(position, oldBlock, VacuumBlock)
-        (block, VacuumData)
+        VacuumData.write(blockBuffer, i)
+        updateLight(Set((position, receivingType)), chunk)
+        ready(dealingBlock, block)
       } else {
-        (null, old.copy(health = receivingHealth.getHealth()))
+        old.copy(health = receivingHealth.getHealth()).write(blockBuffer, i)
+        ready(dealingBlock, null)
       }
-      ready(dealingBlock, receivingBlock)
-      data
+      true
     }
   }
 
   def replaceBlock(filter: BlockFilter, position: Position, block: Block,
     positionMapping: java.util.Map[String, UUID])(ready: Block => Unit) = {
-    updateChunk(position) { old =>
+    val chunk = ChunkPosition(position)
+    updateChunk(chunk) { () =>
+      val i = ChunkData.index(chunk, position)
+      val old = BlockData(blockBuffer, i)
       val typeId = blockFactory.getBlockTypeId(old.w)
       val blockType = blockFactory.getBlockType(typeId)
       if(filter.matches(typeId, blockType)) {
@@ -433,39 +435,253 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         val oldBlock = old.block(oldId, typeId)
         ready(oldBlock)
         sendEvent(position, oldBlock, block)
-        val newBlockType =  blockFactory.getBlockType(block.getType)
-        println(newBlockType)
+        val newBlockType = blockFactory.getBlockType(block.getType)
         BlockData(blockFactory.getW(block.getType()), block, old.ambient,
-          newBlockType.getLightColour, newBlockType.getLightLevel)
+          newBlockType.getLightColour, newBlockType.getLightLevel).write(blockBuffer, i)
+        updateLight(Set((position, blockType)), chunk)
+        true // We updated the chunk
       } else {
-        old
+        false // We didn't update the chunk
       }
     }
   }
 
-  def updateLight(block: Position, chunk: ChunkPosition): Set[Position] = {
-    val queue = mutable.Queue[Position](block)
-    val buffer = mutable.ArrayBuffer[Position]()
+  // Helper method for updating light by event list
+  def updateLight(events: java.util.Map[Position, BlockUpdate], chunk: ChunkPosition) {
+    val updates = events.asScala.toSeq.map {
+      case (position, update) =>
+        (position, blockFactory.getBlockType(update.getBefore.getType))
+    } toSet
 
-    while(!queue.isEmpty) {
-      val pos = queue.dequeue
-      val b = BlockData(blockBuffer, ChunkData.index(chunk, pos))
-      for(adj <- pos.getAdjacent()) {
-        if(chunk.contains(adj)) {
-          val i = ChunkData.index(chunk, adj)
-          val a = BlockData(blockBuffer, i)
-          val aType = blockFactory.getBlockType(blockFactory.getBlockTypeId(a.w))
-          if(aType.isTransparent && a.light + 1 < b.light) {
-            a.copy(light = b.light - 1, red = b.red, green = b.green, blue = b.blue).write(blockBuffer, i)
-            queue.enqueue(adj)
+    updateLight(updates, chunk)
+  }
+
+  // This function validates lightning of blocks that just changed
+  // It handles light sources as well as normal blocks
+  def updateLight(positions: Set[(Position, BlockType)], chunk: ChunkPosition) {
+    // Blocks that should be refreshed in this chunk
+    val refresh = mutable.Set[Position]()
+    // Blocks that should be refreshed in other chunks
+    val refreshOthers = mutable.HashMap[ChunkPosition, mutable.Set[Position]]()
+    // Light sources to remove in this chunk
+    val remove = mutable.Set[LightRemoval]()
+    // Light sources to remove in other chunks
+    val removeOthers = mutable.HashMap[ChunkPosition, mutable.Set[LightRemoval]]()
+
+    // Iterate through all updated blocks
+    for((position, oldBlock) <- positions) {
+      val i = ChunkData.index(chunk, position)
+      val block = BlockData(blockBuffer, i)
+
+      // Old block is a light source
+      if(oldBlock.getLightLevel.getLevel > 1) {
+
+        // Find all adjacent blocks and add them for light removal
+        for(adj <- position.getAdjacent) {
+          val adjChunk = ChunkPosition(adj)
+          if(adjChunk == chunk) {
+            // Add for removal in this chunk
+            remove += LightRemoval(adj, position, oldBlock.getLightLevel.decrease.getLevel)
+          } else {
+            // Add for removal in another chunk
+            val s = removeOthers.getOrElseUpdate(adjChunk, mutable.Set[LightRemoval]())
+            s += LightRemoval(adj, position, oldBlock.getLightLevel.decrease.getLevel)
           }
-        } else {
-          buffer+=adj
         }
       }
 
+      // The block has light of itself
+      if(block.light > 1) {
+
+        // Add block to blocks that requires refresh
+        refresh += position
+      }
+
+      // Iterate through all adjacent blocks
+      for(adj <- position.getAdjacent) {
+        val adjChunk = ChunkPosition(adj)
+        if(adjChunk == chunk) {
+          // Add for refresh in this chunk
+          refresh += adj
+        } else {
+          // Add for refresh in other chunk
+          val s = refreshOthers.getOrElseUpdate(adjChunk, mutable.Set[Position]())
+          s += adj
+        }
+      }
     }
-    buffer.toSet
+
+    // Remove all lights that requires removal in this and other chunks
+    // (This function  sends remove messages to other chunks)
+    // This also adds blocks that requires refresh due to neighbour removal
+    removeLight(RemoveLight(chunk, remove.toSet), removeOthers, refresh)
+
+    // Refresh all lights that requires refresh in this chunk
+    refreshLight(RefreshLight(chunk, refresh.toSet))
+
+    // Send messages to refresh all other chunks
+    refreshOthers foreach {
+      case (chunk, set) =>
+        db ! RefreshLight(chunk, set.toSet)
+    }
+  }
+
+  // Helper method to remove and refresh light
+  // This is done when receiving a remove light message
+  def removeLight(removal: RemoveLight) {
+    val refresh = mutable.Set[Position]()
+    removeLight(removal, mutable.HashMap[ChunkPosition, mutable.Set[LightRemoval]](), refresh)
+    refreshLight(RefreshLight(removal.chunk, refresh.toSet))
+  }
+
+  // Removes light and enqueue neighbours that require refresh
+  def removeLight(removal: RemoveLight, buffer: mutable.HashMap[ChunkPosition, mutable.Set[LightRemoval]],
+    refresh: mutable.Set[Position]) {
+
+    // Queue for BFS search
+    val queue = mutable.Queue[LightRemoval]()
+
+    // Add all lights that require removal
+    queue ++= removal.removal
+
+    val chunk = removal.chunk
+
+    // BFS flood removal
+    while(!queue.isEmpty) {
+      val r = queue.dequeue
+      val i = ChunkData.index(chunk, r.position)
+      val a = BlockData(blockBuffer, i)
+      val aType = blockFactory.getBlockType(blockFactory.getBlockTypeId(a.w))
+
+      // If the block is transparent and has light set
+      if(aType.isTransparent && a.light != 0) {
+
+        // If the light of the block is equal or smaller to the light to be removed, remove it
+        // Else the block needs to be added to refresh list, since it might flood the area where
+        // light has been removed with another light
+        if(a.light <= r.light) {
+          // Remove light from the block
+          a.copy(light = 0, red = Colour.WHITE.getRed, green = Colour.WHITE.getGreen, blue = Colour.WHITE.getBlue).write(blockBuffer, i)
+
+          // If the light to remove is > 1 continue to remove light from all neighbours
+          if(r.light > 1) {
+            for(adj <- r.position.getAdjacent) {
+              if(adj != r.from) {
+                val adjChunk = ChunkPosition(adj)
+                if(chunk == adjChunk) {
+                  // Add light to be removed in this chunk
+                  queue.enqueue(LightRemoval(adj, r.position, r.light - 1))
+                } else {
+                  // Add light to be removed in another chunk
+                  val set = buffer.getOrElseUpdate(adjChunk, mutable.Set[LightRemoval]())
+                  set += LightRemoval(adj, r.position, r.light - 1)
+                }
+              }
+            }
+          }
+        } else {
+          // Add block to be refreshed
+          refresh += r.position
+        }
+      }
+    }
+
+    // Send lights to be removed to other chunks
+    buffer foreach {
+      case (chunk, set) =>
+        db ! RemoveLight(chunk, set.toSet)
+    }
+
+  }
+
+  // This function looks at the positions given and
+  // if the position contains light, tries to propagate
+  // it to refresh any updated or newly placed block
+  def refreshLight(refresh: RefreshLight) {
+    // Blocks where to flood light in this chunk
+    val flood = mutable.Set[LightFlood]()
+
+    // Blocks where to flood light in other chunks
+    val floodOthers = mutable.HashMap[ChunkPosition, mutable.Set[LightFlood]]()
+
+    val chunk = refresh.chunk
+
+    // Iterate through all blocks that require a refresh
+    for(position <- refresh.positions) {
+      val i = ChunkData.index(chunk, position)
+      val block = BlockData(blockBuffer, i)
+
+      // If block has a light level higher than one
+      // it can spread light around
+      if(block.light > 1) {
+        for(adj <- position.getAdjacent) {
+          val adjChunk = ChunkPosition(adj)
+          if(adjChunk == chunk) {
+            // Add light to flood in this chunk
+            flood += LightFlood(adj, position, block.light - 1, block.red, block.green, block.blue)
+          } else {
+            // Add light to flood in other chunk
+            val s = floodOthers.getOrElseUpdate(adjChunk, mutable.Set[LightFlood]())
+            s += LightFlood(adj, position, block.light - 1, block.red, block.green, block.blue)
+          }
+        }
+      }
+    }
+
+    // Flood all lights found
+    floodLight(FloodLight(chunk, flood.toSet), floodOthers)
+  }
+
+  // Helper method to flood lights received via FloodLight message
+  def floodLight(update: FloodLight) {
+    floodLight(update, mutable.HashMap[ChunkPosition, mutable.Set[LightFlood]]())
+  }
+
+  // This function propagates light by flooding using a BFS
+  def floodLight(update: FloodLight, buffer: mutable.HashMap[ChunkPosition, mutable.Set[LightFlood]]) {
+
+    // The BFS queue
+    val queue = mutable.Queue[LightFlood]()
+    queue ++= update.update
+
+    val chunk = update.chunk
+
+    // The BFS
+    while(!queue.isEmpty) {
+      val f = queue.dequeue
+      val i = ChunkData.index(chunk, f.position)
+      val a = BlockData(blockBuffer, i)
+      val aType = blockFactory.getBlockType(blockFactory.getBlockTypeId(a.w))
+
+      // If the block has a lower light level than what is to be flooded
+      // update it to the new level and continue flooding
+      if(aType.isTransparent && a.light < f.light) {
+        a.copy(light = f.light, red = f.red, green = f.green, blue = f.blue).write(blockBuffer, i)
+
+        // If the flood light level is bigger than 1 continue flooding
+        if(f.light > 1) {
+          for(adj <- f.position.getAdjacent) {
+            if(adj != f.from) {
+              val adjChunk = ChunkPosition(adj)
+              if(chunk == adjChunk) {
+                // Add block to flood in this chunk
+                queue.enqueue(LightFlood(adj, f.position, f.light - 1, f.red, f.green, f.blue))
+              } else {
+                // Add block to flood in other chunk
+                val set = buffer.getOrElseUpdate(adjChunk, mutable.Set[LightFlood]())
+                set += LightFlood(adj, f.position, f.light - 1, f.red, f.green, f.blue)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Send messages to flood all other chunks
+    buffer foreach {
+      case (chunk, set) =>
+        db ! FloodLight(chunk, set.toSet)
+    }
   }
 
   /*
@@ -526,7 +742,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       val filters = tertiaryInteractionFilters :+ self
       val message = i.message
       val p = message.getPosition
-      readChunk(p) { block =>
+      readBlock(p) { block =>
         val b = block.block(positionMapping.get(str(p)), blockFactory.getBlockTypeId(block.w))
         val filters = tertiaryInteractionFilters :+ self
         filters.head ! new InteractTertiaryFilter(
@@ -569,7 +785,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     case v: ViewBlock =>
       val s = sender
       val p = v.getPosition
-      readChunk(p) { block =>
+      readBlock(p) { block =>
         val b = block.block(positionMapping.get(str(p)), blockFactory.getBlockTypeId(block.w))
         s ! new ViewBlockResult(p, b)
       }
@@ -605,13 +821,39 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         storeGson(positionMappingFile, gson.toJsonTree(positionMapping, TypeOfPositionMapping))
         positionMappingDirty = false
       }
+    case f: FloodLight =>
+      println(f)
+      updateChunk(f.chunk) { () =>
+        floodLight(f)
+        true //Chunk was updated
+      }
+    case r: RemoveLight =>
+      println(r)
+      updateChunk(r.chunk) { () =>
+        removeLight(r)
+        true //Chunk was updated
+      }
+
   }
 
 }
 
 object ShardActor {
 
-  case class LightUpdate(updated: Set[ChunkPosition], update: Seq[(Position, LightLevel)])
+  // A specific block which should be flooded by light
+  case class LightFlood(position: Position, from: Position, light: Int, red: Int, green: Int, blue: Int)
+
+  // Message to flood light
+  case class FloodLight(chunk: ChunkPosition, update: Set[LightFlood])
+
+  // Message to refresh light in blocks
+  case class RefreshLight(chunk: ChunkPosition, positions: Set[Position])
+
+  // A specific position where light needs to be removed
+  case class LightRemoval(position: Position, from: Position, light: Int)
+  // Message to remove light
+  case class RemoveLight(chunk: ChunkPosition, removal: Set[LightRemoval])
+
   case object StoreChunks
 
   def shardId(shard: ShardPosition) = s"${shard.m}-${shard.n}-${shard.o}"
