@@ -11,7 +11,8 @@ notifications:
     on_start: always    # options: [always|never|change] default: always
 
 script:
-  - sbt test scalafmtTest assembly doc
+  - "sbt scalafmtTest || ( sbt scalafmt; git diff --exit-code ) "
+  - sbt test assembly doc
 
 deploy:
   provider: releases
