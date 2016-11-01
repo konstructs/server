@@ -4,38 +4,19 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import akka.actor.{ Actor, ActorRef, Props }
 
-import konstructs.api.{ Position, BlockFactory, Box, BlockTypeId, Block, Orientation }
+import konstructs.api.{ Position, BlockFactory, Box, BlockTypeId,
+                        Block, Orientation }
 import konstructs.api.messages.{ BoxQuery, BoxShapeQuery,
                                  BoxQueryResult, BoxShapeQueryResult,
                                  ViewBlock, ReplaceBlocks,
                                  ReplaceBlock, DamageBlockWithBlock,
                                  InteractTertiary }
+import konstructs.shard.{ ShardActor, ShardPosition, ChunkPosition,
+                          ChunkData, BoxChunking }
 
 object Db {
-  val BlockSize = 7
   val ChunkSize = 32
   val ShardSize = 8
-  val RevisionSize = 4
-  val Version2Header = 2 + RevisionSize
-  val Version1Header = 2
-  val Header = Version2Header
-  val Version = 3.toByte
-}
-
-case class ShardPosition(m: Int, n: Int, o: Int)
-
-object ShardPosition {
-  def apply(c: ChunkPosition): ShardPosition = {
-    // For negative values we need to "round down", i.e. -0.01 should be -1 and not 0
-    val m = (if(c.p < 0) (c.p - Db.ShardSize + 1) else c.p) / Db.ShardSize
-    val n = (if(c.q < 0) (c.q - Db.ShardSize + 1) else c.q) / Db.ShardSize
-    val o = (if(c.k < 0) (c.k - Db.ShardSize + 1) else c.k) / Db.ShardSize
-    ShardPosition(m, n, o)
-  }
-
-  def apply(p: Position): ShardPosition =
-    ShardPosition(ChunkPosition(p))
-
 }
 
 class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,

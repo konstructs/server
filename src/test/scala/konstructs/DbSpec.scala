@@ -1,4 +1,4 @@
-package konstructs
+package konstructs.shard
 
 import org.scalatest.{ Matchers, WordSpec }
 

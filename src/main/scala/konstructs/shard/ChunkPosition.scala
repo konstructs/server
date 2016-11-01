@@ -1,6 +1,8 @@
-package konstructs
+package konstructs.shard
 
 import konstructs.api.{ Position, Box }
+
+import konstructs.Db
 
 case class ChunkPosition(p: Int, q: Int, k: Int) {
   def translate(pd: Int, qd: Int, kd: Int) =

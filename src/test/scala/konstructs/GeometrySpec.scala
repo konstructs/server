@@ -3,6 +3,7 @@ package konstructs
 import org.scalatest.{ Matchers, WordSpec }
 
 import konstructs.api._
+import konstructs.shard.{ ChunkPosition, BoxChunking }
 
 class GeometrySpec extends WordSpec with Matchers {
 
