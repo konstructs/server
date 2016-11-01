@@ -99,11 +99,16 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
       universe ! c
     case r: ShardActor.RefreshLight =>
       getShardActor(r.chunk) forward r
+    case r: ShardActor.RefreshAmbientLight =>
+      getShardActor(r.chunk) forward r
     case f: ShardActor.FloodLight =>
+      getShardActor(f.chunk) forward f
+    case f: ShardActor.FloodAmbientLight =>
       getShardActor(f.chunk) forward f
     case l: ShardActor.RemoveLight =>
       getShardActor(l.chunk) forward l
-
+    case l: ShardActor.RemoveAmbientLight =>
+      getShardActor(l.chunk) forward l
   }
 }
 
