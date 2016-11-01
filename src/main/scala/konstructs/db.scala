@@ -12,7 +12,7 @@ import konstructs.api.messages.{ BoxQuery, BoxShapeQuery,
                                  ReplaceBlock, DamageBlockWithBlock,
                                  InteractTertiary }
 import konstructs.shard.{ ShardActor, ShardPosition, ChunkPosition,
-                          ChunkData, BoxChunking }
+                          ChunkData, BoxChunking, Light }
 
 object Db {
   val ChunkSize = 32
@@ -78,17 +78,17 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
       universe ! b
     case c: ChunkUpdate =>
       universe ! c
-    case r: ShardActor.RefreshLight =>
+    case r: Light.RefreshLight =>
       getShardActor(r.chunk) forward r
-    case r: ShardActor.RefreshAmbientLight =>
+    case r: Light.RefreshAmbientLight =>
       getShardActor(r.chunk) forward r
-    case f: ShardActor.FloodLight =>
+    case f: Light.FloodLight =>
       getShardActor(f.chunk) forward f
-    case f: ShardActor.FloodAmbientLight =>
+    case f: Light.FloodAmbientLight =>
       getShardActor(f.chunk) forward f
-    case l: ShardActor.RemoveLight =>
+    case l: Light.RemoveLight =>
       getShardActor(l.chunk) forward l
-    case l: ShardActor.RemoveAmbientLight =>
+    case l: Light.RemoveAmbientLight =>
       getShardActor(l.chunk) forward l
   }
 }
