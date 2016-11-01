@@ -11,7 +11,7 @@ notifications:
     on_start: always    # options: [always|never|change] default: always
 
 script:
-  - sbt test assembly doc
+  - sbt test scalafmtTest assembly doc
 
 deploy:
   provider: releases
