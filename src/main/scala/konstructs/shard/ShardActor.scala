@@ -68,6 +68,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
   )
   private val VacuumBlock = Block.create(BlockTypeId.VACUUM)
   private val toolDurabilityBonus = 10.0f
+  private val SpaceVacuumW = blockFactory.getW(BlockTypeId.fromString("org/konstructs/space/vacuum"))
 
   schedule(5000, StoreChunks)
 
@@ -165,7 +166,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       }
       if(!events.isEmpty) {
         sendEvent(events)
-        updateLight(updates.toSet, chunk)
+        updateLight(updates.toSet, chunk, db)
         true // We updated the chunk
       } else {
         false // We didn't update the chunk
@@ -207,7 +208,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         }
         sendEvent(position, oldBlock, VacuumBlock)
         VacuumData.write(blockBuffer, i)
-        updateLight(Set((position, old, VacuumData)), chunk)
+        updateLight(Set((position, old, VacuumData)), chunk, db)
         ready(dealingBlock, block)
       } else {
         old.copy(health = receivingHealth.getHealth()).write(blockBuffer, i)
@@ -242,7 +243,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
           newBlockType.getLightColour, newBlockType.getLightLevel)
         newData.write(blockBuffer, i)
         sendEvent(position, oldBlock, block)
-        updateLight(Set((position, old, newData)), chunk)
+        updateLight(Set((position, old, newData)), chunk, db)
         true // We updated the chunk
       } else {
         false // We didn't update the chunk
@@ -364,7 +365,8 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
           val version = data(0)
           chunks(index(chunk, shard)) = Some(if(version < ChunkData.Version) {
             dirty = dirty + chunk
-            ChunkData.loadOldFormat(version, data, blockBuffer, compressionBuffer)
+            db ! floodTopChunk(chunk)
+            ChunkData.loadOldFormat(version, data, blockBuffer, compressionBuffer, chunk, SpaceVacuumW)
           } else {
             ChunkData(version, data)
           })
@@ -389,32 +391,32 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       }
     case f: FloodLight =>
       updateChunk(f.chunk) { () =>
-        floodLight(f)
+        floodLight(f, db)
         true //Chunk was updated
       }
     case r: RemoveLight =>
       updateChunk(r.chunk) { () =>
-        removeLight(r)
+        removeLight(r, db)
         true //Chunk was updated
       }
     case r: RemoveAmbientLight =>
       updateChunk(r.chunk) { () =>
-        removeAmbientLight(r)
+        removeAmbientLight(r, db)
         true //Chunk was updated
       }
     case f: FloodAmbientLight =>
       updateChunk(f.chunk) { () =>
-        floodAmbientLight(f)
+        floodAmbientLight(f, db)
         true //Chunk was updated
       }
     case r: RefreshLight =>
       updateChunk(r.chunk) { () =>
-        refreshLight(r)
+        refreshLight(r, db)
         true //Chunk was updated
       }
     case r: RefreshAmbientLight =>
       updateChunk(r.chunk) { () =>
-        refreshAmbientLight(r)
+        refreshAmbientLight(r, db)
         true //Chunk was updated
       }
   }

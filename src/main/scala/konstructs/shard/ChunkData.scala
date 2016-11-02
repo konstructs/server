@@ -64,7 +64,8 @@ object ChunkData {
     apply(Version, compressed)
   }
 
-  def loadOldFormat(version: Int, data: Array[Byte], blockBuffer: Array[Byte], compressionBuffer: Array[Byte]): ChunkData = {
+  def loadOldFormat(version: Int, data: Array[Byte], blockBuffer: Array[Byte], compressionBuffer: Array[Byte],
+    chunk: ChunkPosition, spaceVacuum: Int): ChunkData = {
 
     if(version == 1) {
       val size = compress.inflate(data, blockBuffer, Version1Header, data.size - Version1Header)
@@ -73,7 +74,23 @@ object ChunkData {
       val size = compress.inflate(data, blockBuffer, Header, data.size - Header)
       convertFromOldFormat2(blockBuffer, size)
     }
+    if(!inOldWorld(chunk)) {
+      updateVacuumToSpaceVacuum(blockBuffer, spaceVacuum)
+    }
     apply(0, blockBuffer, compressionBuffer)
+  }
+
+  private def inOldWorld(chunk: ChunkPosition): Boolean =
+    chunk.p >= -48 && chunk.p < 48 &&
+      chunk.q >= -48 && chunk.q < 48 &&
+      chunk.k >= 0 && chunk.k < 16
+
+  private def updateVacuumToSpaceVacuum(buf: Array[Byte], spaceVacuum: Int) {
+    for(i <- 0 until ChunkSize*ChunkSize*ChunkSize) {
+      if(BlockData.w(buf, i) == 0) {
+        BlockData.writeW(buf, i, spaceVacuum)
+      }
+    }
   }
 
   private def convertFromOldFormat1(buf: Array[Byte], size: Int) {
