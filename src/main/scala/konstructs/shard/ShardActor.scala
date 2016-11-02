@@ -85,7 +85,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
   }
 
   def loadChunk(chunk: ChunkPosition): Option[ChunkData] = {
-    val i = index(chunk)
+    val i = index(chunk, shard)
     val blocks = chunks(i)
     if(blocks != null) {
       if(!blocks.isDefined)
@@ -132,7 +132,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       if(update()) {
         dirty = dirty + chunk
         val data = ChunkData(c.revision + 1, blockBuffer, compressionBuffer)
-        chunks(index(chunk)) = Some(data)
+        chunks(index(chunk, shard)) = Some(data)
         db ! ChunkUpdate(chunk, data)
       }
     }
@@ -362,7 +362,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       dataOption match {
         case Some(data) =>
           val version = data(0)
-          chunks(index(chunk)) = Some(if(version < ChunkData.Version) {
+          chunks(index(chunk, shard)) = Some(if(version < ChunkData.Version) {
             dirty = dirty + chunk
             ChunkData.loadOldFormat(version, data, blockBuffer, compressionBuffer)
           } else {
@@ -373,12 +373,12 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
           chunkGenerator ! Generate(chunk)
       }
     case Generated(position, data) =>
-      chunks(index(position)) = Some(ChunkData(ChunkData.InitialRevision, data, compressionBuffer))
+      chunks(index(position, shard)) = Some(ChunkData(ChunkData.InitialRevision, data, compressionBuffer))
       dirty = dirty + position
       unstashAll()
     case StoreChunks =>
       dirty.map { chunk =>
-        chunks(index(chunk)).map { c =>
+        chunks(index(chunk, shard)).map { c =>
           storeBinary(chunkId(chunk), c.data)
         }
       }
@@ -433,11 +433,9 @@ object ShardActor {
   case class ReplaceBlocks(chunk: ChunkPosition,
     filter: BlockFilter, blocks: Map[Position, BlockTypeId])
 
-  def index(c: ChunkPosition): Int = {
-    val lp = math.abs(c.p % Db.ShardSize)
-    val lq = math.abs(c.q % Db.ShardSize)
-    val lk = math.abs(c.k % Db.ShardSize)
-    lp + lq * Db.ShardSize + lk * Db.ShardSize * Db.ShardSize
+  def index(c: ChunkPosition, shard: ShardPosition): Int = {
+    val local = shard.local(c)
+    local.p + local.q * Db.ShardSize + local.k * Db.ShardSize * Db.ShardSize
   }
 
   def props(db: ActorRef, shard: ShardPosition,

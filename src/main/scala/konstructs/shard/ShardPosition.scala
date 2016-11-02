@@ -3,7 +3,14 @@ package konstructs.shard
 import konstructs.api.Position
 import konstructs.Db
 
-case class ShardPosition(m: Int, n: Int, o: Int)
+case class ShardPosition(m: Int, n: Int, o: Int) {
+  def local(chunk: ChunkPosition): ChunkPosition =
+    ChunkPosition(
+      chunk.p - m * Db.ShardSize,
+      chunk.q - n * Db.ShardSize,
+      chunk.k - o * Db.ShardSize
+    )
+}
 
 object ShardPosition {
   def apply(c: ChunkPosition): ShardPosition = {
