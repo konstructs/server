@@ -5,9 +5,11 @@ import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 import akka.io.Tcp
 import akka.io.TcpPipelineHandler.{Init, WithinActorContext}
 import akka.util.ByteString
-import konstructs.{ PlayerActor, UniverseActor, DbActor, ChunkPosition }
+import konstructs.{ PlayerActor, UniverseActor, DbActor }
 import konstructs.api._
 import konstructs.api.messages.Said
+import konstructs.shard.ChunkPosition
+
 class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], universe: ActorRef,
                   factory: BlockFactory, textures: Array[Byte])
     extends Actor with Stash {
@@ -177,7 +179,7 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString], univer
     send(pipe, s"B,${b.p},${b.q},${b.x},${b.y},${b.z},${b.w}")
   }
 
-  def sendBlocks(pipe: ActorRef, chunk: konstructs.ChunkPosition, blocks: Array[Byte]) {
+  def sendBlocks(pipe: ActorRef, chunk: ChunkPosition, blocks: Array[Byte]) {
     val data = ByteString
       .newBuilder
       .putByte(C)

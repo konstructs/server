@@ -6,6 +6,7 @@ import akka.actor.{ Actor, Props, ActorRef, Stash, PoisonPill }
 
 import konstructs.api._
 import konstructs.api.messages._
+import konstructs.shard.ChunkPosition
 
 case class Player(nick: String, password: String, position: protocol.Position,
   inventory: Inventory)

@@ -1,6 +1,8 @@
-package konstructs
+package konstructs.shard
 
 import konstructs.api.{ Position, Box }
+
+import konstructs.Db
 
 case class ChunkPosition(p: Int, q: Int, k: Int) {
   def translate(pd: Int, qd: Int, kd: Int) =
@@ -19,6 +21,12 @@ case class ChunkPosition(p: Int, q: Int, k: Int) {
       q * Db.ChunkSize + z
     )
 
+  def contains(pos: Position): Boolean = {
+    val pp = (if(pos.getX < 0) (pos.getX - Db.ChunkSize + 1) else pos.getX) / Db.ChunkSize
+    val pq = (if(pos.getZ < 0) (pos.getZ - Db.ChunkSize + 1) else pos.getZ) / Db.ChunkSize
+    val pk = (if(pos.getY < 0) (pos.getY - Db.ChunkSize + 1) else pos.getY) / Db.ChunkSize
+    return p == pp && q == pq && k == pk
+  }
 }
 
 object ChunkPosition {

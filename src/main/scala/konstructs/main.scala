@@ -9,6 +9,7 @@ import com.typesafe.config.ConfigFactory
 import com.google.gson.reflect.TypeToken
 import konstructs.api.{ GsonDefault, Position }
 import konstructs.plugin.PluginLoaderActor
+import konstructs.shard.{ ShardPosition, ShardActor }
 
 object Main extends App {
   val conf =

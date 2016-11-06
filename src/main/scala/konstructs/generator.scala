@@ -4,6 +4,9 @@ import akka.actor.{ Actor, ActorRef, Props }
 
 import konstructs.api._
 
+import konstructs.shard.{ ChunkPosition, BoxChunking,
+                          BlockData }
+
 class GeneratorActor(jsonStorage: ActorRef, binaryStorage: ActorRef, factory: BlockFactory) extends Actor {
   import GeneratorActor._
 
@@ -14,14 +17,15 @@ class GeneratorActor(jsonStorage: ActorRef, binaryStorage: ActorRef, factory: Bl
     )
   )
 
-  val Vacuum = factory.getW(BlockTypeId.VACUUM)
+  val SpaceVacuum = factory.getW(BlockTypeId.fromString("org/konstructs/space/vacuum"))
 
   val Pristine = Health.PRISTINE.getHealth()
 
   val EmptyChunk = {
-    val data = new Array[Byte](Db.ChunkSize * Db.ChunkSize * Db.ChunkSize * Db.BlockSize)
+    val data = new Array[Byte](Db.ChunkSize * Db.ChunkSize * Db.ChunkSize * BlockData.Size)
     for(i <- 0 until Db.ChunkSize * Db.ChunkSize * Db.ChunkSize) {
-      BlockData.write(data, i, Vacuum, Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
+      BlockData.write(data, i, SpaceVacuum, Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
+        LightLevel.FULL_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
     }
     data
   }

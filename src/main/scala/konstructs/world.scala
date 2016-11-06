@@ -4,6 +4,8 @@ import scala.util.Random
 import akka.actor.{ Actor, ActorRef, Props, Stash }
 import konstructs.api._
 import konstructs.utils._
+import konstructs.shard.{ BlockData, ChunkPosition,
+                          ChunkData }
 
 case class FlatWorld(sizeX: Int, sizeZ: Int)
 
@@ -83,21 +85,25 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
       val height = map(global) + 32
       val gy = global.getY
       if(gy < height - (3 + random.nextInt(1))) {
-        BlockData(w(Konstructs, "stone"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
+        BlockData(w(Konstructs, "stone"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
+          LightLevel.DARK_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
       } else if(gy < height) {
-        BlockData(w(Konstructs, "dirt"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
+        BlockData(w(Konstructs, "dirt"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
+          LightLevel.DARK_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
       } else if (gy < 10) {
-        BlockData(w(Konstructs, "water"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
+        BlockData(w(Konstructs, "water"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
+          LightLevel.FULL_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
       } else {
-        BlockData(w(Konstructs, "vacuum"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING)
+        BlockData(w(Konstructs, "vacuum"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
+          LightLevel.FULL_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
       }
     }
   }
 
   private def blocks(chunk: ChunkPosition, map: HeightMap): Array[Byte] = {
-    val data = new Array[Byte](Db.ChunkSize * Db.ChunkSize * Db.ChunkSize * Db.BlockSize)
+    val data = new Array[Byte](ChunkSize * ChunkSize * ChunkSize * BlockData.Size)
     val bs = blockSeq(chunk, map)
-    for(i <- 0 until Db.ChunkSize * Db.ChunkSize * Db.ChunkSize) {
+    for(i <- 0 until ChunkSize * ChunkSize * ChunkSize) {
       bs(i).write(data, i)
     }
     data

@@ -1,7 +1,6 @@
-package konstructs
+package konstructs.shard
 
 import java.util.UUID
-import java.nio.{ ByteBuffer, ByteOrder }
 
 import scala.collection.mutable
 
@@ -12,167 +11,36 @@ import com.google.gson.reflect.TypeToken
 import konstructs.api.{ BinaryLoaded, Position, Block, GsonLoaded,
                         BlockTypeId, BlockFilter, BlockFilterFactory,
                         BlockFactory, BlockState, Direction, Rotation,
-                        Orientation,
+                        Orientation, LightLevel, Colour, BlockType,
                         BlockUpdate, Health, ReceiveStack, Stack }
 import konstructs.api.messages.{ BoxQuery, BoxQueryResult, ReplaceBlock,
                                  ReplaceBlockResult, ViewBlock, ViewBlockResult,
                                  BlockUpdateEvent, InteractResult, InteractTertiaryFilter,
                                  InteractTertiary }
-import konstructs.utils.compress
 
-case class BlockData(w: Int, health: Int, direction: Int, rotation: Int) {
-  def write(data: Array[Byte], i: Int) {
-    BlockData.write(data, i, w, health, direction, rotation)
-  }
+import konstructs.utils.Scheduled
 
-  def block(id: UUID, blockTypeId: BlockTypeId) =
-    new Block(id, blockTypeId, Health.get(health), Orientation.get(direction, rotation))
-}
-
-object BlockData {
-
-  def w(data: Array[Byte], i: Int): Int =
-    (data(i * Db.BlockSize) & 0xFF) + ((data(i * Db.BlockSize + 1) & 0xFF) << 8)
-
-  def hp(data: Array[Byte], i: Int): Int =
-    (data(i * Db.BlockSize + 2) & 0xFF) + ((data(i * Db.BlockSize + 3) & 0x07) << 8)
-
-  def direction(data: Array[Byte], i: Int): Int =
-    ((data(i * Db.BlockSize + 3) & 0xE0) >> 5)
-
-  def rotation(data: Array[Byte], i: Int): Int =
-    ((data(i * Db.BlockSize + 3) & 0x18) >> 3)
-
-  def apply(data: Array[Byte], i: Int): BlockData = {
-    apply(w(data, i), hp(data, i), direction(data, i), rotation(data, i))
-  }
-
-  def apply(w: Int, block: Block): BlockData = {
-    apply(w, block.getHealth.getHealth,
-      block.getOrientation.getDirection.getEncoding, block.getOrientation.getRotation.getEncoding)
-  }
-
-  def write(data: Array[Byte], i: Int, w: Int, health: Int, direction: Int, rotation: Int) {
-    writeW(data, i, w)
-    writeHealthAndOrientation(data, i, health, direction, rotation)
-  }
-
-  def write(data: Array[Byte], i: Int, w: Int, block: Block) {
-    write(data, i, w, block.getHealth.getHealth,
-      block.getOrientation.getDirection.getEncoding,
-      block.getOrientation.getRotation.getEncoding)
-  }
-
-  def writeW(data: Array[Byte], i: Int, w: Int) {
-    data(i * Db.BlockSize) = (w & 0xFF).toByte
-    data(i * Db.BlockSize + 1) = ((w >> 8) & 0xFF).toByte
-  }
-
-  def writeHealthAndOrientation(data: Array[Byte], i: Int, health: Int, direction: Int, rotation: Int) {
-    data(i * Db.BlockSize + 2) = (health & 0xFF).toByte
-    val b = (((direction << 5) & 0xE0) + ((rotation << 3) & 0x18) + ((health >> 8) & 0x07)).toByte
-    data(i * Db.BlockSize + 3) = b
-  }
-
-}
-
-case class ChunkData(version: Int, data: Array[Byte]) {
-  import ChunkData._
-  import Db._
-
-  val revision = readRevision(data, 2)
-
-  def unpackTo(blockBuffer: Array[Byte]) {
-    val size = compress.inflate(data, blockBuffer, Header, data.size - Header)
-  }
-
-  def block(c: ChunkPosition, p: Position, blockBuffer: Array[Byte]): BlockData = {
-    unpackTo(blockBuffer)
-    BlockData(blockBuffer, index(c, p))
-  }
-
-}
-
-object ChunkData {
-  val InitialRevision = 1
-  val Size = Db.ChunkSize * Db.ChunkSize * Db.ChunkSize * Db.BlockSize
-
-  /* Writes revision as a Little Endian 4 byte unsigned integer
-   * Long is required since all Java types are signed
-   */
-  def writeRevision(data: Array[Byte], revision: Long, offset: Int) {
-    if(revision > 4294967295L) {
-      throw new IllegalArgumentException("Must be smaller than 4294967295")
-    }
-    data(offset + 0) = (revision & 0xFF).toByte
-    data(offset + 1) = ((revision >> 8) & 0xFF).toByte
-    data(offset + 2) = ((revision >> 16) & 0xFF).toByte
-    data(offset + 3) = ((revision >> 24) & 0xFF).toByte
-  }
-
-  /* Read revision as a Little Endian 4 byte unsigned integer
-   * Returns long as all Java types are signed
-   */
-  def readRevision(data: Array[Byte], offset: Int): Long = {
-    (data(offset + 0) & 0xFF).toLong +
-      ((data(offset + 1) & 0xFF) << 8).toLong +
-      ((data(offset + 2) & 0xFF) << 16).toLong +
-      ((data(offset + 3) & 0x7F) << 24).toLong
-  }
-
-  def apply(revision: Long, blocks: Array[Byte], buffer: Array[Byte]): ChunkData = {
-    val compressed = compress.deflate(blocks, buffer, Db.Header)
-    compressed(0) = Db.Version
-    compressed(1) = 0.toByte
-    writeRevision(compressed, revision, 2)
-    apply(Db.Version, compressed)
-  }
-
-  def loadOldFormat(version: Int, data: Array[Byte], blockBuffer: Array[Byte], compressionBuffer: Array[Byte]): ChunkData = {
-    val size = compress.inflate(data, blockBuffer, Db.Version1Header, data.size - Db.Version1Header)
-    convertFromOldFormat(blockBuffer, size)
-    apply(0, blockBuffer, compressionBuffer)
-  }
-
-  private def convertFromOldFormat(buf: Array[Byte], size: Int) {
-    val tmp = java.util.Arrays.copyOf(buf, size)
-    for(i <- 0 until size) {
-      buf(i * 4) = tmp(i)
-      buf(i * 4 + 1) = 0.toByte
-      buf(i * 4 + 2) = 0xFF.toByte
-      buf(i * 4 + 3) = 0x07.toByte
-    }
-  }
-
-
-  def index(x: Int, y: Int, z: Int): Int =
-    x + y * Db.ChunkSize + z * Db.ChunkSize * Db.ChunkSize
-
-  def index(c: ChunkPosition, p: Position): Int = {
-    val x = p.getX - c.p * Db.ChunkSize
-    val y = p.getY - c.k * Db.ChunkSize
-    val z = p.getZ - c.q * Db.ChunkSize
-    index(x, y, z)
-  }
-
-}
+import konstructs.{ Db, BinaryStorage, JsonStorage, DbActor,
+                    GeneratorActor }
 
 class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef,
                  val jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef],
-                 chunkGenerator: ActorRef, blockFactory: BlockFactory,
-                 tertiaryInteractionFilters: Seq[ActorRef], universe: ActorRef)
-    extends Actor with Stash with utils.Scheduled with BinaryStorage with JsonStorage {
-  import ShardActor.{ ReplaceBlocks, index, StoreChunks, str }
+                 chunkGenerator: ActorRef,
+                 tertiaryInteractionFilters: Seq[ActorRef], universe: ActorRef,
+                 implicit val blockFactory: BlockFactory)
+    extends Actor with Stash with Scheduled with BinaryStorage with JsonStorage {
+  import ShardActor._
   import GeneratorActor._
   import DbActor._
   import Db._
+  import Light._
 
   val TypeOfPositionMapping = new TypeToken[java.util.Map[String, UUID]](){}.getType
   val ReplaceFilter = BlockFilterFactory.withBlockState(BlockState.LIQUID).or(BlockFilterFactory.withBlockState(BlockState.GAS)).or(BlockFilterFactory.VACUUM)
   val ns = "chunks"
 
-  private val blockBuffer = new Array[Byte](ChunkData.Size)
-  private val compressionBuffer = new Array[Byte](ChunkData.Size + Header)
+  private implicit val blockBuffer = new Array[Byte](ChunkData.Size)
+  private val compressionBuffer = new Array[Byte](ChunkData.Size + ChunkData.Header)
   private val chunks = new Array[Option[ChunkData]](ShardSize * ShardSize * ShardSize)
 
   private var dirty: Set[ChunkPosition] = Set()
@@ -193,10 +61,14 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     blockFactory.getW(BlockTypeId.VACUUM),
     Health.PRISTINE.getHealth(),
     Direction.UP_ENCODING,
-    Rotation.IDENTITY_ENCODING
+    Rotation.IDENTITY_ENCODING,
+    LightLevel.DARK_ENCODING,
+    Colour.WHITE.getRed(), Colour.WHITE.getGreen(), Colour.WHITE.getBlue(),
+    LightLevel.DARK_ENCODING
   )
   private val VacuumBlock = Block.create(BlockTypeId.VACUUM)
   private val toolDurabilityBonus = 10.0f
+  private val SpaceVacuumW = blockFactory.getW(BlockTypeId.fromString("org/konstructs/space/vacuum"))
 
   schedule(5000, StoreChunks)
 
@@ -214,7 +86,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
   }
 
   def loadChunk(chunk: ChunkPosition): Option[ChunkData] = {
-    val i = index(chunk)
+    val i = index(chunk, shard)
     val blocks = chunks(i)
     if(blocks != null) {
       if(!blocks.isDefined)
@@ -231,8 +103,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
   def runQuery(query: BoxQuery, sender: ActorRef) = {
     val box = query.getBox
     val chunk = ChunkPosition(box.getFrom)
-    loadChunk(chunk).map { c =>
-      c.unpackTo(blockBuffer)
+    updateChunk(chunk) { () =>
       val data = new Array[BlockTypeId](box.getNumberOfBlocks + 1)
       for(
         x <- box.getFrom.getX until box.getUntil.getX;
@@ -244,10 +115,11 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
 
       }
       sender ! new BoxQueryResult(box, data)
+      false /* Indicate that we did not update the chunk */
     }
   }
 
-  def readChunk(pos: Position)(read: BlockData => Unit) = {
+  def readBlock(pos: Position)(read: BlockData => Unit) = {
     val chunk = ChunkPosition(pos)
     loadChunk(chunk).map { c =>
       val block = c.block(chunk, pos, blockBuffer)
@@ -255,55 +127,59 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     }
   }
 
-  def updateChunk(pos: Position)(update: BlockData => BlockData) {
-    val chunk = ChunkPosition(pos)
+  def updateChunk(chunk: ChunkPosition)(update: () => Boolean) {
     loadChunk(chunk).map { c =>
-      dirty = dirty + chunk
       c.unpackTo(blockBuffer)
-      val i = ChunkData.index(chunk, pos)
-      val oldBlock = BlockData(blockBuffer, i)
-      val block = update(oldBlock)
-      block.write(blockBuffer, i)
-      val data = ChunkData(c.revision + 1, blockBuffer, compressionBuffer)
-      chunks(index(chunk)) = Some(data)
-      db ! ChunkUpdate(chunk, data)
+      if(update()) {
+        dirty = dirty + chunk
+        val data = ChunkData(c.revision + 1, blockBuffer, compressionBuffer)
+        chunks(index(chunk, shard)) = Some(data)
+        db ! ChunkUpdate(chunk, data)
+      }
     }
   }
 
   def replaceBlocks(chunk: ChunkPosition,
     filter: BlockFilter, blocks: Map[Position, BlockTypeId],
     positionMapping: java.util.Map[String, UUID]) {
-    loadChunk(chunk).map { c =>
-      var isDirty = false
-      c.unpackTo(blockBuffer)
+    updateChunk(chunk) { () =>
       val events = new java.util.HashMap[Position, BlockUpdate]()
+      val updates = mutable.Set[(Position, BlockData, BlockData)]()
       for((position, newTypeId) <- blocks) {
         val i = ChunkData.index(chunk, position)
         val typeId = blockFactory.getBlockTypeId(BlockData.w(blockBuffer, i))
-        if(filter.matches(typeId, blockFactory.getBlockType(typeId))) {
+        val oldType = blockFactory.getBlockType(typeId)
+        if(filter.matches(typeId, oldType)) {
           val id = positionMapping.remove(str(position))
-          val oldBlock = BlockData(blockBuffer, i).block(id, typeId)
-          val newBlock = Block.create(newTypeId)
-          events.put(position, new BlockUpdate(oldBlock, newBlock))
-          BlockData.write(blockBuffer, i, blockFactory.getW(newTypeId), newBlock)
-          isDirty = true
+          val newType = blockFactory.getBlockType(newTypeId)
+          val oldBlock = BlockData(blockBuffer, i)
+          val newBlock = BlockData(blockFactory.getW(newTypeId), Health.PRISTINE.getHealth(),
+            Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING, LightLevel.DARK_ENCODING,
+            newType.getLightColour.getRed, newType.getLightColour.getGreen, newType.getLightColour.getBlue,
+            newType.getLightLevel.getLevel)
+          events.put(position, new BlockUpdate(oldBlock.block(id, typeId), newBlock.block(null, newTypeId)))
+          updates += ((position, oldBlock, newBlock))
+          newBlock.write(blockBuffer, i)
           if(id != null)
             positionMappingDirty = true
         }
       }
-      if(isDirty) {
-        val data = ChunkData(c.revision + 1, blockBuffer, compressionBuffer)
-        chunks(index(chunk)) = Some(data)
-        db ! ChunkUpdate(chunk, data)
+      if(!events.isEmpty) {
         sendEvent(events)
-        dirty = dirty + chunk
+        updateLight(updates.toSet, chunk, db)
+        true // We updated the chunk
+      } else {
+        false // We didn't update the chunk
       }
     }
   }
 
   def damageBlock(position: Position, dealing: Block,
     positionMapping: java.util.Map[String, UUID])(ready: (Block, Block) => Unit) {
-    updateChunk(position) { old =>
+    val chunk = ChunkPosition(position)
+    updateChunk(chunk) { () =>
+      val i = ChunkData.index(chunk, position)
+      val old = BlockData(blockBuffer, i)
       val receivingTypeId = blockFactory.getBlockTypeId(old.w)
       val receivingType = blockFactory.getBlockType(receivingTypeId)
       val dealingType = blockFactory.getBlockType(dealing.getType())
@@ -317,7 +193,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       }
       val id = positionMapping.remove(str(position))
       val oldBlock = old.block(id, receivingTypeId)
-      val (receivingBlock, data) = if(receivingHealth.isDestroyed()) {
+      if(receivingHealth.isDestroyed()) {
         if(id != null)
           positionMappingDirty = true
         val block = if(receivingType.getDestroyedAs() == BlockTypeId.SELF) {
@@ -331,20 +207,26 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
             .withType(receivingType.getDestroyedAs())
         }
         sendEvent(position, oldBlock, VacuumBlock)
-        (block, VacuumData)
+        VacuumData.write(blockBuffer, i)
+        updateLight(Set((position, old, VacuumData)), chunk, db)
+        ready(dealingBlock, block)
       } else {
-        (null, BlockData(old.w, oldBlock.withHealth(receivingHealth)))
+        old.copy(health = receivingHealth.getHealth()).write(blockBuffer, i)
+        ready(dealingBlock, null)
       }
-      ready(dealingBlock, receivingBlock)
-      data
+      true
     }
   }
 
   def replaceBlock(filter: BlockFilter, position: Position, block: Block,
     positionMapping: java.util.Map[String, UUID])(ready: Block => Unit) = {
-    updateChunk(position) { old =>
+    val chunk = ChunkPosition(position)
+    updateChunk(chunk) { () =>
+      val i = ChunkData.index(chunk, position)
+      val old = BlockData(blockBuffer, i)
       val typeId = blockFactory.getBlockTypeId(old.w)
-      if(filter.matches(typeId, blockFactory.getBlockType(typeId))) {
+      val blockType = blockFactory.getBlockType(typeId)
+      if(filter.matches(typeId, blockType)) {
         val oldId = if(block.getId() != null) {
           positionMappingDirty = true
           positionMapping.put(str(position), block.getId())
@@ -356,10 +238,15 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
         }
         val oldBlock = old.block(oldId, typeId)
         ready(oldBlock)
+        val newBlockType = blockFactory.getBlockType(block.getType)
+        val newData = BlockData(blockFactory.getW(block.getType()), block, LightLevel.DARK_ENCODING,
+          newBlockType.getLightColour, newBlockType.getLightLevel)
+        newData.write(blockBuffer, i)
         sendEvent(position, oldBlock, block)
-        BlockData(blockFactory.getW(block.getType()), block)
+        updateLight(Set((position, old, newData)), chunk, db)
+        true // We updated the chunk
       } else {
-        old
+        false // We didn't update the chunk
       }
     }
   }
@@ -422,7 +309,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       val filters = tertiaryInteractionFilters :+ self
       val message = i.message
       val p = message.getPosition
-      readChunk(p) { block =>
+      readBlock(p) { block =>
         val b = block.block(positionMapping.get(str(p)), blockFactory.getBlockTypeId(block.w))
         val filters = tertiaryInteractionFilters :+ self
         filters.head ! new InteractTertiaryFilter(
@@ -465,7 +352,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
     case v: ViewBlock =>
       val s = sender
       val p = v.getPosition
-      readChunk(p) { block =>
+      readBlock(p) { block =>
         val b = block.block(positionMapping.get(str(p)), blockFactory.getBlockTypeId(block.w))
         s ! new ViewBlockResult(p, b)
       }
@@ -476,9 +363,10 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       dataOption match {
         case Some(data) =>
           val version = data(0)
-          chunks(index(chunk)) = Some(if(version < Db.Version) {
+          chunks(index(chunk, shard)) = Some(if(version < ChunkData.Version) {
             dirty = dirty + chunk
-            ChunkData.loadOldFormat(version, data, blockBuffer, compressionBuffer)
+            db ! floodTopChunk(chunk)
+            ChunkData.loadOldFormat(version, data, blockBuffer, compressionBuffer, chunk, SpaceVacuumW)
           } else {
             ChunkData(version, data)
           })
@@ -487,12 +375,12 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
           chunkGenerator ! Generate(chunk)
       }
     case Generated(position, data) =>
-      chunks(index(position)) = Some(ChunkData(ChunkData.InitialRevision, data, compressionBuffer))
+      chunks(index(position, shard)) = Some(ChunkData(ChunkData.InitialRevision, data, compressionBuffer))
       dirty = dirty + position
       unstashAll()
     case StoreChunks =>
       dirty.map { chunk =>
-        chunks(index(chunk)).map { c =>
+        chunks(index(chunk, shard)).map { c =>
           storeBinary(chunkId(chunk), c.data)
         }
       }
@@ -500,6 +388,36 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
       if(positionMappingDirty) {
         storeGson(positionMappingFile, gson.toJsonTree(positionMapping, TypeOfPositionMapping))
         positionMappingDirty = false
+      }
+    case f: FloodLight =>
+      updateChunk(f.chunk) { () =>
+        floodLight(f, db)
+        true //Chunk was updated
+      }
+    case r: RemoveLight =>
+      updateChunk(r.chunk) { () =>
+        removeLight(r, db)
+        true //Chunk was updated
+      }
+    case r: RemoveAmbientLight =>
+      updateChunk(r.chunk) { () =>
+        removeAmbientLight(r, db)
+        true //Chunk was updated
+      }
+    case f: FloodAmbientLight =>
+      updateChunk(f.chunk) { () =>
+        floodAmbientLight(f, db)
+        true //Chunk was updated
+      }
+    case r: RefreshLight =>
+      updateChunk(r.chunk) { () =>
+        refreshLight(r, db)
+        true //Chunk was updated
+      }
+    case r: RefreshAmbientLight =>
+      updateChunk(r.chunk) { () =>
+        refreshAmbientLight(r, db)
+        true //Chunk was updated
       }
   }
 
@@ -517,11 +435,9 @@ object ShardActor {
   case class ReplaceBlocks(chunk: ChunkPosition,
     filter: BlockFilter, blocks: Map[Position, BlockTypeId])
 
-  def index(c: ChunkPosition): Int = {
-    val lp = math.abs(c.p % Db.ShardSize)
-    val lq = math.abs(c.q % Db.ShardSize)
-    val lk = math.abs(c.k % Db.ShardSize)
-    lp + lq * Db.ShardSize + lk * Db.ShardSize * Db.ShardSize
+  def index(c: ChunkPosition, shard: ShardPosition): Int = {
+    val local = shard.local(c)
+    local.p + local.q * Db.ShardSize + local.k * Db.ShardSize * Db.ShardSize
   }
 
   def props(db: ActorRef, shard: ShardPosition,
@@ -530,6 +446,6 @@ object ShardActor {
     blockFactory: BlockFactory, tertiaryInteractionFilters: Seq[ActorRef],
     universe: ActorRef) =
     Props(classOf[ShardActor], db, shard, binaryStorage, jsonStorage,
-      blockUpdateEvents, chunkGenerator, blockFactory, tertiaryInteractionFilters,
-      universe)
+      blockUpdateEvents, chunkGenerator, tertiaryInteractionFilters,
+      universe, blockFactory)
 }
