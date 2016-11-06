@@ -40,3 +40,5 @@ releaseProcess := Seq[ReleaseStep](
 )
 
 assemblyJarName in assembly := s"${name.value}-${version.value}.jar"
+
+scalafmtConfig in ThisBuild := Some(file(".scalafmt.conf"))
