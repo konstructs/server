@@ -352,7 +352,7 @@ object Light {
       val blockTypeId = blockFactory.getBlockTypeId(block.w)
       val blockType = blockFactory.getBlockType(blockTypeId)
       // Block has ambient lightning
-      if(blockType.isTransparent && block.ambient > 1 && blockTypeId.getNamespace != "org/konstructs/space") {
+      if(blockType.isTransparent && block.ambient > 1) {
 
         // Find all adjacent blocks and add them for ambient flooding
         for(adj <- position.getAdjacent) {
