@@ -1,6 +1,6 @@
 package konstructs.shard
 
-import konstructs.api.Position
+import konstructs.api.{ Position, LightLevel }
 import konstructs.utils.compress
 import konstructs.Db
 
@@ -89,6 +89,7 @@ object ChunkData {
     for(i <- 0 until ChunkSize*ChunkSize*ChunkSize) {
       if(BlockData.w(buf, i) == 0) {
         BlockData.writeW(buf, i, spaceVacuum)
+        BlockData.writeLight(buf, i, LightLevel.FULL_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
       }
     }
   }
