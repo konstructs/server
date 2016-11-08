@@ -365,7 +365,7 @@ class ShardActor(db: ActorRef, shard: ShardPosition, val binaryStorage: ActorRef
           val version = data(0)
           chunks(index(chunk, shard)) = Some(if(version < ChunkData.Version) {
             dirty = dirty + chunk
-            db ! floodTopChunk(chunk)
+            db ! refreshChunkAbove(chunk)
             ChunkData.loadOldFormat(version, data, blockBuffer, compressionBuffer, chunk, SpaceVacuumW)
           } else {
             ChunkData(version, data)
