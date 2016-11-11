@@ -352,7 +352,7 @@ object Light {
       val blockTypeId = blockFactory.getBlockTypeId(block.w)
       val blockType = blockFactory.getBlockType(blockTypeId)
       // Block has ambient lightning
-      if(blockType.isTransparent && block.ambient > 1 && blockTypeId.getNamespace != "org/konstructs/space") {
+      if(blockType.isTransparent && block.ambient > 1) {
 
         // Find all adjacent blocks and add them for ambient flooding
         for(adj <- position.getAdjacent) {
@@ -493,15 +493,14 @@ object Light {
     }
   }
 
-  def floodTopChunk(chunk: ChunkPosition): FloodAmbientLight = {
-    val maxChunk = chunk.copy(k = 15)
+  def refreshChunkAbove(chunk: ChunkPosition): RefreshAmbientLight = {
+    val maxChunk = chunk.copy(k = chunk.k + 1)
     val set = (for(x <- 0 until Db.ChunkSize;
       z <- 0 until Db.ChunkSize) yield {
-      val position = maxChunk.position(x, Db.ChunkSize - 1, z)
-        AmbientLightFlood(position, position.addY(1), LightLevel.FULL_ENCODING)
+      maxChunk.position(x, 0, z)
     }) toSet
 
-    FloodAmbientLight(maxChunk, set)
+    RefreshAmbientLight(maxChunk, set)
   }
 
 }
