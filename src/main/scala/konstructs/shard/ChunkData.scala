@@ -1,6 +1,6 @@
 package konstructs.shard
 
-import konstructs.api.{ Position, LightLevel }
+import konstructs.api.{Position, LightLevel}
 import konstructs.utils.compress
 import konstructs.Db
 
@@ -32,12 +32,11 @@ object ChunkData {
   val Header = Version2Header
   val Version = 3.toByte
 
-
   /* Writes revision as a Little Endian 4 byte unsigned integer
    * Long is required since all Java types are signed
    */
   def writeRevision(data: Array[Byte], revision: Long, offset: Int) {
-    if(revision > 4294967295L) {
+    if (revision > 4294967295L) {
       throw new IllegalArgumentException("Must be smaller than 4294967295")
     }
     data(offset + 0) = (revision & 0xFF).toByte
@@ -64,17 +63,21 @@ object ChunkData {
     apply(Version, compressed)
   }
 
-  def loadOldFormat(version: Int, data: Array[Byte], blockBuffer: Array[Byte], compressionBuffer: Array[Byte],
-    chunk: ChunkPosition, spaceVacuum: Int): ChunkData = {
+  def loadOldFormat(version: Int,
+                    data: Array[Byte],
+                    blockBuffer: Array[Byte],
+                    compressionBuffer: Array[Byte],
+                    chunk: ChunkPosition,
+                    spaceVacuum: Int): ChunkData = {
 
-    if(version == 1) {
+    if (version == 1) {
       val size = compress.inflate(data, blockBuffer, Version1Header, data.size - Version1Header)
       convertFromOldFormat1(blockBuffer, size)
     } else {
       val size = compress.inflate(data, blockBuffer, Header, data.size - Header)
       convertFromOldFormat2(blockBuffer, size)
     }
-    if(!inOldWorld(chunk)) {
+    if (!inOldWorld(chunk)) {
       updateVacuumToSpaceVacuum(blockBuffer, spaceVacuum)
     }
     apply(0, blockBuffer, compressionBuffer)
@@ -86,8 +89,8 @@ object ChunkData {
       chunk.k >= 0 && chunk.k < 16
 
   private def updateVacuumToSpaceVacuum(buf: Array[Byte], spaceVacuum: Int) {
-    for(i <- 0 until ChunkSize*ChunkSize*ChunkSize) {
-      if(BlockData.w(buf, i) == 0) {
+    for (i <- 0 until ChunkSize * ChunkSize * ChunkSize) {
+      if (BlockData.w(buf, i) == 0) {
         BlockData.writeW(buf, i, spaceVacuum)
         BlockData.writeLight(buf, i, LightLevel.FULL_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
       }
@@ -96,7 +99,7 @@ object ChunkData {
 
   private def convertFromOldFormat1(buf: Array[Byte], size: Int) {
     val tmp = java.util.Arrays.copyOf(buf, size)
-    for(i <- 0 until size) {
+    for (i <- 0 until size) {
       buf(i * BlockData.Size) = tmp(i)
       buf(i * BlockData.Size + 1) = 0.toByte
       buf(i * BlockData.Size + 2) = 0xFF.toByte
@@ -109,7 +112,7 @@ object ChunkData {
 
   private def convertFromOldFormat2(buf: Array[Byte], size: Int) {
     val tmp = java.util.Arrays.copyOf(buf, size)
-    for(i <- 0 until (size / 4)) {
+    for (i <- 0 until (size / 4)) {
       buf(i * BlockData.Size) = tmp(i * 4)
       buf(i * BlockData.Size + 1) = tmp(i * 4 + 1)
       buf(i * BlockData.Size + 2) = tmp(i * 4 + 2)

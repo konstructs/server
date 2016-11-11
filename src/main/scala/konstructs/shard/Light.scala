@@ -3,8 +3,7 @@ package konstructs.shard
 import scala.collection.mutable
 import akka.actor.ActorRef
 import konstructs.Db
-import konstructs.api.{ Position, LightLevel,
-                        Colour, BlockFactory }
+import konstructs.api.{Position, LightLevel, Colour, BlockFactory}
 
 object Light {
 
@@ -40,8 +39,9 @@ object Light {
 
   // This function validates lightning of blocks that just changed
   // It handles light sources as well as normal blocks
-  def updateLight(positions: Set[(Position, BlockData, BlockData)], chunk: ChunkPosition, db: ActorRef)
-    (implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+  def updateLight(positions: Set[(Position, BlockData, BlockData)], chunk: ChunkPosition, db: ActorRef)(
+      implicit blockFactory: BlockFactory,
+      blockBuffer: Array[Byte]) {
     // Blocks that should be refreshed in this chunk
     val refresh = mutable.Set[Position]()
     val refreshAmbient = mutable.Set[Position]()
@@ -60,14 +60,14 @@ object Light {
     val removeAmbientOthers = mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightRemoval]]()
 
     // Iterate through all updated blocks
-    for((position, oldBlock, block) <- positions) {
+    for ((position, oldBlock, block) <- positions) {
       // Old block is a light source or was lit
-      if(oldBlock.light > 1) {
+      if (oldBlock.light > 1) {
 
         // Find all adjacent blocks and add them for light removal
-        for(adj <- position.getAdjacent) {
+        for (adj <- position.getAdjacent) {
           val adjChunk = ChunkPosition(adj)
-          if(adjChunk == chunk) {
+          if (adjChunk == chunk) {
             // Add for removal in this chunk
             remove += LightRemoval(adj, position, oldBlock.light - 1)
           } else {
@@ -79,16 +79,16 @@ object Light {
       }
 
       // Old block had ambient light
-      if(oldBlock.ambient > 1) {
+      if (oldBlock.ambient > 1) {
         // Find all adjacent blocks and add them for light removal
-        for(adj <- position.getAdjacent) {
+        for (adj <- position.getAdjacent) {
           val adjChunk = ChunkPosition(adj)
-          val ambient = if(position.getY > adj.getY && oldBlock.ambient == LightLevel.FULL_ENCODING) {
+          val ambient = if (position.getY > adj.getY && oldBlock.ambient == LightLevel.FULL_ENCODING) {
             oldBlock.ambient
           } else {
             oldBlock.ambient - 1
           }
-          if(adjChunk == chunk) {
+          if (adjChunk == chunk) {
             // Add for removal in this chunk
             removeAmbient += AmbientLightRemoval(adj, position, ambient)
           } else {
@@ -100,15 +100,15 @@ object Light {
       }
 
       // The new block has light of itself
-      if(block.light > 1) {
+      if (block.light > 1) {
         // Add block to blocks that requires refresh
         refresh += position
       }
 
       // Iterate through all adjacent blocks
-      for(adj <- position.getAdjacent) {
+      for (adj <- position.getAdjacent) {
         val adjChunk = ChunkPosition(adj)
-        if(adjChunk == chunk) {
+        if (adjChunk == chunk) {
           // Add for refresh in this chunk
           refresh += adj
           refreshAmbient += adj
@@ -151,8 +151,7 @@ object Light {
 
   // Helper method to remove and refresh light
   // This is done when receiving a remove light message
-  def removeLight(removal: RemoveLight, db: ActorRef)
-    (implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+  def removeLight(removal: RemoveLight, db: ActorRef)(implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
     val refresh = mutable.Set[Position]()
     removeLight(removal, mutable.HashMap[ChunkPosition, mutable.Set[LightRemoval]](), refresh, db)
     refreshLight(RefreshLight(removal.chunk, refresh.toSet), db)
@@ -160,9 +159,9 @@ object Light {
 
   // Removes light and enqueue neighbours that require refresh
   def removeLight(removal: RemoveLight,
-    buffer: mutable.HashMap[ChunkPosition, mutable.Set[LightRemoval]],
-    refresh: mutable.Set[Position], db: ActorRef)
-    (implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+                  buffer: mutable.HashMap[ChunkPosition, mutable.Set[LightRemoval]],
+                  refresh: mutable.Set[Position],
+                  db: ActorRef)(implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
 
     // Queue for BFS search
     val queue = mutable.Queue[LightRemoval]()
@@ -173,28 +172,29 @@ object Light {
     val chunk = removal.chunk
 
     // BFS flood removal
-    while(!queue.isEmpty) {
+    while (!queue.isEmpty) {
       val r = queue.dequeue
       val i = ChunkData.index(chunk, r.position)
       val a = BlockData(blockBuffer, i)
       val aType = blockFactory.getBlockType(blockFactory.getBlockTypeId(a.w))
 
       // If the block is transparent and has light set
-      if(aType.isTransparent && a.light != 0) {
+      if (aType.isTransparent && a.light != 0) {
 
         // If the light of the block is equal or smaller to the light to be removed, remove it
         // Else the block needs to be added to refresh list, since it might flood the area where
         // light has been removed with another light
-        if(a.light <= r.light) {
+        if (a.light <= r.light) {
           // Remove light from the block
-          a.copy(light = 0, red = Colour.WHITE.getRed, green = Colour.WHITE.getGreen, blue = Colour.WHITE.getBlue).write(blockBuffer, i)
+          a.copy(light = 0, red = Colour.WHITE.getRed, green = Colour.WHITE.getGreen, blue = Colour.WHITE.getBlue)
+            .write(blockBuffer, i)
 
           // If the light to remove is > 1 continue to remove light from all neighbours
-          if(r.light > 1) {
-            for(adj <- r.position.getAdjacent) {
-              if(adj != r.from) {
+          if (r.light > 1) {
+            for (adj <- r.position.getAdjacent) {
+              if (adj != r.from) {
                 val adjChunk = ChunkPosition(adj)
-                if(chunk == adjChunk) {
+                if (chunk == adjChunk) {
                   // Add light to be removed in this chunk
                   queue.enqueue(LightRemoval(adj, r.position, r.light - 1))
                 } else {
@@ -222,8 +222,8 @@ object Light {
 
   // Helper method to remove and refresh light
   // This is done when receiving a remove light message
-  def removeAmbientLight(removal: RemoveAmbientLight, db: ActorRef)
-    (implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+  def removeAmbientLight(removal: RemoveAmbientLight, db: ActorRef)(implicit blockFactory: BlockFactory,
+                                                                    blockBuffer: Array[Byte]) {
     val refresh = mutable.Set[Position]()
     removeAmbientLight(removal, mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightRemoval]](), refresh, db)
     refreshAmbientLight(RefreshAmbientLight(removal.chunk, refresh.toSet), db)
@@ -231,9 +231,9 @@ object Light {
 
   // Removes light and enqueue neighbours that require refresh
   def removeAmbientLight(removal: RemoveAmbientLight,
-    buffer: mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightRemoval]],
-    refresh: mutable.Set[Position], db: ActorRef)
-    (implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+                         buffer: mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightRemoval]],
+                         refresh: mutable.Set[Position],
+                         db: ActorRef)(implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
 
     // Queue for BFS search
     val queue = mutable.Queue[AmbientLightRemoval]()
@@ -244,7 +244,7 @@ object Light {
     val chunk = removal.chunk
 
     // BFS flood removal
-    while(!queue.isEmpty) {
+    while (!queue.isEmpty) {
       val r = queue.dequeue
       val i = ChunkData.index(chunk, r.position)
       val a = BlockData(blockBuffer, i)
@@ -252,27 +252,27 @@ object Light {
       val aType = blockFactory.getBlockType(aTypeId)
 
       // If the block is transparent and has light set
-      if(aType.isTransparent && a.ambient != 0 && aTypeId.getNamespace != "org/konstructs/space") {
+      if (aType.isTransparent && a.ambient != 0 && aTypeId.getNamespace != "org/konstructs/space") {
 
         // If the light of the block is equal or smaller to the light to be removed, remove it
         // Else the block needs to be added to refresh list, since it might flood the area where
         // light has been removed with another light
-        if(a.ambient <= r.ambient) {
+        if (a.ambient <= r.ambient) {
           // Remove light from the block
           a.copy(ambient = 0).write(blockBuffer, i)
 
           // If the light to remove is > 1 continue to remove light from all neighbours
-          if(r.ambient > 1) {
-            for(adj <- r.position.getAdjacent) {
-              if(adj != r.from) {
+          if (r.ambient > 1) {
+            for (adj <- r.position.getAdjacent) {
+              if (adj != r.from) {
                 val adjChunk = ChunkPosition(adj)
                 // TODO: Remove artificial limit at 0
-                val ambient = if(r.position.getY > adj.getY && r.ambient == LightLevel.FULL_ENCODING) {
+                val ambient = if (r.position.getY > adj.getY && r.ambient == LightLevel.FULL_ENCODING) {
                   r.ambient
                 } else {
                   r.ambient - 1
                 }
-                if(chunk == adjChunk) {
+                if (chunk == adjChunk) {
                   // Add light to be removed in this chunk
                   queue.enqueue(AmbientLightRemoval(adj, r.position, ambient))
                 } else {
@@ -301,8 +301,8 @@ object Light {
   // This function looks at the positions given and
   // if the position contains light, tries to propagate
   // it to refresh any updated or newly placed block
-  def refreshLight(refresh: RefreshLight, db: ActorRef)
-    (implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+  def refreshLight(refresh: RefreshLight, db: ActorRef)(implicit blockFactory: BlockFactory,
+                                                        blockBuffer: Array[Byte]) {
     // Blocks where to flood light in this chunk
     val flood = mutable.Set[LightFlood]()
 
@@ -312,16 +312,16 @@ object Light {
     val chunk = refresh.chunk
 
     // Iterate through all blocks that require a refresh
-    for(position <- refresh.positions) {
+    for (position <- refresh.positions) {
       val i = ChunkData.index(chunk, position)
       val block = BlockData(blockBuffer, i)
 
       // If block has a light level higher than one
       // it can spread light around
-      if(block.light > 1) {
-        for(adj <- position.getAdjacent) {
+      if (block.light > 1) {
+        for (adj <- position.getAdjacent) {
           val adjChunk = ChunkPosition(adj)
-          if(adjChunk == chunk) {
+          if (adjChunk == chunk) {
             // Add light to flood in this chunk
             flood += LightFlood(adj, position, block.light - 1, block.red, block.green, block.blue)
           } else {
@@ -337,8 +337,8 @@ object Light {
     floodLight(FloodLight(chunk, flood.toSet), floodOthers, db)
   }
 
-  def refreshAmbientLight(refreshAmbient: RefreshAmbientLight, db: ActorRef)
-    (implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+  def refreshAmbientLight(refreshAmbient: RefreshAmbientLight, db: ActorRef)(implicit blockFactory: BlockFactory,
+                                                                             blockBuffer: Array[Byte]) {
 
     val ambientFlood = mutable.Set[AmbientLightFlood]()
     val ambientFloodOthers = mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightFlood]]()
@@ -346,23 +346,23 @@ object Light {
     val chunk = refreshAmbient.chunk
 
     // Iterate through all blocks that require a refresh
-    for(position <- refreshAmbient.positions) {
+    for (position <- refreshAmbient.positions) {
       val i = ChunkData.index(chunk, position)
       val block = BlockData(blockBuffer, i)
       val blockTypeId = blockFactory.getBlockTypeId(block.w)
       val blockType = blockFactory.getBlockType(blockTypeId)
       // Block has ambient lightning
-      if(blockType.isTransparent && block.ambient > 1) {
+      if (blockType.isTransparent && block.ambient > 1) {
 
         // Find all adjacent blocks and add them for ambient flooding
-        for(adj <- position.getAdjacent) {
+        for (adj <- position.getAdjacent) {
           val adjChunk = ChunkPosition(adj)
-          val ambient = if(position.getY > adj.getY && block.ambient == LightLevel.FULL_ENCODING) {
+          val ambient = if (position.getY > adj.getY && block.ambient == LightLevel.FULL_ENCODING) {
             block.ambient
           } else {
             block.ambient - 1
           }
-          if(adjChunk == chunk) {
+          if (adjChunk == chunk) {
             ambientFlood += AmbientLightFlood(adj, position, ambient)
           } else {
             val s = ambientFloodOthers.getOrElseUpdate(adjChunk, mutable.Set[AmbientLightFlood]())
@@ -375,16 +375,14 @@ object Light {
   }
 
   // Helper method to flood lights received via FloodLight message
-  def floodLight(update: FloodLight, db: ActorRef)
-    (implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+  def floodLight(update: FloodLight, db: ActorRef)(implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
     floodLight(update, mutable.HashMap[ChunkPosition, mutable.Set[LightFlood]](), db)
   }
 
   // This function propagates light by flooding using a BFS
-  def floodLight(update: FloodLight,
-    buffer: mutable.HashMap[ChunkPosition, mutable.Set[LightFlood]],
-    db: ActorRef)
-    (implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+  def floodLight(update: FloodLight, buffer: mutable.HashMap[ChunkPosition, mutable.Set[LightFlood]], db: ActorRef)(
+      implicit blockFactory: BlockFactory,
+      blockBuffer: Array[Byte]) {
 
     // The BFS queue
     val queue = mutable.Queue[LightFlood]()
@@ -393,7 +391,7 @@ object Light {
     val chunk = update.chunk
 
     // The BFS
-    while(!queue.isEmpty) {
+    while (!queue.isEmpty) {
       val f = queue.dequeue
       val i = ChunkData.index(chunk, f.position)
       val a = BlockData(blockBuffer, i)
@@ -401,15 +399,15 @@ object Light {
 
       // If the block has a lower light level than what is to be flooded
       // update it to the new level and continue flooding
-      if(aType.isTransparent && a.light < f.light) {
+      if (aType.isTransparent && a.light < f.light) {
         a.copy(light = f.light, red = f.red, green = f.green, blue = f.blue).write(blockBuffer, i)
 
         // If the flood light level is bigger than 1 continue flooding
-        if(f.light > 1) {
-          for(adj <- f.position.getAdjacent) {
-            if(adj != f.from) {
+        if (f.light > 1) {
+          for (adj <- f.position.getAdjacent) {
+            if (adj != f.from) {
               val adjChunk = ChunkPosition(adj)
-              if(chunk == adjChunk) {
+              if (chunk == adjChunk) {
                 // Add block to flood in this chunk
                 queue.enqueue(LightFlood(adj, f.position, f.light - 1, f.red, f.green, f.blue))
               } else {
@@ -431,17 +429,14 @@ object Light {
   }
 
   // Helper method to flood ambient light received via FloodAmbientLight message
-  def floodAmbientLight(update: FloodAmbientLight, db: ActorRef)
-    (implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+  def floodAmbientLight(update: FloodAmbientLight, db: ActorRef)(implicit blockFactory: BlockFactory,
+                                                                 blockBuffer: Array[Byte]) {
     floodAmbientLight(update, mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightFlood]](), db)
   }
 
-  def floodAmbientLight(
-    update: FloodAmbientLight,
-    buffer: mutable.HashMap[ChunkPosition,
-      mutable.Set[AmbientLightFlood]],
-    db: ActorRef)
-    (implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+  def floodAmbientLight(update: FloodAmbientLight,
+                        buffer: mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightFlood]],
+                        db: ActorRef)(implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
 
     // The BFS queue
     val queue = mutable.Queue[AmbientLightFlood]()
@@ -450,7 +445,7 @@ object Light {
     val chunk = update.chunk
 
     // The BFS
-    while(!queue.isEmpty) {
+    while (!queue.isEmpty) {
       val f = queue.dequeue
       val i = ChunkData.index(chunk, f.position)
       val a = BlockData(blockBuffer, i)
@@ -459,20 +454,20 @@ object Light {
 
       // If the block has a lower light level than what is to be flooded
       // update it to the new level and continue flooding
-      if(aType.isTransparent && a.ambient < f.ambient  && aTypeId.getNamespace != "org/konstructs/space") {
+      if (aType.isTransparent && a.ambient < f.ambient && aTypeId.getNamespace != "org/konstructs/space") {
         a.copy(ambient = f.ambient).write(blockBuffer, i)
 
         // If the flood light level is bigger than 1 continue flooding
-        if(f.ambient > 1) {
-          for(adj <- f.position.getAdjacent) {
-            if(adj != f.from) {
+        if (f.ambient > 1) {
+          for (adj <- f.position.getAdjacent) {
+            if (adj != f.from) {
               val adjChunk = ChunkPosition(adj)
-              val ambient = if(f.position.getY > adj.getY && f.ambient == LightLevel.FULL_ENCODING) {
+              val ambient = if (f.position.getY > adj.getY && f.ambient == LightLevel.FULL_ENCODING) {
                 f.ambient
               } else {
                 f.ambient - 1
               }
-              if(chunk == adjChunk) {
+              if (chunk == adjChunk) {
                 // Add block to flood in this chunk
                 queue.enqueue(AmbientLightFlood(adj, f.position, ambient))
               } else {
@@ -495,8 +490,8 @@ object Light {
 
   def refreshChunkAbove(chunk: ChunkPosition): RefreshAmbientLight = {
     val maxChunk = chunk.copy(k = chunk.k + 1)
-    val set = (for(x <- 0 until Db.ChunkSize;
-      z <- 0 until Db.ChunkSize) yield {
+    val set = (for (x <- 0 until Db.ChunkSize;
+                    z <- 0 until Db.ChunkSize) yield {
       maxChunk.position(x, 0, z)
     }) toSet
 

@@ -2,14 +2,14 @@ package konstructs
 
 import java.io.File
 import scala.util.Try
-import akka.actor.{ Actor, ActorRef, Props }
+import akka.actor.{Actor, ActorRef, Props}
 import org.apache.commons.io.FileUtils
-import konstructs.plugin.{ PluginConstructor, Config }
+import konstructs.plugin.{PluginConstructor, Config}
 import konstructs.api.GsonDefault
-import com.google.gson.{ Gson, JsonParser, JsonElement }
+import com.google.gson.{Gson, JsonParser, JsonElement}
 
 class BinaryStorageActor(name: String, directory: File) extends Actor {
-  import konstructs.api.{ StoreBinary, LoadBinary, BinaryLoaded }
+  import konstructs.api.{StoreBinary, LoadBinary, BinaryLoaded}
   import Storage._
 
   val Suffix = "binary"
@@ -23,7 +23,7 @@ class BinaryStorageActor(name: String, directory: File) extends Actor {
 }
 
 trait BinaryStorage {
-  import konstructs.api.{ StoreBinary, LoadBinary }
+  import konstructs.api.{StoreBinary, LoadBinary}
 
   def ns: String
   def binaryStorage: ActorRef
@@ -34,12 +34,12 @@ trait BinaryStorage {
 
 object BinaryStorageActor {
   @PluginConstructor
-  def props(name: String, universe: ActorRef,
-    @Config(key = "directory") directory: File) = Props(classOf[BinaryStorageActor], name, directory)
+  def props(name: String, universe: ActorRef, @Config(key = "directory") directory: File) =
+    Props(classOf[BinaryStorageActor], name, directory)
 }
 
 class JsonStorageActor(name: String, directory: File) extends Actor {
-  import konstructs.api.{ StoreGson, LoadGson, GsonLoaded }
+  import konstructs.api.{StoreGson, LoadGson, GsonLoaded}
   import Storage._
 
   private val Suffix = "json"
@@ -59,12 +59,12 @@ class JsonStorageActor(name: String, directory: File) extends Actor {
 
 object JsonStorageActor {
   @PluginConstructor
-  def props(name: String, universe: ActorRef,
-    @Config(key = "directory") directory: File) = Props(classOf[JsonStorageActor], name, directory)
+  def props(name: String, universe: ActorRef, @Config(key = "directory") directory: File) =
+    Props(classOf[JsonStorageActor], name, directory)
 }
 
 trait JsonStorage {
-  import konstructs.api.{ StoreGson, LoadGson }
+  import konstructs.api.{StoreGson, LoadGson}
 
   val gson = GsonDefault.getDefaultGson
 
@@ -82,7 +82,7 @@ object Storage {
     FileUtils.writeByteArrayToFile(file(directory, id, ns, suffix), data)
   def load(directory: File, id: String, ns: String, suffix: String): Option[Array[Byte]] = {
     val f = file(directory, id, ns, suffix)
-    if(f.exists) {
+    if (f.exists) {
       Some(FileUtils.readFileToByteArray(f))
     } else {
       None

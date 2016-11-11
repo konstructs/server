@@ -1,15 +1,15 @@
 package konstructs
 
 import java.util.UUID
-import java.io.{ FileReader, FileNotFoundException, File }
+import java.io.{FileReader, FileNotFoundException, File}
 import org.apache.commons.io.FileUtils
 import scala.collection.JavaConverters._
 import akka.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
 import com.google.gson.reflect.TypeToken
-import konstructs.api.{ GsonDefault, Position }
+import konstructs.api.{GsonDefault, Position}
 import konstructs.plugin.PluginLoaderActor
-import konstructs.shard.{ ShardPosition, ShardActor }
+import konstructs.shard.{ShardPosition, ShardActor}
 
 object Main extends App {
   val conf =
@@ -23,8 +23,8 @@ object Main extends App {
 }
 
 object Compatibility {
-  import ShardActor.{ shardId, positionMappingFile }
-  val TypeOfPositionMapping = new TypeToken[java.util.Map[String, UUID]](){}.getType
+  import ShardActor.{shardId, positionMappingFile}
+  val TypeOfPositionMapping = new TypeToken[java.util.Map[String, UUID]]() {}.getType
 
   def process() {
     println("STARTING MIGRATION PROCESS, DON'T INTERRUPT!")
@@ -54,11 +54,15 @@ object Compatibility {
           ShardPosition(position)
       }
       val meta = new File("meta")
-      for((shard, positions) <- grouped) {
+      for ((shard, positions) <- grouped) {
         val file = Storage.file(meta, positionMappingFile(shardId(shard)), "chunks", "json")
-        if(file.exists())
+        if (file.exists())
           throw new IllegalStateException("Shard position mapping already exists!")
-        Storage.write(meta, positionMappingFile(shardId(shard)), "chunks", "json", gson.toJson(positions.asJava, TypeOfPositionMapping).getBytes())
+        Storage.write(meta,
+                      positionMappingFile(shardId(shard)),
+                      "chunks",
+                      "json",
+                      gson.toJson(positions.asJava, TypeOfPositionMapping).getBytes())
         println(s"Migrated mapping for $shard to $file")
       }
       println("Position mapping migration finished, will delete original mappings file")

@@ -1,6 +1,6 @@
 package konstructs.utils
 
-import java.util.zip.{ Inflater, Deflater }
+import java.util.zip.{Inflater, Deflater}
 
 package object compress {
 

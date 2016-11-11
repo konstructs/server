@@ -2,14 +2,18 @@ package konstructs.shard
 
 import java.util.UUID
 
-import konstructs.api.{ Position, Block,
-                        BlockTypeId, Direction, Rotation,
-                        Orientation, LightLevel, Colour,
-                        Health }
+import konstructs.api.{Position, Block, BlockTypeId, Direction, Rotation, Orientation, LightLevel, Colour, Health}
 import konstructs.Db
 
-case class BlockData(w: Int, health: Int, direction: Int, rotation: Int, ambient: Int,
-  red: Int, green: Int, blue: Int, light: Int) {
+case class BlockData(w: Int,
+                     health: Int,
+                     direction: Int,
+                     rotation: Int,
+                     ambient: Int,
+                     red: Int,
+                     green: Int,
+                     blue: Int,
+                     light: Int) {
   def write(data: Array[Byte], i: Int) {
     BlockData.write(data, i, w, health, direction, rotation, ambient, red, green, blue, light)
   }
@@ -50,16 +54,15 @@ object BlockData {
     ((data(i * Size + 6) & 0x0F))
 
   def apply(data: Array[Byte], i: Int): BlockData = {
-    apply(
-      w(data, i),
-      hp(data, i),
-      direction(data, i),
-      rotation(data, i),
-      ambientLight(data, i),
-      red(data, i),
-      green(data, i),
-      blue(data, i),
-      light(data, i))
+    apply(w(data, i),
+          hp(data, i),
+          direction(data, i),
+          rotation(data, i),
+          ambientLight(data, i),
+          red(data, i),
+          green(data, i),
+          blue(data, i),
+          light(data, i))
   }
 
   def apply(w: Int, block: Block, ambient: Int, colour: Colour, level: LightLevel): BlockData = {
@@ -76,23 +79,40 @@ object BlockData {
     )
   }
 
-  def write(data: Array[Byte], i: Int, w: Int, health: Int, direction: Int, rotation: Int, ambient: Int,
-    red: Int, green: Int, blue: Int, light: Int) {
+  def write(data: Array[Byte],
+            i: Int,
+            w: Int,
+            health: Int,
+            direction: Int,
+            rotation: Int,
+            ambient: Int,
+            red: Int,
+            green: Int,
+            blue: Int,
+            light: Int) {
     writeW(data, i, w)
     writeHealthAndOrientation(data, i, health, direction, rotation)
     writeLight(data, i, ambient, red, green, blue, light)
   }
 
-  def write(data: Array[Byte], i: Int, w: Int, block: Block, ambientLight: LightLevel, colour: Colour, light: LightLevel) {
-    write(data, i, w, block.getHealth.getHealth,
-      block.getOrientation.getDirection.getEncoding,
-      block.getOrientation.getRotation.getEncoding,
-      ambientLight.getLevel,
-      colour.getRed,
-      colour.getGreen,
-      colour.getBlue,
-      light.getLevel
-    )
+  def write(data: Array[Byte],
+            i: Int,
+            w: Int,
+            block: Block,
+            ambientLight: LightLevel,
+            colour: Colour,
+            light: LightLevel) {
+    write(data,
+          i,
+          w,
+          block.getHealth.getHealth,
+          block.getOrientation.getDirection.getEncoding,
+          block.getOrientation.getRotation.getEncoding,
+          ambientLight.getLevel,
+          colour.getRed,
+          colour.getGreen,
+          colour.getBlue,
+          light.getLevel)
   }
 
   def writeW(data: Array[Byte], i: Int, w: Int) {

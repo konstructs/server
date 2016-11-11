@@ -2,26 +2,34 @@ package konstructs
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import akka.actor.{ Actor, ActorRef, Props }
+import akka.actor.{Actor, ActorRef, Props}
 
-import konstructs.api.{ Position, BlockFactory, Box, BlockTypeId,
-                        Block, Orientation }
-import konstructs.api.messages.{ BoxQuery, BoxShapeQuery,
-                                 BoxQueryResult, BoxShapeQueryResult,
-                                 ViewBlock, ReplaceBlocks,
-                                 ReplaceBlock, DamageBlockWithBlock,
-                                 InteractTertiary }
-import konstructs.shard.{ ShardActor, ShardPosition, ChunkPosition,
-                          ChunkData, BoxChunking, Light }
+import konstructs.api.{Position, BlockFactory, Box, BlockTypeId, Block, Orientation}
+import konstructs.api.messages.{
+  BoxQuery,
+  BoxShapeQuery,
+  BoxQueryResult,
+  BoxShapeQueryResult,
+  ViewBlock,
+  ReplaceBlocks,
+  ReplaceBlock,
+  DamageBlockWithBlock,
+  InteractTertiary
+}
+import konstructs.shard.{ShardActor, ShardPosition, ChunkPosition, ChunkData, BoxChunking, Light}
 
 object Db {
   val ChunkSize = 32
   val ShardSize = 8
 }
 
-class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
-  jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef], blockFactory: BlockFactory,
-  tertiaryInteractionFilters: Seq[ActorRef])
+class DbActor(universe: ActorRef,
+              generator: ActorRef,
+              binaryStorage: ActorRef,
+              jsonStorage: ActorRef,
+              blockUpdateEvents: Seq[ActorRef],
+              blockFactory: BlockFactory,
+              tertiaryInteractionFilters: Seq[ActorRef])
     extends Actor {
   import DbActor._
 
@@ -38,8 +46,16 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
     context.child(rid) match {
       case Some(a) => a
       case None =>
-        context.actorOf(ShardActor.props(self, shard, binaryStorage, jsonStorage, blockUpdateEvents,
-          generator, blockFactory, tertiaryInteractionFilters, universe), rid)
+        context.actorOf(ShardActor.props(self,
+                                         shard,
+                                         binaryStorage,
+                                         jsonStorage,
+                                         blockUpdateEvents,
+                                         generator,
+                                         blockFactory,
+                                         tertiaryInteractionFilters,
+                                         universe),
+                        rid)
     }
   }
 
@@ -71,7 +87,7 @@ class DbActor(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
         getShardActor(box.getFrom).tell(new BoxQuery(box), resultActor)
       }
     case r: ReplaceBlocks =>
-      for((chunk, blocks) <- splitList[BlockTypeId](r.getBlocks)) {
+      for ((chunk, blocks) <- splitList[BlockTypeId](r.getBlocks)) {
         getShardActor(chunk) forward ShardActor.ReplaceBlocks(chunk, r.getFilter, blocks)
       }
     case b: BlockList =>
@@ -102,31 +118,43 @@ object DbActor {
   case class InteractSecondaryUpdate(position: Position, orientation: Orientation, block: Block)
   case class InteractTertiaryUpdate(filters: Seq[ActorRef], message: InteractTertiary)
 
-  def splitList[T](placed: java.util.Map[Position, T]):
-      Map[ChunkPosition, Map[Position, T]] = {
+  def splitList[T](placed: java.util.Map[Position, T]): Map[ChunkPosition, Map[Position, T]] = {
     val shards = mutable.HashMap[ChunkPosition, mutable.Map[Position, T]]()
 
-    for((position, i) <- placed.asScala) {
+    for ((position, i) <- placed.asScala) {
       val pos = ChunkPosition(position)
       val map: mutable.Map[Position, T] =
         shards.getOrElse(pos, mutable.HashMap[Position, T]())
       map += position -> i
       shards += pos -> map
     }
-    (shards.map { case (k, v) =>
-      k -> v.toMap
+    (shards.map {
+      case (k, v) =>
+        k -> v.toMap
     }).toMap
   }
 
-  def props(universe: ActorRef, generator: ActorRef, binaryStorage: ActorRef,
-    jsonStorage: ActorRef, blockUpdateEvents: Seq[ActorRef], blockFactory: BlockFactory,
-    tertiaryInteractionFilters: Seq[ActorRef]) =
-    Props(classOf[DbActor], universe, generator, binaryStorage, jsonStorage, blockUpdateEvents,
-      blockFactory, tertiaryInteractionFilters)
+  def props(universe: ActorRef,
+            generator: ActorRef,
+            binaryStorage: ActorRef,
+            jsonStorage: ActorRef,
+            blockUpdateEvents: Seq[ActorRef],
+            blockFactory: BlockFactory,
+            tertiaryInteractionFilters: Seq[ActorRef]) =
+    Props(classOf[DbActor],
+          universe,
+          generator,
+          binaryStorage,
+          jsonStorage,
+          blockUpdateEvents,
+          blockFactory,
+          tertiaryInteractionFilters)
 }
 
-class BoxQueryResultActor(initiator: ActorRef, blockFactory: BlockFactory,
-  query: Either[BoxQuery, BoxShapeQuery], boxes: Set[Box])
+class BoxQueryResultActor(initiator: ActorRef,
+                          blockFactory: BlockFactory,
+                          query: Either[BoxQuery, BoxShapeQuery],
+                          boxes: Set[Box])
     extends Actor {
   var receivedBoxes: Set[BoxQueryResult] = Set()
 
@@ -138,10 +166,10 @@ class BoxQueryResultActor(initiator: ActorRef, blockFactory: BlockFactory,
   def receive = {
     case r: BoxQueryResult =>
       receivedBoxes += r
-      if(receivedBoxes.map(_.getBox) == boxes) {
+      if (receivedBoxes.map(_.getBox) == boxes) {
         val data = new Array[BlockTypeId](box.getNumberOfBlocks)
-        for(subData <- receivedBoxes) {
-          for((position, typeId)  <- subData.getAsMap.asScala) {
+        for (subData <- receivedBoxes) {
+          for ((position, typeId) <- subData.getAsMap.asScala) {
             data(box.arrayIndex(position)) = typeId
           }
         }
@@ -158,7 +186,6 @@ class BoxQueryResultActor(initiator: ActorRef, blockFactory: BlockFactory,
 }
 
 object BoxQueryResultActor {
-  def props(initiator: ActorRef, query: Either[BoxQuery, BoxShapeQuery], boxes: Set[Box],
-    blockFactory: BlockFactory) =
+  def props(initiator: ActorRef, query: Either[BoxQuery, BoxShapeQuery], boxes: Set[Box], blockFactory: BlockFactory) =
     Props(classOf[BoxQueryResultActor], initiator, blockFactory, query, boxes)
 }
