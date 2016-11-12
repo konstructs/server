@@ -5,32 +5,33 @@ import java.util.UUID
 import scala.collection.mutable
 import scala.collection.JavaConverters._
 
-import akka.actor.{ Actor, Props, ActorRef, Stash }
+import akka.actor.{Actor, Props, ActorRef, Stash}
 
 import com.google.gson.reflect.TypeToken
-import konstructs.plugin.{ PluginConstructor, Config }
+import konstructs.plugin.{PluginConstructor, Config}
 import konstructs.api._
 
-
-
-class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
-    with Stash with JsonStorage with utils.Scheduled {
+class InventoryActor(val ns: String, val jsonStorage: ActorRef)
+    extends Actor
+    with Stash
+    with JsonStorage
+    with utils.Scheduled {
   import InventoryActor._
 
   schedule(5000, StoreData)
 
   loadGson(InventoriesFile)
 
-  val typeOfInventories = new TypeToken[java.util.Map[String, Inventory]](){}.getType
+  val typeOfInventories = new TypeToken[java.util.Map[String, Inventory]]() {}.getType
   var inventories: java.util.Map[String, Inventory] = null
 
   private def put(blockId: UUID, slot: Int, stack: Stack): Stack = {
-    if(inventories.containsKey(blockId.toString)) {
+    if (inventories.containsKey(blockId.toString)) {
       val inventory = inventories.get(blockId.toString)
       val oldStack = inventory.getStack(slot)
 
-      if(oldStack != null) {
-        if(oldStack.acceptsPartOf(stack)) {
+      if (oldStack != null) {
+        if (oldStack.acceptsPartOf(stack)) {
           val r = oldStack.acceptPartOf(stack)
           inventories.put(blockId.toString, inventory.withSlot(slot, r.getAccepting))
           r.getGiving
@@ -48,17 +49,17 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
   }
 
   private def get(blockId: UUID, slot: Int): Stack =
-    if(inventories.containsKey(blockId.toString)) {
+    if (inventories.containsKey(blockId.toString)) {
       inventories.get(blockId.toString).getStack(slot)
     } else {
       null
     }
 
   private def remove(blockId: UUID, slot: Int, amount: StackAmount): Stack =
-    if(inventories.containsKey(blockId.toString)) {
+    if (inventories.containsKey(blockId.toString)) {
       val i = inventories.get(blockId.toString)
       val s = i.getStack(slot)
-      if(s == null)
+      if (s == null)
         return null
       amount match {
         case FullStack =>
@@ -79,7 +80,7 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
   def receive = {
     case GsonLoaded(_, json) if json != null =>
       inventories = gson.fromJson(json, typeOfInventories)
-        // This handles old inventories where empty stacks wasn't null
+      // This handles old inventories where empty stacks wasn't null
       val updatedInventories = new java.util.HashMap[String, Inventory]()
       inventories.asScala.toMap foreach {
         case (pos, inventory) =>
@@ -98,7 +99,7 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef) extends Actor
 
   def ready: Receive = {
     case CreateInventory(blockId, size) =>
-      if(!inventories.containsKey(blockId.toString)) {
+      if (!inventories.containsKey(blockId.toString)) {
         inventories.put(blockId.toString, Inventory.createEmpty(size))
       }
 
@@ -129,7 +130,6 @@ object InventoryActor {
   val InventoriesFile = "inventories"
 
   @PluginConstructor
-  def props(name: String, universe: ActorRef,
-    @Config(key = "json-storage") jsonStorage: ActorRef): Props =
+  def props(name: String, universe: ActorRef, @Config(key = "json-storage") jsonStorage: ActorRef): Props =
     Props(classOf[InventoryActor], name, jsonStorage)
 }

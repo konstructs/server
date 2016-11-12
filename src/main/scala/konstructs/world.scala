@@ -1,17 +1,22 @@
 package konstructs
 
 import scala.util.Random
-import akka.actor.{ Actor, ActorRef, Props, Stash }
+import akka.actor.{Actor, ActorRef, Props, Stash}
 import konstructs.api._
 import konstructs.utils._
-import konstructs.shard.{ BlockData, ChunkPosition,
-                          ChunkData }
+import konstructs.shard.{BlockData, ChunkPosition, ChunkData}
 
 case class FlatWorld(sizeX: Int, sizeZ: Int)
 
-class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
-  val jsonStorage: ActorRef, val binaryStorage: ActorRef)
-    extends Actor with Stash with JsonStorage with BinaryStorage {
+class FlatWorldActor(name: String,
+                     end: Position,
+                     factory: BlockFactory,
+                     val jsonStorage: ActorRef,
+                     val binaryStorage: ActorRef)
+    extends Actor
+    with Stash
+    with JsonStorage
+    with BinaryStorage {
   import World._
   import GeneratorActor.Generated
   import Db.ChunkSize
@@ -30,7 +35,7 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
       context.become(loadHeightMap(world))
       unstashAll()
     case GsonLoaded(_, _) =>
-      val world = FlatWorld(size*3, size*3)
+      val world = FlatWorld(size * 3, size * 3)
       storeGson(name, gson.toJsonTree(world))
       loadBinary(name)
       context.become(loadHeightMap(world))
@@ -49,15 +54,35 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
         val diamond0 = new DiamondSquareHeightMap(0.1f, size, new Position(0, 0, 0), EmptyHeightMap)
         val diamond1 = new DiamondSquareHeightMap(0.2f, size, new Position(0, 0, size), diamond0)
         val diamond2 = new DiamondSquareHeightMap(0.1f, size, new Position(0, 0, 2 * size), diamond0 orElse diamond1)
-        val diamond3 = new DiamondSquareHeightMap(0.3f, size, new Position(size, 0, 0), diamond0 orElse diamond1 orElse diamond2)
-        val diamond4 = new DiamondSquareHeightMap(0.7f, size, new Position(size, 0, size), diamond0 orElse diamond1 orElse diamond2 orElse diamond3)
-        val diamond5 = new DiamondSquareHeightMap(0.1f, size, new Position(size, 0, 2 * size), diamond0 orElse diamond1 orElse diamond2 orElse diamond3 orElse diamond4)
-        val diamond6 = new DiamondSquareHeightMap(0.3f, size, new Position(2 * size, 0, 0), diamond0 orElse diamond1 orElse diamond2 orElse diamond3 orElse diamond4 orElse diamond5)
-        val diamond7 = new DiamondSquareHeightMap(0.2f, size, new Position(2 * size, 0, size), diamond0 orElse diamond1 orElse diamond2 orElse diamond3 orElse diamond4 orElse diamond5 orElse diamond6)
-        val diamond8 = new DiamondSquareHeightMap(0.1f, size, new Position(2 * size, 0, 2 * size), diamond0 orElse diamond1 orElse diamond2 orElse diamond3 orElse diamond4 orElse diamond5 orElse diamond6 orElse diamond7)
+        val diamond3 =
+          new DiamondSquareHeightMap(0.3f, size, new Position(size, 0, 0), diamond0 orElse diamond1 orElse diamond2)
+        val diamond4 = new DiamondSquareHeightMap(0.7f,
+                                                  size,
+                                                  new Position(size, 0, size),
+                                                  diamond0 orElse diamond1 orElse diamond2 orElse diamond3)
+        val diamond5 = new DiamondSquareHeightMap(
+          0.1f,
+          size,
+          new Position(size, 0, 2 * size),
+          diamond0 orElse diamond1 orElse diamond2 orElse diamond3 orElse diamond4)
+        val diamond6 = new DiamondSquareHeightMap(
+          0.3f,
+          size,
+          new Position(2 * size, 0, 0),
+          diamond0 orElse diamond1 orElse diamond2 orElse diamond3 orElse diamond4 orElse diamond5)
+        val diamond7 = new DiamondSquareHeightMap(
+          0.2f,
+          size,
+          new Position(2 * size, 0, size),
+          diamond0 orElse diamond1 orElse diamond2 orElse diamond3 orElse diamond4 orElse diamond5 orElse diamond6)
+        val diamond8 = new DiamondSquareHeightMap(
+          0.1f,
+          size,
+          new Position(2 * size, 0, 2 * size),
+          diamond0 orElse diamond1 orElse diamond2 orElse diamond3 orElse diamond4 orElse diamond5 orElse diamond6 orElse diamond7)
         diamond0 orElse diamond1 orElse diamond2 orElse diamond3 orElse diamond4 orElse diamond5 orElse diamond6 orElse diamond7 orElse diamond8
       }
-      val localMap = ArrayHeightMap.fromExistingHeightMap(newMap, size*3, size*3)
+      val localMap = ArrayHeightMap.fromExistingHeightMap(newMap, size * 3, size * 3)
       storeBinary(name, localMap.toByteArray)
       val map = GlobalHeightMap(new Position(0, 0, 0), localMap)
       context.become(ready(world, map))
@@ -72,30 +97,55 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
   val Pristine = Health.PRISTINE.getHealth()
 
   private val Konstructs = "org/konstructs"
-  private val Flowers = Seq("flower-yellow", "flower-red", "flower-purple", "sunflower",
-    "flower-white", "flower-blue")
+  private val Flowers = Seq("flower-yellow", "flower-red", "flower-purple", "sunflower", "flower-white", "flower-blue")
 
   private def blockSeq(chunk: ChunkPosition, map: HeightMap): Seq[BlockData] = {
-    for(
-      z <- 0 until ChunkSize;
-      y <- 0 until ChunkSize;
-      x <- 0 until ChunkSize
-    ) yield {
+    for (z <- 0 until ChunkSize;
+         y <- 0 until ChunkSize;
+         x <- 0 until ChunkSize) yield {
       val global = chunk.position(x, y, z)
       val height = map(global) + 32
       val gy = global.getY
-      if(gy < height - (3 + random.nextInt(1))) {
-        BlockData(w(Konstructs, "stone"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
-          LightLevel.DARK_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
-      } else if(gy < height) {
-        BlockData(w(Konstructs, "dirt"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
-          LightLevel.DARK_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
+      if (gy < height - (3 + random.nextInt(1))) {
+        BlockData(w(Konstructs, "stone"),
+                  Pristine,
+                  Direction.UP_ENCODING,
+                  Rotation.IDENTITY_ENCODING,
+                  LightLevel.DARK_ENCODING,
+                  0,
+                  0,
+                  0,
+                  LightLevel.DARK_ENCODING)
+      } else if (gy < height) {
+        BlockData(w(Konstructs, "dirt"),
+                  Pristine,
+                  Direction.UP_ENCODING,
+                  Rotation.IDENTITY_ENCODING,
+                  LightLevel.DARK_ENCODING,
+                  0,
+                  0,
+                  0,
+                  LightLevel.DARK_ENCODING)
       } else if (gy < 10) {
-        BlockData(w(Konstructs, "water"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
-          LightLevel.FULL_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
+        BlockData(w(Konstructs, "water"),
+                  Pristine,
+                  Direction.UP_ENCODING,
+                  Rotation.IDENTITY_ENCODING,
+                  LightLevel.FULL_ENCODING,
+                  0,
+                  0,
+                  0,
+                  LightLevel.DARK_ENCODING)
       } else {
-        BlockData(w(Konstructs, "vacuum"), Pristine, Direction.UP_ENCODING, Rotation.IDENTITY_ENCODING,
-          LightLevel.FULL_ENCODING, 0, 0, 0, LightLevel.DARK_ENCODING)
+        BlockData(w(Konstructs, "vacuum"),
+                  Pristine,
+                  Direction.UP_ENCODING,
+                  Rotation.IDENTITY_ENCODING,
+                  LightLevel.FULL_ENCODING,
+                  0,
+                  0,
+                  0,
+                  LightLevel.DARK_ENCODING)
       }
     }
   }
@@ -103,7 +153,7 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
   private def blocks(chunk: ChunkPosition, map: HeightMap): Array[Byte] = {
     val data = new Array[Byte](ChunkSize * ChunkSize * ChunkSize * BlockData.Size)
     val bs = blockSeq(chunk, map)
-    for(i <- 0 until ChunkSize * ChunkSize * ChunkSize) {
+    for (i <- 0 until ChunkSize * ChunkSize * ChunkSize) {
       bs(i).write(data, i)
     }
     data
@@ -117,8 +167,7 @@ class FlatWorldActor(name: String, end: Position, factory: BlockFactory,
 }
 
 object FlatWorldActor {
-  def props(name: String, end: Position, factory: BlockFactory,
-    jsonStorage: ActorRef, binaryStorage: ActorRef) =
+  def props(name: String, end: Position, factory: BlockFactory, jsonStorage: ActorRef, binaryStorage: ActorRef) =
     Props(classOf[FlatWorldActor], name, end, factory, jsonStorage, binaryStorage)
 }
 

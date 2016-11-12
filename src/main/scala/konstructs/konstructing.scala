@@ -6,14 +6,13 @@ import java.util.UUID
 import scala.collection.JavaConverters._
 import scala.math.min
 
-import com.typesafe.config.{ Config => TypesafeConfig }
-import akka.actor.{ Actor, Props, ActorRef, Stash }
+import com.typesafe.config.{Config => TypesafeConfig}
+import akka.actor.{Actor, Props, ActorRef, Stash}
 import konstructs.api._
 import konstructs.api.messages.GetBlockFactory
-import konstructs.plugin.{ PluginConstructor, Config, ListConfig }
+import konstructs.plugin.{PluginConstructor, Config, ListConfig}
 
-class KonstructingActor(universe: ActorRef, konstructs: Set[Konstruct])
-    extends Actor with Stash {
+class KonstructingActor(universe: ActorRef, konstructs: Set[Konstruct]) extends Actor with Stash {
 
   universe ! GetBlockFactory.MESSAGE
 
@@ -53,19 +52,20 @@ object KonstructingActor {
 
   def parseStack(config: TypesafeConfig): Stack = {
     val blockId = config.getString("id")
-    val amount = if(config.hasPath("amount")) {
+    val amount = if (config.hasPath("amount")) {
       config.getInt("amount")
     } else {
       1
     }
-    new Stack(
-      ((0 until amount).map { i => Block.create(blockId) }).toArray )
+    new Stack(((0 until amount).map { i =>
+      Block.create(blockId)
+    }).toArray)
   }
 
   def parseStackTemplate(config: TypesafeConfig): StackTemplate = {
-    if(config.hasPath("id")) {
+    if (config.hasPath("id")) {
       val blockId = config.getString("id")
-      val amount = if(config.hasPath("amount")) {
+      val amount = if (config.hasPath("amount")) {
         config.getInt("amount")
       } else {
         1
@@ -77,13 +77,14 @@ object KonstructingActor {
   }
 
   def parsePatternTemplate(config: TypesafeConfig): PatternTemplate = {
-    if(config.hasPath("stack")) {
+    if (config.hasPath("stack")) {
       new PatternTemplate(Array(parseStackTemplate(config.getConfig("stack"))), 1, 1)
     } else {
       val rows = config.getInt("rows")
       val columns = config.getInt("columns")
       val stacks = util.Arrays.copyOf(
-        config.getConfigList("stacks").asScala.map(parseStackTemplate).toArray, rows * columns
+        config.getConfigList("stacks").asScala.map(parseStackTemplate).toArray,
+        rows * columns
       )
       new PatternTemplate(stacks, rows, columns)
     }
@@ -93,7 +94,7 @@ object KonstructingActor {
     val konstructs = config.root.entrySet.asScala.map { e =>
       config.getConfig(e.getKey)
     }
-    (for(konstruct <- konstructs) yield {
+    (for (konstruct <- konstructs) yield {
       val pattern = parsePatternTemplate(konstruct.getConfig("match"))
       val result = parseStack(konstruct.getConfig("result"))
       new Konstruct(pattern, result)
@@ -102,17 +103,21 @@ object KonstructingActor {
 
   @PluginConstructor
   def props(
-    name: String, universe: ActorRef,
-    @Config(key = "konstructs") konstructs: TypesafeConfig
+      name: String,
+      universe: ActorRef,
+      @Config(key = "konstructs") konstructs: TypesafeConfig
   ): Props =
     Props(classOf[KonstructingActor], universe, parseKonstructs(konstructs))
 }
 
-
-class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: UUID,
-                            inventoryView: InventoryView, konstructingView: InventoryView,
+class KonstructingViewActor(player: ActorRef,
+                            universe: ActorRef,
+                            inventoryId: UUID,
+                            inventoryView: InventoryView,
+                            konstructingView: InventoryView,
                             resultView: InventoryView)
-    extends Actor with Stash {
+    extends Actor
+    with Stash {
 
   universe ! GetBlockFactory.MESSAGE
 
@@ -122,23 +127,20 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
   var factory: BlockFactory = null
 
   private def view(inventory: Inventory) =
-    View.EMPTY
-      .add(inventoryView, inventory)
-      .add(konstructingView, konstructing)
-      .add(resultView, result)
+    View.EMPTY.add(inventoryView, inventory).add(konstructingView, konstructing).add(resultView, result)
 
   private def updateKonstructing(k: Inventory) {
     konstructing = k
     result = Inventory.createEmpty(1)
     val p = konstructing.getPattern(konstructingView)
-    if(p != null)
+    if (p != null)
       universe ! MatchPattern(p)
   }
 
   def receive = {
     case f: BlockFactory =>
       factory = f
-      if(inventoryId != null) {
+      if (inventoryId != null) {
         universe ! GetInventory(inventoryId)
       } else {
         context.become(ready(EmptyInventory))
@@ -150,7 +152,6 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
     case _ =>
       context.stop(self)
   }
-
 
   def awaitInventory: Receive = {
     case GetInventoryResponse(_, Some(inventory)) =>
@@ -176,7 +177,7 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
       }
 
       val newKonstructing = konstructing.remove(pattern, factory, toKonstruct)
-      if(newKonstructing != null)
+      if (newKonstructing != null)
         updateKonstructing(newKonstructing)
       player ! ReceiveStack(Stack.createOfSize(stack.getTypeId, toKonstruct * stack.size))
       player ! UpdateView(view(inventory))
@@ -194,15 +195,15 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
       result = result.withSlot(0, stack)
       player ! UpdateView(view(inventory))
     case PutViewStack(stack, to) =>
-      if(inventoryView.contains(to)) {
+      if (inventoryView.contains(to)) {
         context.become(awaitInventory)
         universe.forward(PutStack(inventoryId, inventoryView.translate(to), stack))
         universe ! GetInventory(inventoryId)
-      } else if(konstructingView.contains(to)) {
+      } else if (konstructingView.contains(to)) {
         val index = konstructingView.translate(to)
         val oldStack = konstructing.getStack(index)
-        if(oldStack != null) {
-          if(oldStack.acceptsPartOf(stack)) {
+        if (oldStack != null) {
+          if (oldStack.acceptsPartOf(stack)) {
             val r = oldStack.acceptPartOf(stack)
             sender ! ReceiveStack(r.getGiving)
             updateKonstructing(konstructing.withSlot(index, r.getAccepting()))
@@ -219,11 +220,11 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
         sender ! ReceiveStack(stack)
       }
     case RemoveViewStack(from, amount) =>
-      if(inventoryView.contains(from)) {
+      if (inventoryView.contains(from)) {
         context.become(awaitInventory)
         universe.forward(RemoveStack(inventoryId, inventoryView.translate(from), amount))
         universe ! GetInventory(inventoryId)
-      } else if(konstructingView.contains(from)) {
+      } else if (konstructingView.contains(from)) {
         val stack = konstructing.getStack(konstructingView.translate(from))
         amount match {
           case FullStack =>
@@ -238,10 +239,10 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
             sender ! ReceiveStack(Stack.createFromBlock(stack.getHead()))
         }
         player ! UpdateView(view(inventory))
-      } else if(resultView.contains(from)) {
+      } else if (resultView.contains(from)) {
         val pattern = konstructing.getPattern(konstructingView)
-        if(pattern != null) {
-          if(!result.isEmpty) {
+        if (pattern != null) {
+          if (!result.isEmpty) {
             context.become(awaitKonstruction(inventory, amount))
             universe ! KonstructPattern(pattern)
           } else {
@@ -258,9 +259,11 @@ class KonstructingViewActor(player: ActorRef, universe: ActorRef, inventoryId: U
 }
 
 object KonstructingViewActor {
-  def props(player: ActorRef, universe: ActorRef, inventoryId: UUID,
-    inventoryView: InventoryView, konstructingView: InventoryView,
-    resultView: InventoryView): Props =
-    Props(classOf[KonstructingViewActor], player, universe, inventoryId,
-      inventoryView, konstructingView, resultView)
+  def props(player: ActorRef,
+            universe: ActorRef,
+            inventoryId: UUID,
+            inventoryView: InventoryView,
+            konstructingView: InventoryView,
+            resultView: InventoryView): Props =
+    Props(classOf[KonstructingViewActor], player, universe, inventoryId, inventoryView, konstructingView, resultView)
 }

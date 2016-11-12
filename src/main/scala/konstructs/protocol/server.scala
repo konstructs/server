@@ -1,14 +1,13 @@
 package konstructs.protocol
 
-import akka.actor.{ Actor, ActorRef, Props, ActorLogging, Stash }
+import akka.actor.{Actor, ActorRef, Props, ActorLogging, Stash}
 import akka.io._
 import java.net.InetSocketAddress
 import konstructs.plugin.PluginConstructor
-import konstructs.api.{ BlockFactory, GetTextures, Textures }
+import konstructs.api.{BlockFactory, GetTextures, Textures}
 import konstructs.api.messages.GetBlockFactory
 
-class Server(name: String, universe: ActorRef)
-    extends Actor with ActorLogging with Stash {
+class Server(name: String, universe: ActorRef) extends Actor with ActorLogging with Stash {
   import Tcp._
   import context.system
 
@@ -41,15 +40,15 @@ class Server(name: String, universe: ActorRef)
 
   def bound(listener: ActorRef, factory: BlockFactory, textures: Array[Byte]): Receive = {
     case Connected(remote, _) =>
-      val init = TcpPipelineHandler.withLogger(log,
-        new LengthFieldFrame(maxSize = 256*256*256, headerSize = 4, lengthIncludesHeader = false) >>
+      val init = TcpPipelineHandler.withLogger(
+        log,
+        new LengthFieldFrame(maxSize = 256 * 256 * 256, headerSize = 4, lengthIncludesHeader = false) >>
           new TcpReadWriteAdapter >>
-          new BackpressureBuffer(lowBytes = 100, highBytes = 16*1024, maxBytes = 64*1024))
+          new BackpressureBuffer(lowBytes = 100, highBytes = 16 * 1024, maxBytes = 64 * 1024))
 
       val connection = sender
       val handler = context.actorOf(ClientActor.props(init, universe, factory, textures))
-      val pipeline = context.actorOf(TcpPipelineHandler.props(
-      init, connection, handler))
+      val pipeline = context.actorOf(TcpPipelineHandler.props(init, connection, handler))
       println(s"$remote connected!")
       connection ! Tcp.Register(pipeline)
   }

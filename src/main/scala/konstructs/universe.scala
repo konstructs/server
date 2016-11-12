@@ -1,25 +1,26 @@
 package konstructs
 
-import akka.actor.{ Actor, ActorRef, Props, Stash }
-import konstructs.plugin.{ PluginConstructor, Config, ListConfig, PluginRef }
+import akka.actor.{Actor, ActorRef, Props, Stash}
+import konstructs.plugin.{PluginConstructor, Config, ListConfig, PluginRef}
 import konstructs.api._
 import konstructs.api.messages._
 import collection.JavaConversions._
 
 class UniverseActor(
-                     name: String,
-                     jsonStorage: ActorRef,
-                     binaryStorage: ActorRef,
-                     inventoryManager: ActorRef,
-                     konstructing: ActorRef,
-                     blockManager: ActorRef,
-                     chatFilters: Seq[ActorRef],
-                     blockUpdateEvents: Seq[ActorRef],
-                     primaryInteractionFilters: Seq[ActorRef],
-                     secondaryInteractionFilters: Seq[ActorRef],
-                     tertiaryInteractionFilters: Seq[ActorRef],
-                     listeners: Map[EventTypeId, Seq[ActorRef]]
-                   ) extends Actor with Stash {
+    name: String,
+    jsonStorage: ActorRef,
+    binaryStorage: ActorRef,
+    inventoryManager: ActorRef,
+    konstructing: ActorRef,
+    blockManager: ActorRef,
+    chatFilters: Seq[ActorRef],
+    blockUpdateEvents: Seq[ActorRef],
+    primaryInteractionFilters: Seq[ActorRef],
+    secondaryInteractionFilters: Seq[ActorRef],
+    tertiaryInteractionFilters: Seq[ActorRef],
+    listeners: Map[EventTypeId, Seq[ActorRef]]
+) extends Actor
+    with Stash {
 
   import UniverseActor._
 
@@ -41,7 +42,7 @@ class UniverseActor(
 
   def player(nick: String, password: String) {
     val player = context.actorOf(
-      PlayerActor.props(nextPid, nick, password, sender, db, self, jsonStorage, protocol.Position(0,512f,0,0,0)),
+      PlayerActor.props(nextPid, nick, password, sender, db, self, jsonStorage, protocol.Position(0, 512f, 0, 0, 0)),
       playerActorId(nextPid)
     )
     allPlayers(except = Some(nextPid)).foreach(_ ! PlayerActor.SendInfo(player))
@@ -54,8 +55,9 @@ class UniverseActor(
   def receive = {
     case factory: BlockFactory =>
       generator = context.actorOf(GeneratorActor.props(jsonStorage, binaryStorage, factory))
-      db = context.actorOf(DbActor.props(self, generator, binaryStorage, jsonStorage, blockUpdateEvents, factory,
-        tertiaryInteractionFilters))
+      db = context.actorOf(
+        DbActor
+          .props(self, generator, binaryStorage, jsonStorage, blockUpdateEvents, factory, tertiaryInteractionFilters))
       context.become(ready)
       unstashAll()
     case _ =>
@@ -64,7 +66,7 @@ class UniverseActor(
 
   def ready: Receive = {
     case s: SendEvent =>
-      listeners getOrElse(s.getId, Seq()) foreach (_ forward s.getMessage)
+      listeners getOrElse (s.getId, Seq()) foreach (_ forward s.getMessage)
     case CreatePlayer(nick, password) =>
       player(nick, password)
     case m: PlayerActor.PlayerMovement =>
@@ -85,7 +87,7 @@ class UniverseActor(
       filters.head.forward(new InteractPrimaryFilter(filters.tail.toArray, i))
     case i: InteractPrimaryFilter =>
       val message = i.getMessage
-      if(message.getPosition != null) {
+      if (message.getPosition != null) {
         db.tell(DbActor.InteractPrimaryUpdate(message.getPosition, message.getBlock), message.getSender)
       } else {
         message.getSender ! new InteractResult(message.getPosition, message.getBlock, null)
@@ -95,13 +97,14 @@ class UniverseActor(
       filters.head.forward(new InteractSecondaryFilter(filters.tail.toArray, i))
     case i: InteractSecondaryFilter =>
       val message = i.getMessage
-      if(message.getPosition != null && message.getBlock != null) {
-        db.tell(DbActor.InteractSecondaryUpdate(message.getPosition, message.getOrientation, message.getBlock), message.getSender)
+      if (message.getPosition != null && message.getBlock != null) {
+        db.tell(DbActor.InteractSecondaryUpdate(message.getPosition, message.getOrientation, message.getBlock),
+                message.getSender)
       } else {
         message.getSender ! new InteractResult(message.getPosition, message.getBlock, null)
       }
     case i: InteractTertiary =>
-      if(i.getPosition != null) {
+      if (i.getPosition != null) {
         db ! DbActor.InteractTertiaryUpdate(tertiaryInteractionFilters, i)
       } else {
         val filters = tertiaryInteractionFilters :+ self
@@ -171,65 +174,56 @@ object UniverseActor {
 
   @PluginConstructor
   def props(
-             name: String,
-             notUsed: ActorRef,
-
-             @Config(key = "binary-storage") binaryStorage: ActorRef,
-             @Config(key = "json-storage") jsonStorage: ActorRef,
-             @Config(key = "inventory-manager") inventoryManager: ActorRef,
-             @Config(key = "konstructing") konstructing: ActorRef,
-             @Config(key = "block-manager") blockManager: ActorRef,
-
-             @ListConfig(
-               key = "chat-filters",
-               elementType = classOf[ActorRef],
-               optional = true
-             ) chatFilters: Seq[ActorRef],
-
-
-             @ListConfig(
-               key = "block-update-events",
-               elementType = classOf[ActorRef],
-               optional = true
-             ) blockUpdateEvents: Seq[ActorRef],
-
-             @ListConfig(
-               key = "primary-interaction-listeners",
-               elementType = classOf[ActorRef],
-               optional = true
-             ) primaryListeners: Seq[ActorRef],
-
-             @ListConfig(
-               key = "secondary-interaction-listeners",
-               elementType = classOf[ActorRef],
-               optional = true
-             ) secondaryListeners: Seq[ActorRef],
-
-             @ListConfig(
-               key = "tertiary-interaction-listeners",
-               elementType = classOf[ActorRef],
-               optional = true
-             ) tertiaryListeners: Seq[ActorRef],
-
-             @ListConfig(
-               key = "listeners",
-               elementType = classOf[PluginRef],
-               optional = true
-             ) listeners: Seq[PluginRef]
-
-           ): Props = Props(
-                             classOf[UniverseActor],
-                             name,
-                             jsonStorage,
-                             binaryStorage,
-                             inventoryManager,
-                             konstructing,
-                             blockManager,
-                             nullAsEmpty(chatFilters),
-                             nullAsEmpty(blockUpdateEvents),
-                             nullAsEmpty(primaryListeners),
-                             nullAsEmpty(secondaryListeners),
-                             nullAsEmpty(tertiaryListeners),
-                             parseListeners(nullAsEmpty(listeners))
-                           )
+      name: String,
+      notUsed: ActorRef,
+      @Config(key = "binary-storage") binaryStorage: ActorRef,
+      @Config(key = "json-storage") jsonStorage: ActorRef,
+      @Config(key = "inventory-manager") inventoryManager: ActorRef,
+      @Config(key = "konstructing") konstructing: ActorRef,
+      @Config(key = "block-manager") blockManager: ActorRef,
+      @ListConfig(
+        key = "chat-filters",
+        elementType = classOf[ActorRef],
+        optional = true
+      ) chatFilters: Seq[ActorRef],
+      @ListConfig(
+        key = "block-update-events",
+        elementType = classOf[ActorRef],
+        optional = true
+      ) blockUpdateEvents: Seq[ActorRef],
+      @ListConfig(
+        key = "primary-interaction-listeners",
+        elementType = classOf[ActorRef],
+        optional = true
+      ) primaryListeners: Seq[ActorRef],
+      @ListConfig(
+        key = "secondary-interaction-listeners",
+        elementType = classOf[ActorRef],
+        optional = true
+      ) secondaryListeners: Seq[ActorRef],
+      @ListConfig(
+        key = "tertiary-interaction-listeners",
+        elementType = classOf[ActorRef],
+        optional = true
+      ) tertiaryListeners: Seq[ActorRef],
+      @ListConfig(
+        key = "listeners",
+        elementType = classOf[PluginRef],
+        optional = true
+      ) listeners: Seq[PluginRef]
+  ): Props = Props(
+    classOf[UniverseActor],
+    name,
+    jsonStorage,
+    binaryStorage,
+    inventoryManager,
+    konstructing,
+    blockManager,
+    nullAsEmpty(chatFilters),
+    nullAsEmpty(blockUpdateEvents),
+    nullAsEmpty(primaryListeners),
+    nullAsEmpty(secondaryListeners),
+    nullAsEmpty(tertiaryListeners),
+    parseListeners(nullAsEmpty(listeners))
+  )
 }

@@ -1,6 +1,6 @@
 package konstructs.utils
 
-import java.io.{ DataInputStream, ByteArrayInputStream, DataOutputStream, ByteArrayOutputStream }
+import java.io.{DataInputStream, ByteArrayInputStream, DataOutputStream, ByteArrayOutputStream}
 import com.sksamuel.scrimage.Image
 import konstructs.api._
 
@@ -12,14 +12,13 @@ trait LocalHeightMap {
   def sizeZ: Int
 }
 
-case class ArrayHeightMap(data: Array[Int], sizeX: Int, sizeZ: Int)
-    extends LocalHeightMap {
+case class ArrayHeightMap(data: Array[Int], sizeX: Int, sizeZ: Int) extends LocalHeightMap {
   private val SizeOfInt = 4
   def get(pos: Position) = data(pos.getX + pos.getZ * sizeZ)
   def toByteArray = {
-    val bytes = new ByteArrayOutputStream(sizeX*sizeZ*SizeOfInt)
+    val bytes = new ByteArrayOutputStream(sizeX * sizeZ * SizeOfInt)
     val dataWriter = new DataOutputStream(bytes)
-    for(x <- 0 until sizeX; z <- 0 until sizeZ) {
+    for (x <- 0 until sizeX; z <- 0 until sizeZ) {
       dataWriter.writeInt(data(x + z * sizeZ))
     }
     bytes.toByteArray
@@ -28,7 +27,7 @@ case class ArrayHeightMap(data: Array[Int], sizeX: Int, sizeZ: Int)
 
 object ArrayHeightMap {
   def fromExistingHeightMap(map: PartialFunction[Position, Int], sizeX: Int, sizeZ: Int): ArrayHeightMap = {
-    val local = for(x <- 0 until sizeX; z <- 0 until sizeZ) yield {
+    val local = for (x <- 0 until sizeX; z <- 0 until sizeZ) yield {
       map(new Position(x, 0, z))
     }
     ArrayHeightMap(local.toArray, sizeX, sizeZ)
@@ -36,7 +35,7 @@ object ArrayHeightMap {
   def fromByteArray(data: Array[Byte], sizeX: Int, sizeZ: Int): ArrayHeightMap = {
     val dataReader = new DataInputStream(new ByteArrayInputStream(data))
     val mapData = new Array[Int](sizeX * sizeZ)
-    for(x <- 0 until sizeX; z <- 0 until sizeZ) {
+    for (x <- 0 until sizeX; z <- 0 until sizeZ) {
       mapData(x + z * sizeZ) = dataReader.readInt()
     }
     ArrayHeightMap(mapData, sizeX, sizeZ)
@@ -54,7 +53,7 @@ case object EmptyHeightMap extends HeightMap {
 }
 
 case class ImageHeightMap(img: Image, range: Int = 128) extends LocalHeightMap {
-  private val scale: Double = (256*256*256) / range
+  private val scale: Double = (256 * 256 * 256) / range
   def get(local: Position) = {
     val v: Double = (img.pixel(local.getX, local.getZ) & 0x00FFFFFF)
     (v / scale).toInt
@@ -74,7 +73,11 @@ case class GlobalHeightMap(placement: Position, map: LocalHeightMap) extends Hei
       position.getZ < placement.getZ + map.sizeZ)
 }
 
-class DiamondSquareHeightMap(roughness: Float, baseSize: Int, placement: Position, global: PartialFunction[Position, Int]) extends HeightMap {
+class DiamondSquareHeightMap(roughness: Float,
+                             baseSize: Int,
+                             placement: Position,
+                             global: PartialFunction[Position, Int])
+    extends HeightMap {
   import DiamondSquareHeightMap._
   private val size = findNearestPowerOfTwo(baseSize) + 1
   private val offset = size / 4 + 1
@@ -122,12 +125,11 @@ class DiamondSquareHeightMap(roughness: Float, baseSize: Int, placement: Positio
 
   private def getPoint(x: Int, z: Int): Option[Float] = {
     val pos = new Position(x, 0, z)
-    if(map.isDefinedAt(pos)) {
+    if (map.isDefinedAt(pos)) {
       val point = map(pos)
-      if(point.isNaN) None
+      if (point.isNaN) None
       else Some(point)
-    }
-    else None
+    } else None
   }
 
   private def setPoint(x: Int, z: Int, value: Float) {
@@ -152,7 +154,7 @@ class DiamondSquareHeightMap(roughness: Float, baseSize: Int, placement: Positio
 
   def average(values: Option[Float]*): Float = {
     val v = values.flatten
-    if(v.size > 0) v.sum / v.size
+    if (v.size > 0) v.sum / v.size
     else 0.0f
   }
 
@@ -180,10 +182,10 @@ class DiamondSquareHeightMap(roughness: Float, baseSize: Int, placement: Positio
 
 object DiamondSquareHeightMap {
   def findNearestPowerOfTwo(number: Int): Int = {
-    if(number < 0) throw new IllegalArgumentException("Number must be positive")
+    if (number < 0) throw new IllegalArgumentException("Number must be positive")
     var n = number
     var i = 0
-    while(n != 0) {
+    while (n != 0) {
       i += 1
       n = n >> 1
     }
