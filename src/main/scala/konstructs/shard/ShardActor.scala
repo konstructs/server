@@ -279,16 +279,20 @@ class ShardActor(db: ActorRef,
         }
         val oldBlock = old.block(oldId, typeId)
         ready(oldBlock)
-        val newBlockType = blockFactory.getBlockType(block.getType)
-        val newData = BlockData(blockFactory.getW(block.getType()),
-                                block,
-                                LightLevel.DARK_ENCODING,
-                                newBlockType.getLightColour,
-                                newBlockType.getLightLevel)
-        newData.write(blockBuffer, i)
-        sendEvent(position, oldBlock, block)
-        updateLight(Set((position, old, newData)), chunk, db)
-        true // We updated the chunk
+        if (oldBlock != block) {
+          val newBlockType = blockFactory.getBlockType(block.getType)
+          val newData = BlockData(blockFactory.getW(block.getType()),
+                                  block,
+                                  LightLevel.DARK_ENCODING,
+                                  newBlockType.getLightColour,
+                                  newBlockType.getLightLevel)
+          newData.write(blockBuffer, i)
+          sendEvent(position, oldBlock, block)
+          updateLight(Set((position, old, newData)), chunk, db)
+          true // We updated the chunk
+        } else {
+          false
+        }
       } else {
         false // We didn't update the chunk
       }
