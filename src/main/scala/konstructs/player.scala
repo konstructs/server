@@ -54,7 +54,6 @@ class PlayerActor(
         unstashAll()
       } else {
         println(s"Stop player and client actors for ${newData.nick}, incorrect password provided.");
-        client ! PoisonPill
         context.stop(self)
       }
     case GsonLoaded(_, _) =>
@@ -184,6 +183,7 @@ class PlayerActor(
     if (data != null)
       storeGson(nick, gson.toJsonTree(data))
     universe ! PlayerLogout(pid)
+    client ! PoisonPill
   }
 
   def sendBelt: Receive = {
