@@ -23,6 +23,8 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString],
 
   implicit val bo = java.nio.ByteOrder.BIG_ENDIAN
 
+  private var player: PlayerInfo = null
+
   private def readData[T](conv: String => T, data: String): List[T] = {
     val comma = data.indexOf(',')
     if (comma > 0) {
@@ -34,7 +36,7 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString],
     }
   }
 
-  def handle(player: PlayerInfo, data: ByteString) = {
+  def handle(data: ByteString) = {
     val command = data.decodeString("ascii")
     if (command.startsWith("P,")) {
       val floats = readData(_.toFloat, command.drop(2))
@@ -85,19 +87,20 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString],
 
   def waitForPlayer(pipe: ActorRef): Receive = {
     case p: PlayerInfo =>
+      player = p
       send(pipe, s"U,${p.pid},${p.pos.x},${p.pos.y},${p.pos.z},${p.pos.rx},${p.pos.ry}")
       sendPlayerNick(pipe, p.pid, p.nick)
       sendBlockTypes(pipe)
       sendTextures(pipe)
       unstashAll()
-      context.become(ready(pipe, p))
+      context.become(ready(pipe))
     case init.Event(data) =>
       stash()
   }
 
-  def ready(pipe: ActorRef, player: PlayerInfo): Receive = {
+  def ready(pipe: ActorRef): Receive = {
     case init.Event(command) =>
-      handle(player, command)
+      handle(command)
     case BlockList(chunk, data) =>
       sendBlocks(pipe, chunk, data.data)
     case ChunkUpdate(p, q, k) =>
@@ -124,8 +127,12 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString],
     case Time(t) =>
       sendTime(pipe, t)
     case _: Tcp.ConnectionClosed =>
-      player.actor ! PoisonPill
       context.stop(self)
+  }
+
+  override def postStop {
+    if (player != null)
+      player.actor ! PoisonPill
   }
 
   def sendError(pipe: ActorRef, error: String) {

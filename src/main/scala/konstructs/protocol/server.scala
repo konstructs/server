@@ -44,7 +44,7 @@ class Server(name: String, universe: ActorRef) extends Actor with ActorLogging w
         log,
         new LengthFieldFrame(maxSize = 256 * 256 * 256, headerSize = 4, lengthIncludesHeader = false) >>
           new TcpReadWriteAdapter >>
-          new BackpressureBuffer(lowBytes = 100, highBytes = 16 * 1024, maxBytes = 64 * 1024))
+          new BackpressureBuffer(lowBytes = 100, highBytes = 32 * 1024, maxBytes = 128 * 1024))
 
       val connection = sender
       val handler = context.actorOf(ClientActor.props(init, universe, factory, textures))
