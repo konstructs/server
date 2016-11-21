@@ -232,9 +232,9 @@ class ShardActor(db: ActorRef,
       } else {
         dealing.withHealth(dealingHealth)
       }
-      val id = positionMapping.remove(str(position))
-      val oldBlock = old.block(id, receivingTypeId)
       if (receivingHealth.isDestroyed()) {
+        val id = positionMapping.remove(str(position))
+        val oldBlock = old.block(id, receivingTypeId)
         if (id != null)
           positionMappingDirty = true
         val block = if (receivingType.getDestroyedAs() == BlockTypeId.SELF) {
