@@ -1,20 +1,23 @@
 package konstructs.shard
 
+import akka.util.ByteString
+
 import konstructs.api.{Position, LightLevel}
 import konstructs.utils.compress
 import konstructs.Db
 
-case class ChunkData(version: Int, data: Array[Byte]) {
+case class ChunkData(version: Int, data: ByteString) {
   import ChunkData._
 
   val revision = readRevision(data, 2)
 
-  def unpackTo(blockBuffer: Array[Byte]) {
-    val size = compress.inflate(data, blockBuffer, Header, data.size - Header)
+  def unpackTo(blockBuffer: Array[Byte], compressionBuffer: Array[Byte]) {
+    data.copyToArray(compressionBuffer)
+    val size = compress.inflate(compressionBuffer, blockBuffer, Header, data.size - Header)
   }
 
-  def block(c: ChunkPosition, p: Position, blockBuffer: Array[Byte]): BlockData = {
-    unpackTo(blockBuffer)
+  def block(c: ChunkPosition, p: Position, blockBuffer: Array[Byte], compressionBuffer: Array[Byte]): BlockData = {
+    unpackTo(blockBuffer, compressionBuffer)
     BlockData(blockBuffer, index(c, p))
   }
 
@@ -48,7 +51,7 @@ object ChunkData {
   /* Read revision as a Little Endian 4 byte unsigned integer
    * Returns long as all Java types are signed
    */
-  def readRevision(data: Array[Byte], offset: Int): Long = {
+  def readRevision(data: ByteString, offset: Int): Long = {
     (data(offset + 0) & 0xFF).toLong +
       ((data(offset + 1) & 0xFF) << 8).toLong +
       ((data(offset + 2) & 0xFF) << 16).toLong +
@@ -56,25 +59,26 @@ object ChunkData {
   }
 
   def apply(revision: Long, blocks: Array[Byte], buffer: Array[Byte]): ChunkData = {
-    val compressed = compress.deflate(blocks, buffer, Header)
-    compressed(0) = Version
-    compressed(1) = 0.toByte
-    writeRevision(compressed, revision, 2)
-    apply(Version, compressed)
+    val size = compress.deflate(blocks, buffer, Header)
+    buffer(0) = Version
+    buffer(1) = 0.toByte
+    writeRevision(buffer, revision, 2)
+    apply(Version, ByteString.fromArray(buffer, 0, size))
   }
 
   def loadOldFormat(version: Int,
-                    data: Array[Byte],
+                    data: ByteString,
                     blockBuffer: Array[Byte],
                     compressionBuffer: Array[Byte],
                     chunk: ChunkPosition,
                     spaceVacuum: Int): ChunkData = {
 
+    data.copyToArray(compressionBuffer)
     if (version == 1) {
-      val size = compress.inflate(data, blockBuffer, Version1Header, data.size - Version1Header)
+      val size = compress.inflate(compressionBuffer, blockBuffer, Version1Header, data.size - Version1Header)
       convertFromOldFormat1(blockBuffer, size)
     } else {
-      val size = compress.inflate(data, blockBuffer, Header, data.size - Header)
+      val size = compress.inflate(compressionBuffer, blockBuffer, Header, data.size - Header)
       convertFromOldFormat2(blockBuffer, size)
     }
     if (!inOldWorld(chunk)) {

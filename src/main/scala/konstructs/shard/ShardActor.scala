@@ -5,6 +5,7 @@ import java.util.UUID
 import scala.collection.mutable
 
 import akka.actor.{Actor, Stash, ActorRef, Props}
+import akka.util.ByteString
 
 import com.google.gson.reflect.TypeToken
 
@@ -169,14 +170,14 @@ class ShardActor(db: ActorRef,
   def readBlock(pos: Position)(read: BlockData => Unit) = {
     val chunk = ChunkPosition(pos)
     loadChunk(chunk).map { c =>
-      val block = c.block(chunk, pos, blockBuffer)
+      val block = c.block(chunk, pos, blockBuffer, compressionBuffer)
       read(block)
     }
   }
 
   def updateChunk(chunk: ChunkPosition)(update: () => Boolean) {
     loadChunk(chunk).map { c =>
-      c.unpackTo(blockBuffer)
+      c.unpackTo(blockBuffer, compressionBuffer)
       universe ! new IncreaseMetric(ChunkDecompressedMetric, 1)
       if (update()) {
         dirty = dirty + chunk

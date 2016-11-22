@@ -3,6 +3,7 @@ package konstructs
 import java.io.File
 import scala.util.Try
 import akka.actor.{Actor, ActorRef, Props}
+import akka.util.ByteString
 import org.apache.commons.io.FileUtils
 import konstructs.plugin.{PluginConstructor, Config}
 import konstructs.api.GsonDefault
@@ -16,9 +17,9 @@ class BinaryStorageActor(name: String, directory: File) extends Actor {
 
   def receive = {
     case StoreBinary(id, ns, data) =>
-      write(directory, id, ns, Suffix, data)
+      write(directory, id, ns, Suffix, data.toArray)
     case LoadBinary(id, ns) =>
-      sender ! BinaryLoaded(id, load(directory, id, ns, Suffix))
+      sender ! BinaryLoaded(id, load(directory, id, ns, Suffix).map(ByteString(_)))
   }
 }
 
@@ -29,7 +30,7 @@ trait BinaryStorage {
   def binaryStorage: ActorRef
 
   def loadBinary(id: String)(implicit sender: ActorRef) = binaryStorage ! LoadBinary(id, ns)
-  def storeBinary(id: String, data: Array[Byte])(implicit sender: ActorRef) = binaryStorage ! StoreBinary(id, ns, data)
+  def storeBinary(id: String, data: ByteString)(implicit sender: ActorRef) = binaryStorage ! StoreBinary(id, ns, data)
 }
 
 object BinaryStorageActor {
@@ -78,8 +79,10 @@ trait JsonStorage {
 
 object Storage {
   def file(directory: File, id: String, ns: String, suffix: String) = new File(directory, s"$ns/$id.$suffix")
+
   def write(directory: File, id: String, ns: String, suffix: String, data: Array[Byte]) =
     FileUtils.writeByteArrayToFile(file(directory, id, ns, suffix), data)
+
   def load(directory: File, id: String, ns: String, suffix: String): Option[Array[Byte]] = {
     val f = file(directory, id, ns, suffix)
     if (f.exists) {

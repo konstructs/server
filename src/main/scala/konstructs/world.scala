@@ -2,6 +2,7 @@ package konstructs
 
 import scala.util.Random
 import akka.actor.{Actor, ActorRef, Props, Stash}
+import akka.util.ByteString
 import konstructs.api._
 import konstructs.utils._
 import konstructs.shard.{BlockData, ChunkPosition, ChunkData}
@@ -46,7 +47,7 @@ class FlatWorldActor(name: String,
 
   def loadHeightMap(world: FlatWorld): Receive = {
     case BinaryLoaded(_, Some(data)) =>
-      val localMap = ArrayHeightMap.fromByteArray(data, world.sizeX, world.sizeZ)
+      val localMap = ArrayHeightMap.fromByteArray(data.toArray, world.sizeX, world.sizeZ)
       val map = GlobalHeightMap(new Position(0, 0, 0), localMap)
       context.become(ready(world, map))
     case BinaryLoaded(_, None) =>
@@ -83,7 +84,7 @@ class FlatWorldActor(name: String,
         diamond0 orElse diamond1 orElse diamond2 orElse diamond3 orElse diamond4 orElse diamond5 orElse diamond6 orElse diamond7 orElse diamond8
       }
       val localMap = ArrayHeightMap.fromExistingHeightMap(newMap, size * 3, size * 3)
-      storeBinary(name, localMap.toByteArray)
+      storeBinary(name, ByteString(localMap.toByteArray))
       val map = GlobalHeightMap(new Position(0, 0, 0), localMap)
       context.become(ready(world, map))
       unstashAll()

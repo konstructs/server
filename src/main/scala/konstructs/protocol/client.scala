@@ -225,9 +225,9 @@ class ClientActor(universe: ActorRef, factory: BlockFactory, textures: Array[Byt
     send(pipe, s"B,${b.p},${b.q},${b.x},${b.y},${b.z},${b.w}")
   }
 
-  def sendBlocks(pipe: ActorRef, chunk: ChunkPosition, blocks: Array[Byte]) {
+  def sendBlocks(pipe: ActorRef, chunk: ChunkPosition, blocks: ByteString) {
     val data =
-      ByteString.createBuilder.putByte(C).putInt(chunk.p).putInt(chunk.q).putInt(chunk.k).putBytes(blocks).result
+      ByteString.createBuilder.putByte(C).putInt(chunk.p).putInt(chunk.q).putInt(chunk.k).append(blocks).result
     writeBuffer.putInt(data.length).append(data)
     send(pipe)
   }
