@@ -40,17 +40,10 @@ class Server(name: String, universe: ActorRef) extends Actor with ActorLogging w
 
   def bound(listener: ActorRef, factory: BlockFactory, textures: Array[Byte]): Receive = {
     case Connected(remote, _) =>
-      val init = TcpPipelineHandler.withLogger(
-        log,
-        new LengthFieldFrame(maxSize = 256 * 256 * 256, headerSize = 4, lengthIncludesHeader = false) >>
-          new TcpReadWriteAdapter >>
-          new BackpressureBuffer(lowBytes = 100, highBytes = 32 * 1024, maxBytes = 128 * 1024))
-
       val connection = sender
-      val handler = context.actorOf(ClientActor.props(init, universe, factory, textures))
-      val pipeline = context.actorOf(TcpPipelineHandler.props(init, connection, handler))
+      val handler = context.actorOf(ClientActor.props(universe, factory, textures))
       println(s"$remote connected!")
-      connection ! Tcp.Register(pipeline)
+      connection ! Tcp.Register(handler)
   }
 }
 

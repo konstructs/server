@@ -5,7 +5,7 @@ import konstructs.plugin.{PluginConstructor, Config, ListConfig, PluginRef}
 import konstructs.api._
 import konstructs.api.messages._
 import konstructs.metric.MetricPlugin
-import collection.JavaConversions._
+import collection.JavaConverters._
 
 class UniverseActor(
     name: String,
@@ -163,7 +163,7 @@ object UniverseActor {
     (EventTypeId.fromString(id), plugin)
 
   def parseEventIds(plugin: PluginRef): Seq[(EventTypeId, PluginRef)] =
-    plugin.getConfig.root.keySet map parseEventId(plugin) toSeq
+    plugin.getConfig.root.keySet.asScala map parseEventId(plugin) toSeq
 
   def tag(entry: (EventTypeId, PluginRef)): EventTypeId = entry._1
 
