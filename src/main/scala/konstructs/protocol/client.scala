@@ -237,7 +237,7 @@ object ClientActor {
   val V = 'V'.toByte
   val P = 'P'.toByte
   val M = 'M'.toByte
-  val Version = 9
+  val Version = 10
   case object Setup
   def props(init: Init[WithinActorContext, ByteString, ByteString],
             universe: ActorRef,
