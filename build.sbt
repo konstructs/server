@@ -17,10 +17,10 @@ resolvers += "konstructs" at "http://dl.bintray.com/konstructs/maven"
 libraryDependencies ++= Seq(
   "org.konstructs" % "konstructs-server-api" % "0.2.0",
   "com.typesafe.akka" %% "akka-actor" % akkaVersion,
-  "commons-io" % "commons-io" % "2.4",
-  "com.google.code.gson" % "gson" % "2.6.2",
-  "com.sksamuel.scrimage" %% "scrimage-core" % "1.4.2",
-  "org.scalatest" %% "scalatest" % "2.2.1" % "test"
+  "commons-io" % "commons-io" % "2.5",
+  "com.google.code.gson" % "gson" % "2.8.0",
+  "com.sksamuel.scrimage" %% "scrimage-core" % "2.1.8",
+  "org.scalatest" %% "scalatest" % "3.0.1" % "test"
 )
 
 bintrayOrganization := Some("konstructs")
