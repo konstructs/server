@@ -4,6 +4,7 @@ import akka.actor.{Actor, ActorRef, Props, Stash}
 import konstructs.plugin.{PluginConstructor, Config, ListConfig, PluginRef}
 import konstructs.api._
 import konstructs.api.messages._
+import konstructs.metric.MetricPlugin
 import collection.JavaConversions._
 
 class UniverseActor(
@@ -13,6 +14,7 @@ class UniverseActor(
     inventoryManager: ActorRef,
     konstructing: ActorRef,
     blockManager: ActorRef,
+    metrics: ActorRef,
     chatFilters: Seq[ActorRef],
     blockUpdateEvents: Seq[ActorRef],
     primaryInteractionFilters: Seq[ActorRef],
@@ -145,6 +147,10 @@ class UniverseActor(
       blockManager.forward(GetBlockFactory.MESSAGE)
     case GetTextures =>
       blockManager.forward(GetTextures)
+    case i: IncreaseMetric =>
+      metrics.forward(i)
+    case s: SetMetric =>
+      metrics.forward(s)
   }
 }
 
@@ -181,6 +187,7 @@ object UniverseActor {
       @Config(key = "inventory-manager") inventoryManager: ActorRef,
       @Config(key = "konstructing") konstructing: ActorRef,
       @Config(key = "block-manager") blockManager: ActorRef,
+      @Config(key = "metrics") metrics: ActorRef,
       @ListConfig(
         key = "chat-filters",
         elementType = classOf[ActorRef],
@@ -219,6 +226,7 @@ object UniverseActor {
     inventoryManager,
     konstructing,
     blockManager,
+    metrics,
     nullAsEmpty(chatFilters),
     nullAsEmpty(blockUpdateEvents),
     nullAsEmpty(primaryListeners),
