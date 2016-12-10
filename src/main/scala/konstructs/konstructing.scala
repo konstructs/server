@@ -6,7 +6,8 @@ import java.util.UUID
 import scala.collection.JavaConverters._
 import scala.math.min
 
-import com.typesafe.config.{Config => TypesafeConfig}
+import com.typesafe.config.{Config => TypesafeConfig, ConfigValueType}
+import com.typesafe.config.ConfigException.BadValue
 import akka.actor.{Actor, Props, ActorRef, Stash}
 import konstructs.api._
 import konstructs.api.messages.GetBlockFactory
@@ -80,6 +81,9 @@ object KonstructingActor {
     if (config.hasPath("stack")) {
       new PatternTemplate(Array(parseStackTemplate(config.getConfig("stack"))), 1, 1)
     } else {
+      if (config.getValue("stacks").valueType() == ConfigValueType.OBJECT) {
+        throw new BadValue("stacks", "'stacks' does not expect object. Did you mean 'stack'?")
+      }
       val rows = config.getInt("rows")
       val columns = config.getInt("columns")
       val stacks = util.Arrays.copyOf(
