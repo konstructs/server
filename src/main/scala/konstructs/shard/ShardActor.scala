@@ -27,7 +27,8 @@ import konstructs.api.{
   BlockUpdate,
   Health,
   ReceiveStack,
-  Stack
+  Stack,
+  MetricId
 }
 import konstructs.api.messages.{
   BoxQuery,
@@ -39,7 +40,8 @@ import konstructs.api.messages.{
   BlockUpdateEvent,
   InteractResult,
   InteractTertiaryFilter,
-  InteractTertiary
+  InteractTertiary,
+  IncreaseMetric
 }
 
 import konstructs.utils.Scheduled
@@ -108,7 +110,17 @@ class ShardActor(db: ActorRef,
 
   schedule(5000, StoreChunks)
 
+  val BlockUpdatedMetric = MetricId.fromString("org/konstructs/updated-blocks")
+  val BlockQueriedMetric = MetricId.fromString("org/konstructs/queried-blocks")
+
+  val ChunkDecompressedMetric = MetricId.fromString("org/konstructs/decompressed-chunks")
+  val ChunkCompressedMetric = MetricId.fromString("org/konstructs/compressed-chunks")
+  val ChunkSentMetric = MetricId.fromString("org/konstructs/sent-chunks")
+
+  val LightUpdatedMetric = MetricId.fromString("org/konstructs/updated-blocks-light")
+
   def sendEvent(events: java.util.Map[Position, BlockUpdate]) {
+    universe ! new IncreaseMetric(BlockUpdatedMetric, events.size)
     val msg = new BlockUpdateEvent(events)
     for (l <- blockUpdateEvents) {
       l ! msg
@@ -149,6 +161,7 @@ class ShardActor(db: ActorRef,
 
       }
       sender ! new BoxQueryResult(box, data)
+      universe ! new IncreaseMetric(BlockQueriedMetric, box.getNumberOfBlocks)
       false /* Indicate that we did not update the chunk */
     }
   }
@@ -164,11 +177,13 @@ class ShardActor(db: ActorRef,
   def updateChunk(chunk: ChunkPosition)(update: () => Boolean) {
     loadChunk(chunk).map { c =>
       c.unpackTo(blockBuffer)
+      universe ! new IncreaseMetric(ChunkDecompressedMetric, 1)
       if (update()) {
         dirty = dirty + chunk
         val data = ChunkData(c.revision + 1, blockBuffer, compressionBuffer)
         chunks(index(chunk, shard)) = Some(data)
         db ! ChunkUpdate(chunk, data)
+        universe ! new IncreaseMetric(ChunkCompressedMetric, 1)
       }
     }
   }
@@ -206,7 +221,7 @@ class ShardActor(db: ActorRef,
       }
       if (!events.isEmpty) {
         sendEvent(events)
-        updateLight(updates.toSet, chunk, db)
+        universe ! new IncreaseMetric(LightUpdatedMetric, updateLight(updates.toSet, chunk, db))
         true // We updated the chunk
       } else {
         false // We didn't update the chunk
@@ -247,10 +262,11 @@ class ShardActor(db: ActorRef,
         }
         sendEvent(position, oldBlock, VacuumBlock)
         VacuumData.write(blockBuffer, i)
-        updateLight(Set((position, old, VacuumData)), chunk, db)
+        universe ! new IncreaseMetric(LightUpdatedMetric, updateLight(Set((position, old, VacuumData)), chunk, db))
         ready(dealingBlock, block)
       } else {
         old.copy(health = receivingHealth.getHealth()).write(blockBuffer, i)
+        universe ! new IncreaseMetric(BlockUpdatedMetric, 1)
         ready(dealingBlock, null)
       }
       true
@@ -288,7 +304,7 @@ class ShardActor(db: ActorRef,
                                   newBlockType.getLightLevel)
           newData.write(blockBuffer, i)
           sendEvent(position, oldBlock, block)
-          updateLight(Set((position, old, newData)), chunk, db)
+          universe ! new IncreaseMetric(LightUpdatedMetric, updateLight(Set((position, old, newData)), chunk, db))
           true // We updated the chunk
         } else {
           false
@@ -438,33 +454,63 @@ class ShardActor(db: ActorRef,
       }
     case f: FloodLight =>
       updateChunk(f.chunk) { () =>
-        floodLight(f, db)
-        true //Chunk was updated
+        val updated = floodLight(f, db)
+        if (updated > 0) {
+          universe ! new IncreaseMetric(LightUpdatedMetric, updated)
+          true //Chunk was updated
+        } else {
+          false
+        }
       }
     case r: RemoveLight =>
       updateChunk(r.chunk) { () =>
-        removeLight(r, db)
-        true //Chunk was updated
+        val updated = removeLight(r, db)
+        if (updated > 0) {
+          universe ! new IncreaseMetric(LightUpdatedMetric, updated)
+          true //Chunk was updated
+        } else {
+          false
+        }
       }
     case r: RemoveAmbientLight =>
       updateChunk(r.chunk) { () =>
-        removeAmbientLight(r, db)
-        true //Chunk was updated
+        val updated = removeAmbientLight(r, db)
+        if (updated > 0) {
+          universe ! new IncreaseMetric(LightUpdatedMetric, updated)
+          true //Chunk was updated
+        } else {
+          false
+        }
       }
     case f: FloodAmbientLight =>
       updateChunk(f.chunk) { () =>
-        floodAmbientLight(f, db)
-        true //Chunk was updated
+        val updated = floodAmbientLight(f, db)
+        if (updated > 0) {
+          universe ! new IncreaseMetric(LightUpdatedMetric, updated)
+          true //Chunk was updated
+        } else {
+          false
+        }
       }
     case r: RefreshLight =>
       updateChunk(r.chunk) { () =>
-        refreshLight(r, db)
-        true //Chunk was updated
+        val updated = refreshLight(r, db)
+        if (updated > 0) {
+          universe ! new IncreaseMetric(LightUpdatedMetric, updated)
+          true //Chunk was updated
+        } else {
+          false
+        }
       }
     case r: RefreshAmbientLight =>
       updateChunk(r.chunk) { () =>
-        refreshAmbientLight(r, db)
-        true //Chunk was updated
+        val updated = refreshAmbientLight(r, db)
+        if (updated > 0) {
+          universe ! new IncreaseMetric(LightUpdatedMetric, updated)
+          true //Chunk was updated
+        } else {
+          false
+        }
       }
   }
 

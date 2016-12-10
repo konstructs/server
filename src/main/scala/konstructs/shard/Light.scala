@@ -41,7 +41,9 @@ object Light {
   // It handles light sources as well as normal blocks
   def updateLight(positions: Set[(Position, BlockData, BlockData)], chunk: ChunkPosition, db: ActorRef)(
       implicit blockFactory: BlockFactory,
-      blockBuffer: Array[Byte]) {
+      blockBuffer: Array[Byte]): Int = {
+    var bu = 0
+
     // Blocks that should be refreshed in this chunk
     val refresh = mutable.Set[Position]()
     val refreshAmbient = mutable.Set[Position]()
@@ -122,10 +124,10 @@ object Light {
       }
     }
 
-    removeAmbientLight(RemoveAmbientLight(chunk, removeAmbient.toSet), removeAmbientOthers, refreshAmbient, db)
+    bu += removeAmbientLight(RemoveAmbientLight(chunk, removeAmbient.toSet), removeAmbientOthers, refreshAmbient, db)
 
     // Refresh all lights that requires refresh in this chunk
-    refreshAmbientLight(RefreshAmbientLight(chunk, refreshAmbient.toSet), db)
+    bu += refreshAmbientLight(RefreshAmbientLight(chunk, refreshAmbient.toSet), db)
 
     // Send messages to refresh all other chunks
     refreshAmbientOthers foreach {
@@ -136,33 +138,36 @@ object Light {
     // Remove all lights that requires removal in this and other chunks
     // (This function  sends remove messages to other chunks)
     // This also adds blocks that requires refresh due to neighbour removal
-    removeLight(RemoveLight(chunk, remove.toSet), removeOthers, refresh, db)
+    bu += removeLight(RemoveLight(chunk, remove.toSet), removeOthers, refresh, db)
 
     // Refresh all lights that requires refresh in this chunk
-    refreshLight(RefreshLight(chunk, refresh.toSet), db)
+    bu += refreshLight(RefreshLight(chunk, refresh.toSet), db)
 
     // Send messages to refresh all other chunks
     refreshOthers foreach {
       case (chunk, set) =>
         db ! RefreshLight(chunk, set.toSet)
     }
-
+    return bu
   }
 
   // Helper method to remove and refresh light
   // This is done when receiving a remove light message
-  def removeLight(removal: RemoveLight, db: ActorRef)(implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+  def removeLight(removal: RemoveLight, db: ActorRef)(implicit blockFactory: BlockFactory,
+                                                      blockBuffer: Array[Byte]): Int = {
     val refresh = mutable.Set[Position]()
-    removeLight(removal, mutable.HashMap[ChunkPosition, mutable.Set[LightRemoval]](), refresh, db)
-    refreshLight(RefreshLight(removal.chunk, refresh.toSet), db)
+    var bu = 0
+    bu = bu + removeLight(removal, mutable.HashMap[ChunkPosition, mutable.Set[LightRemoval]](), refresh, db)
+    bu = bu + refreshLight(RefreshLight(removal.chunk, refresh.toSet), db)
+    return bu
   }
 
   // Removes light and enqueue neighbours that require refresh
   def removeLight(removal: RemoveLight,
                   buffer: mutable.HashMap[ChunkPosition, mutable.Set[LightRemoval]],
                   refresh: mutable.Set[Position],
-                  db: ActorRef)(implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
-
+                  db: ActorRef)(implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]): Int = {
+    var bu = 0
     // Queue for BFS search
     val queue = mutable.Queue[LightRemoval]()
 
@@ -188,7 +193,7 @@ object Light {
           // Remove light from the block
           a.copy(light = 0, red = Colour.WHITE.getRed, green = Colour.WHITE.getGreen, blue = Colour.WHITE.getBlue)
             .write(blockBuffer, i)
-
+          bu = bu + 1
           // If the light to remove is > 1 continue to remove light from all neighbours
           if (r.light > 1) {
             for (adj <- r.position.getAdjacent) {
@@ -218,22 +223,30 @@ object Light {
         db ! RemoveLight(chunk, set.toSet)
     }
 
+    return bu
   }
 
   // Helper method to remove and refresh light
   // This is done when receiving a remove light message
   def removeAmbientLight(removal: RemoveAmbientLight, db: ActorRef)(implicit blockFactory: BlockFactory,
-                                                                    blockBuffer: Array[Byte]) {
+                                                                    blockBuffer: Array[Byte]): Int = {
+    var bu = 0
     val refresh = mutable.Set[Position]()
-    removeAmbientLight(removal, mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightRemoval]](), refresh, db)
-    refreshAmbientLight(RefreshAmbientLight(removal.chunk, refresh.toSet), db)
+    bu = bu + removeAmbientLight(removal,
+                                 mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightRemoval]](),
+                                 refresh,
+                                 db)
+    bu = bu + refreshAmbientLight(RefreshAmbientLight(removal.chunk, refresh.toSet), db)
+    return bu
   }
 
   // Removes light and enqueue neighbours that require refresh
   def removeAmbientLight(removal: RemoveAmbientLight,
                          buffer: mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightRemoval]],
                          refresh: mutable.Set[Position],
-                         db: ActorRef)(implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+                         db: ActorRef)(implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]): Int = {
+
+    var bu = 0
 
     // Queue for BFS search
     val queue = mutable.Queue[AmbientLightRemoval]()
@@ -258,6 +271,8 @@ object Light {
         // Else the block needs to be added to refresh list, since it might flood the area where
         // light has been removed with another light
         if (a.ambient <= r.ambient) {
+
+          bu = bu + 1
           // Remove light from the block
           a.copy(ambient = 0).write(blockBuffer, i)
 
@@ -296,13 +311,14 @@ object Light {
         db ! RemoveAmbientLight(chunk, set.toSet)
     }
 
+    return bu
   }
 
   // This function looks at the positions given and
   // if the position contains light, tries to propagate
   // it to refresh any updated or newly placed block
   def refreshLight(refresh: RefreshLight, db: ActorRef)(implicit blockFactory: BlockFactory,
-                                                        blockBuffer: Array[Byte]) {
+                                                        blockBuffer: Array[Byte]): Int = {
     // Blocks where to flood light in this chunk
     val flood = mutable.Set[LightFlood]()
 
@@ -334,11 +350,11 @@ object Light {
     }
 
     // Flood all lights found
-    floodLight(FloodLight(chunk, flood.toSet), floodOthers, db)
+    return floodLight(FloodLight(chunk, flood.toSet), floodOthers, db)
   }
 
   def refreshAmbientLight(refreshAmbient: RefreshAmbientLight, db: ActorRef)(implicit blockFactory: BlockFactory,
-                                                                             blockBuffer: Array[Byte]) {
+                                                                             blockBuffer: Array[Byte]): Int = {
 
     val ambientFlood = mutable.Set[AmbientLightFlood]()
     val ambientFloodOthers = mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightFlood]]()
@@ -371,18 +387,21 @@ object Light {
         }
       }
     }
-    floodAmbientLight(FloodAmbientLight(chunk, ambientFlood.toSet), ambientFloodOthers, db)
+    return floodAmbientLight(FloodAmbientLight(chunk, ambientFlood.toSet), ambientFloodOthers, db)
   }
 
   // Helper method to flood lights received via FloodLight message
-  def floodLight(update: FloodLight, db: ActorRef)(implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
-    floodLight(update, mutable.HashMap[ChunkPosition, mutable.Set[LightFlood]](), db)
+  def floodLight(update: FloodLight, db: ActorRef)(implicit blockFactory: BlockFactory,
+                                                   blockBuffer: Array[Byte]): Int = {
+    return floodLight(update, mutable.HashMap[ChunkPosition, mutable.Set[LightFlood]](), db)
   }
 
   // This function propagates light by flooding using a BFS
   def floodLight(update: FloodLight, buffer: mutable.HashMap[ChunkPosition, mutable.Set[LightFlood]], db: ActorRef)(
       implicit blockFactory: BlockFactory,
-      blockBuffer: Array[Byte]) {
+      blockBuffer: Array[Byte]): Int = {
+
+    var bu = 0
 
     // The BFS queue
     val queue = mutable.Queue[LightFlood]()
@@ -400,6 +419,8 @@ object Light {
       // If the block has a lower light level than what is to be flooded
       // update it to the new level and continue flooding
       if (aType.isTransparent && a.light < f.light) {
+        bu = bu + 1
+
         a.copy(light = f.light, red = f.red, green = f.green, blue = f.blue).write(blockBuffer, i)
 
         // If the flood light level is bigger than 1 continue flooding
@@ -426,17 +447,21 @@ object Light {
       case (chunk, set) =>
         db ! FloodLight(chunk, set.toSet)
     }
+
+    return bu
   }
 
   // Helper method to flood ambient light received via FloodAmbientLight message
   def floodAmbientLight(update: FloodAmbientLight, db: ActorRef)(implicit blockFactory: BlockFactory,
-                                                                 blockBuffer: Array[Byte]) {
-    floodAmbientLight(update, mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightFlood]](), db)
+                                                                 blockBuffer: Array[Byte]): Int = {
+    return floodAmbientLight(update, mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightFlood]](), db)
   }
 
   def floodAmbientLight(update: FloodAmbientLight,
                         buffer: mutable.HashMap[ChunkPosition, mutable.Set[AmbientLightFlood]],
-                        db: ActorRef)(implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]) {
+                        db: ActorRef)(implicit blockFactory: BlockFactory, blockBuffer: Array[Byte]): Int = {
+
+    var bu = 0
 
     // The BFS queue
     val queue = mutable.Queue[AmbientLightFlood]()
@@ -455,6 +480,7 @@ object Light {
       // If the block has a lower light level than what is to be flooded
       // update it to the new level and continue flooding
       if (aType.isTransparent && a.ambient < f.ambient && aTypeId.getNamespace != "org/konstructs/space") {
+        bu = bu + 1
         a.copy(ambient = f.ambient).write(blockBuffer, i)
 
         // If the flood light level is bigger than 1 continue flooding
@@ -486,6 +512,8 @@ object Light {
       case (chunk, set) =>
         db ! FloodAmbientLight(chunk, set.toSet)
     }
+
+    return bu
   }
 
   def refreshChunkAbove(chunk: ChunkPosition): RefreshAmbientLight = {
