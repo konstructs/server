@@ -3,19 +3,13 @@ package konstructs.protocol
 import scala.collection.JavaConverters._
 import akka.actor.{Actor, Props, ActorRef, Stash, PoisonPill}
 import akka.io.Tcp
-import akka.io.TcpPipelineHandler.{Init, WithinActorContext}
-import akka.util.ByteString
+import akka.util.{ByteString, ByteStringBuilder}
 import konstructs.{PlayerActor, UniverseActor, DbActor}
 import konstructs.api._
 import konstructs.api.messages.Said
 import konstructs.shard.ChunkPosition
 
-class ClientActor(init: Init[WithinActorContext, ByteString, ByteString],
-                  universe: ActorRef,
-                  factory: BlockFactory,
-                  textures: Array[Byte])
-    extends Actor
-    with Stash {
+class ClientActor(universe: ActorRef, factory: BlockFactory, textures: Array[Byte]) extends Actor with Stash {
   import DbActor.BlockList
   import UniverseActor.CreatePlayer
   import ClientActor._
@@ -23,7 +17,13 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString],
 
   implicit val bo = java.nio.ByteOrder.BIG_ENDIAN
 
+  private var readBuffer = ByteString.empty
+
+  private val writeBuffer = new ByteStringBuilder()
+
   private var player: PlayerInfo = null
+
+  private var canWrite = true
 
   private def readData[T](conv: String => T, data: String): List[T] = {
     val comma = data.indexOf(',')
@@ -36,7 +36,7 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString],
     }
   }
 
-  def handle(data: ByteString) = {
+  private def handle(data: ByteString) = {
     val command = data.decodeString("ascii")
     if (command.startsWith("P,")) {
       val floats = readData(_.toFloat, command.drop(2))
@@ -68,21 +68,50 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString],
     }
   }
 
+  private def read(data: ByteString)(handle: ByteString => Unit) {
+    readBuffer = readBuffer ++ data
+    try {
+      while (!readBuffer.isEmpty) {
+        val size = readBuffer.iterator.getInt
+        val length = readBuffer.length - 4
+        if (size <= length) {
+          readBuffer = readBuffer.drop(4)
+          handle(readBuffer.take(size))
+          readBuffer = readBuffer.drop(size)
+        } else {
+          return
+        }
+      }
+    } catch {
+      case _: java.util.NoSuchElementException =>
+      /* Packet was not complete yet */
+    }
+  }
+
+  def handleAck(pipe: ActorRef) {
+    canWrite = true
+    send(sender)
+  }
+
   def receive = {
-    case init.Event(data) =>
-      val command = data.decodeString("ascii")
-      if (command.startsWith(s"V,$Version,")) {
-        val strings = readData(s => s, command.drop(2))
-        val auth = Authenticate(strings(0) toInt, strings(1), strings(2))
-        println(s"Player ${auth.name} connected with protocol version ${auth.version}")
-        universe ! CreatePlayer(auth.name, auth.token)
-        context.become(waitForPlayer(sender))
-      } else {
-        sendError(sender, s"This server only supports protocol version $Version")
-        context.stop(self)
+    case Tcp.Received(data) =>
+      read(data) { data =>
+        val command = data.decodeString("ascii")
+
+        if (command.startsWith(s"V,$Version,")) {
+          val strings = readData(s => s, command.drop(2))
+          val auth = Authenticate(strings(0) toInt, strings(1), strings(2))
+          println(s"Player ${auth.name} connected with protocol version ${auth.version}")
+          universe ! CreatePlayer(auth.name, auth.token)
+          context.become(waitForPlayer(sender))
+        } else {
+          sendError(sender, s"This server only supports protocol version $Version")
+        }
       }
     case _: Tcp.ConnectionClosed =>
       context.stop(self)
+    case Ack =>
+      handleAck(sender)
   }
 
   def waitForPlayer(pipe: ActorRef): Receive = {
@@ -94,13 +123,15 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString],
       sendTextures(pipe)
       unstashAll()
       context.become(ready(pipe))
-    case init.Event(data) =>
+    case Tcp.Received(data) =>
       stash()
+    case Ack =>
+      handleAck(sender)
   }
 
   def ready(pipe: ActorRef): Receive = {
-    case init.Event(command) =>
-      handle(command)
+    case Tcp.Received(data) =>
+      read(data)(handle)
     case BlockList(chunk, data) =>
       sendBlocks(pipe, chunk, data.data)
     case ChunkUpdate(p, q, k) =>
@@ -128,6 +159,8 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString],
       sendTime(pipe, t)
     case _: Tcp.ConnectionClosed =>
       context.stop(self)
+    case Ack =>
+      handleAck(sender)
   }
 
   override def postStop {
@@ -137,6 +170,7 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString],
 
   def sendError(pipe: ActorRef, error: String) {
     send(pipe, s"E,$error")
+    context.stop(self)
   }
 
   def sendPlayerNick(pipe: ActorRef, pid: Int, nick: String) {
@@ -191,14 +225,17 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString],
     send(pipe, s"B,${b.p},${b.q},${b.x},${b.y},${b.z},${b.w}")
   }
 
-  def sendBlocks(pipe: ActorRef, chunk: ChunkPosition, blocks: Array[Byte]) {
-    val data = ByteString.newBuilder.putByte(C).putInt(chunk.p).putInt(chunk.q).putInt(chunk.k).putBytes(blocks).result
-    send(pipe, data)
+  def sendBlocks(pipe: ActorRef, chunk: ChunkPosition, blocks: ByteString) {
+    val data =
+      ByteString.createBuilder.putByte(C).putInt(chunk.p).putInt(chunk.q).putInt(chunk.k).append(blocks).result
+    writeBuffer.putInt(data.length).append(data)
+    send(pipe)
   }
 
   def sendTextures(pipe: ActorRef) {
-    val data = ByteString.newBuilder.putByte(M).putBytes(textures).result
-    send(pipe, data)
+    val data = ByteString.createBuilder.putByte(M).putBytes(textures).result
+    writeBuffer.putInt(data.length).append(data)
+    send(pipe)
   }
 
   def sendBlockTypes(pipe: ActorRef) {
@@ -222,13 +259,22 @@ class ClientActor(init: Init[WithinActorContext, ByteString, ByteString],
            1)},${faces(2)},${faces(3)},${faces(4)},${faces(5)},${isOrientable}")
   }
 
-  def send(pipe: ActorRef, msg: ByteString) {
-    pipe ! init.Command(msg)
+  def send(pipe: ActorRef, msg: String) {
+    val data = ByteString(msg, "ascii")
+    writeBuffer.putInt(data.length).append(data)
+    send(pipe)
   }
 
-  def send(pipe: ActorRef, msg: String) {
-    send(pipe, ByteString(msg, "ascii"))
+  def send(pipe: ActorRef) {
+    if (!writeBuffer.isEmpty) {
+      if (canWrite) {
+        pipe ! Tcp.Write(writeBuffer.result(), Ack)
+        writeBuffer.clear()
+        canWrite = false
+      }
+    }
   }
+
 }
 
 object ClientActor {
@@ -237,11 +283,9 @@ object ClientActor {
   val V = 'V'.toByte
   val P = 'P'.toByte
   val M = 'M'.toByte
+
   val Version = 10
-  case object Setup
-  def props(init: Init[WithinActorContext, ByteString, ByteString],
-            universe: ActorRef,
-            factory: BlockFactory,
-            textures: Array[Byte]) =
-    Props(classOf[ClientActor], init, universe, factory, textures)
+  case object Ack extends Tcp.Event
+  def props(universe: ActorRef, factory: BlockFactory, textures: Array[Byte]) =
+    Props(classOf[ClientActor], universe, factory, textures)
 }

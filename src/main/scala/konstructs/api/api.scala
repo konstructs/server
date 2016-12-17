@@ -4,6 +4,7 @@ import java.util.UUID
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import akka.actor.ActorRef
+import akka.util.ByteString
 import com.google.gson.JsonElement
 import konstructs.protocol
 
@@ -42,9 +43,9 @@ case class RemoveViewStack(from: Int, amount: StackAmount)
 case object CloseInventory
 
 /* Messages for binary storage */
-case class StoreBinary(id: String, ns: String, data: Array[Byte])
+case class StoreBinary(id: String, ns: String, data: ByteString)
 case class LoadBinary(id: String, ns: String)
-case class BinaryLoaded(id: String, data: Option[Array[Byte]])
+case class BinaryLoaded(id: String, data: Option[ByteString])
 
 /* Messages for JSON storage */
 case class StoreGson(id: String, ns: String, data: JsonElement)

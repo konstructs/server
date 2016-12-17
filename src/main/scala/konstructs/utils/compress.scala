@@ -4,13 +4,13 @@ import java.util.zip.{Inflater, Deflater}
 
 package object compress {
 
-  def deflate(data: Array[Byte], buffer: Array[Byte], offset: Int): Array[Byte] = {
+  def deflate(data: Array[Byte], buffer: Array[Byte], offset: Int): Int = {
     val compresser = new Deflater()
     compresser.setInput(data)
     compresser.finish()
     val size = compresser.deflate(buffer, offset, buffer.size - offset)
     compresser.end()
-    buffer.slice(0, size + offset)
+    size + offset
   }
 
   def inflate(data: Array[Byte], buffer: Array[Byte], offset: Int, length: Int): Int = {

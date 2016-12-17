@@ -55,7 +55,7 @@ case object EmptyHeightMap extends HeightMap {
 case class ImageHeightMap(img: Image, range: Int = 128) extends LocalHeightMap {
   private val scale: Double = (256 * 256 * 256) / range
   def get(local: Position) = {
-    val v: Double = (img.pixel(local.getX, local.getZ) & 0x00FFFFFF)
+    val v: Double = (img.pixel(local.getX, local.getZ).argb & 0x00FFFFFF)
     (v / scale).toInt
   }
   def sizeX = img.width
