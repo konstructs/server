@@ -1,5 +1,9 @@
 package konstructs
 
+import java.util.concurrent.TimeUnit
+
+import scala.concurrent.duration.Duration
+
 import konstructs.plugin.toolsack.ToolSackActor
 
 import akka.actor.{Actor, Props, ActorRef, Stash, PoisonPill}
@@ -27,6 +31,7 @@ class PlayerActor(
   import PlayerActor._
   import DbActor.{BlockList, ChunkUpdate}
 
+  val Stone = BlockTypeId.fromString("org/konstructs/stone")
   val ns = "players"
 
   var data: Player = null
@@ -58,10 +63,29 @@ class PlayerActor(
       }
     case GsonLoaded(_, _) =>
       val inventoryBlock = Block.create(ToolSackActor.BlockId)
-      val inventory = Inventory.createEmpty(9).withSlot(0, Stack.createFromBlock(inventoryBlock))
+      val inventory = Inventory
+        .createEmpty(9)
+        .withSlot(8, Stack.createFromBlock(inventoryBlock))
+        .withSlot(7, Stack.createOfSize(Stone, 1))
+        .withSlot(6, Stack.createOfSize(Stone, 1))
       data = Player(nick, password, startingPosition, inventory)
       client ! PlayerInfo(pid, nick, self, data.position)
       context.become(sendBelt)
+      /* Send welcome message */
+      sendWelcomeText(1, s"Welcome $nick!")
+      sendWelcomeText(3, "The yellow item on the rightmost position of your belt is your tool sack.")
+      sendWelcomeText(3, "You can use your tool sack to craft different type of blocks and tools.")
+      sendWelcomeText(3, "It can also be used as a storage space.")
+      sendWelcomeText(
+        4,
+        "Activate it by first selecting it (press 9 or use the scroll wheel) and then press E or the middle mouse button.")
+      sendWelcomeText(
+        4,
+        "By placing the two stone blocks in the 2x2 crafting area of the tool sack you can craft a hand axe which is a simple tool.")
+      sendWelcomeText(
+        4,
+        "Use it to destroy other blocks and explore what can be crafted by placing other blocks into the 2x2 crafting area.")
+      sendWelcomeText(0, "Happy playing!")
       unstashAll()
     case _ =>
       stash()
@@ -186,11 +210,20 @@ class PlayerActor(
     client ! PoisonPill
   }
 
+  var delay = 0
+
+  def sendWelcomeText(d: Int, text: String) {
+    context.system.scheduler
+      .scheduleOnce(Duration.create(delay, TimeUnit.SECONDS), client, new Said(text))(context.dispatcher)
+    delay = delay + d
+  }
+
   def sendBelt: Receive = {
     /* Send belt*/
     client ! BeltUpdate(data.inventory.getStacks)
     /* Send time */
     client ! protocol.Time((new java.util.Date().getTime / 1000L) % 600)
+
     ready orElse handleBasics
   }
 
