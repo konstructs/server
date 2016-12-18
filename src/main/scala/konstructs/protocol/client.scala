@@ -66,9 +66,10 @@ class ClientActor(universe: ActorRef, factory: BlockFactory, textures: Array[Byt
       val ints = readData(_.toInt, command.drop(2))
       player.actor ! SetViewDistance(ints(0))
     }
+    true
   }
 
-  private def read(data: ByteString)(handle: ByteString => Unit) {
+  private def read(data: ByteString)(handle: ByteString => Boolean) {
     readBuffer = readBuffer ++ data
     try {
       while (!readBuffer.isEmpty) {
@@ -76,8 +77,10 @@ class ClientActor(universe: ActorRef, factory: BlockFactory, textures: Array[Byt
         val length = readBuffer.length - 4
         if (size <= length) {
           readBuffer = readBuffer.drop(4)
-          handle(readBuffer.take(size))
+          val result = handle(readBuffer.take(size))
           readBuffer = readBuffer.drop(size)
+          if (!result)
+            return
         } else {
           return
         }
@@ -107,6 +110,7 @@ class ClientActor(universe: ActorRef, factory: BlockFactory, textures: Array[Byt
         } else {
           sendError(sender, s"This server only supports protocol version $Version")
         }
+        false
       }
     case _: Tcp.ConnectionClosed =>
       context.stop(self)
@@ -123,6 +127,8 @@ class ClientActor(universe: ActorRef, factory: BlockFactory, textures: Array[Byt
       sendTextures(pipe)
       unstashAll()
       context.become(ready(pipe))
+      // Process any data left over from processing of version packet
+      read(ByteString.empty)(handle)
     case Tcp.Received(data) =>
       stash()
     case Ack =>
@@ -186,7 +192,7 @@ class ClientActor(universe: ActorRef, factory: BlockFactory, textures: Array[Byt
   }
 
   def sendSaid(pipe: ActorRef, msg: String) {
-    send(pipe, s"T,$msg")
+    send(pipe, s"t,$msg")
   }
 
   def sendPlayerLogout(pipe: ActorRef, pid: Int) {
