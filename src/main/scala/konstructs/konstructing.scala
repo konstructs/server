@@ -172,11 +172,11 @@ class KonstructingViewActor(player: ActorRef,
     case PatternKonstructed(pattern, stack, number) =>
       context.become(ready(inventory))
       val toKonstruct = amount match {
-        case FullStack =>
+        case StackAmount.ALL =>
           number
-        case HalfStack =>
-          number / 2
-        case OneBlock =>
+        case StackAmount.HALF =>
+          Math.max(number / 2, 1)
+        case StackAmount.ONE =>
           1
       }
 
@@ -230,18 +230,8 @@ class KonstructingViewActor(player: ActorRef,
         universe ! GetInventory(inventoryId)
       } else if (konstructingView.contains(from)) {
         val stack = konstructing.getStack(konstructingView.translate(from))
-        amount match {
-          case FullStack =>
-            updateKonstructing(konstructing.withoutSlot(konstructingView.translate(from)))
-            sender ! ReceiveStack(stack)
-          case HalfStack =>
-            val halfSize = stack.size() / 2
-            updateKonstructing(konstructing.withSlot(konstructingView.translate(from), stack.drop(halfSize)))
-            sender ! ReceiveStack(stack.take(halfSize))
-          case OneBlock =>
-            updateKonstructing(konstructing.withSlot(konstructingView.translate(from), stack.getTail()))
-            sender ! ReceiveStack(Stack.createFromBlock(stack.getHead()))
-        }
+        updateKonstructing(konstructing.withSlot(konstructingView.translate(from), stack.drop(amount)))
+        sender ! ReceiveStack(stack.take(amount))
         player ! UpdateView(view(inventory))
       } else if (resultView.contains(from)) {
         val pattern = konstructing.getPattern(konstructingView)

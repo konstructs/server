@@ -297,7 +297,7 @@ class PlayerActor(
           val beltIndex = BeltView.translate(index)
           val oldStack = data.inventory.getStack(beltIndex)
           if (oldStack != null) {
-            if (oldStack.acceptsPartOf(stack)) {
+            if (oldStack.canAcceptPartOf(stack)) {
               val r = oldStack.acceptPartOf(stack)
               if (r.getGiving != null) {
                 context.become(stackSelected(inventoryActor, view, r.getGiving) orElse handleBasics orElse stashAll)
@@ -332,39 +332,29 @@ class PlayerActor(
     f
   }
 
+  def stackAmount(button: Int): StackAmount = button match {
+    case 1 => StackAmount.ALL
+    case 3 => StackAmount.HALF
+    case 2 => StackAmount.ONE
+    case i => throw new IllegalStateException(s"Undefined button: $i")
+  }
+
   def manageInventory(inventoryActor: ActorRef, view: View): Receive = {
     client ! HeldStack(null)
 
     val f: Receive = {
       case SelectItem(index, button) =>
+        val amount = stackAmount(button)
         if (BeltView.contains(index)) {
           val beltIndex = BeltView.translate(index)
           val stack = data.inventory.getStack(beltIndex)
           if (stack != null) {
-            button match {
-              case 1 =>
-                update(data.inventory.withoutSlot(beltIndex))
-                context.become(stackSelected(inventoryActor, view, stack) orElse handleBasics orElse stashAll)
-              case 3 =>
-                val halfSize = stack.size() / 2
-                update(data.inventory.withSlot(beltIndex, stack.drop(halfSize)))
-                context.become(
-                  stackSelected(inventoryActor, view, stack.take(halfSize)) orElse handleBasics orElse stashAll)
-              case 2 =>
-                update(data.inventory.withSlot(beltIndex, stack.getTail()))
-                context.become(
-                  stackSelected(inventoryActor, view, Stack.createFromBlock(stack.getHead())) orElse handleBasics orElse stashAll)
-            }
+            update(data.inventory.withSlot(beltIndex, stack.drop(amount)))
+            context.become(stackSelected(inventoryActor, view, stack.take(amount)) orElse handleBasics orElse stashAll)
             client ! InventoryUpdate(addBelt(view))
           }
         } else {
-          val stackAmount: StackAmount = button match {
-            case 1 => FullStack
-            case 3 => HalfStack
-            case 2 => OneBlock
-            case i => throw new IllegalStateException(s"Undefined button: $i")
-          }
-          inventoryActor ! RemoveViewStack(index, stackAmount)
+          inventoryActor ! RemoveViewStack(index, amount)
         }
       case UpdateView(view) =>
         context.become(manageInventory(inventoryActor, view) orElse handleBasics orElse stashAll)

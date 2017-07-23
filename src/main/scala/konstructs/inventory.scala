@@ -31,7 +31,7 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef)
       val oldStack = inventory.getStack(slot)
 
       if (oldStack != null) {
-        if (oldStack.acceptsPartOf(stack)) {
+        if (oldStack.canAcceptPartOf(stack)) {
           val r = oldStack.acceptPartOf(stack)
           inventories.put(blockId.toString, inventory.withSlot(slot, r.getAccepting))
           r.getGiving
@@ -61,18 +61,8 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef)
       val s = i.getStack(slot)
       if (s == null)
         return null
-      amount match {
-        case FullStack =>
-          inventories.put(blockId.toString, i.withoutSlot(slot))
-          s
-        case HalfStack =>
-          val halfSize = s.size() / 2
-          inventories.put(blockId.toString, i.withSlot(slot, s.drop(halfSize)))
-          s.take(halfSize)
-        case OneBlock =>
-          inventories.put(blockId.toString, i.withSlot(slot, s.getTail()))
-          Stack.createFromBlock(s.getHead())
-      }
+      inventories.put(blockId.toString, i.withSlot(slot, s.drop(amount)))
+      s.take(amount)
     } else {
       null
     }

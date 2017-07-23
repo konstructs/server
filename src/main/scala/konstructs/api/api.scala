@@ -12,12 +12,6 @@ import konstructs.protocol
 case object GetTextures
 case class Textures(textures: Array[Byte])
 
-/* Manage inventories */
-sealed trait StackAmount
-case object FullStack extends StackAmount
-case object HalfStack extends StackAmount
-case object OneBlock extends StackAmount
-
 case class CreateInventory(blockId: UUID, size: Int)
 case class GetInventory(blockId: UUID)
 case class GetInventoryResponse(blockId: UUID, inventory: Option[Inventory])
