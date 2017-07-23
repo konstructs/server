@@ -1,12 +1,9 @@
 package konstructs.api
 
 import java.util.UUID
-import scala.collection.JavaConverters._
-import scala.collection.mutable
 import akka.actor.ActorRef
 import akka.util.ByteString
 import com.google.gson.JsonElement
-import konstructs.protocol
 
 /* Manage blocks */
 case object GetTextures
