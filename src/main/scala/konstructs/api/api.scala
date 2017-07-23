@@ -1,22 +1,13 @@
 package konstructs.api
 
 import java.util.UUID
-import scala.collection.JavaConverters._
-import scala.collection.mutable
 import akka.actor.ActorRef
 import akka.util.ByteString
 import com.google.gson.JsonElement
-import konstructs.protocol
 
 /* Manage blocks */
 case object GetTextures
 case class Textures(textures: Array[Byte])
-
-/* Manage inventories */
-sealed trait StackAmount
-case object FullStack extends StackAmount
-case object HalfStack extends StackAmount
-case object OneBlock extends StackAmount
 
 case class CreateInventory(blockId: UUID, size: Int)
 case class GetInventory(blockId: UUID)
