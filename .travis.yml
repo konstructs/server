@@ -12,9 +12,11 @@ notifications:
     on_failure: always  # options: [always|never|change] default: always
     on_start: always    # options: [always|never|change] default: always
 
-script:
-  - "sbt scalafmtTest || ( sbt scalafmt; git diff --exit-code ) "
+before_script:
+  - "sbt scalafmtTest || ( sbt scalafmt; git diff --exit-code )"
   - "grep $(date +%Y) LICENSE"
+
+script:
   - sbt test assembly doc
 
 deploy:
