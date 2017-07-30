@@ -123,14 +123,20 @@ class UniverseActor(
       db forward r
     case c: CreateInventory =>
       inventoryManager.forward(c)
+    case g: GetInventoriesView =>
+      inventoryManager.forward(g)
     case g: GetInventory =>
       inventoryManager.forward(g)
-    case p: PutStack =>
-      inventoryManager.forward(p)
-    case r: RemoveStack =>
+    case a: AddToInventory =>
+      inventoryManager.forward(a)
+    case r: RemoveFromInventory =>
       inventoryManager.forward(r)
-    case g: GetStack =>
-      inventoryManager.forward(g)
+    case t: TransferBetweenInventories =>
+      inventoryManager.forward(t)
+    case p: PutStackIntoSlot =>
+      inventoryManager.forward(p)
+    case r: RemoveStackFromSlot =>
+      inventoryManager.forward(r)
     case d: DeleteInventory =>
       inventoryManager.forward(d)
     case m: MatchPattern =>

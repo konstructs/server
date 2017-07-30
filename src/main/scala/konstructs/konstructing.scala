@@ -10,7 +10,7 @@ import com.typesafe.config.{Config => TypesafeConfig, ConfigValueType}
 import com.typesafe.config.ConfigException.BadValue
 import akka.actor.{Actor, Props, ActorRef, Stash}
 import konstructs.api._
-import konstructs.api.messages.GetBlockFactory
+import konstructs.api.messages._
 import konstructs.plugin.{PluginConstructor, Config, ListConfig}
 
 class KonstructingActor(universe: ActorRef, konstructs: Set[Konstruct]) extends Actor with Stash {
@@ -145,24 +145,24 @@ class KonstructingViewActor(player: ActorRef,
     case f: BlockFactory =>
       factory = f
       if (inventoryId != null) {
-        universe ! GetInventory(inventoryId)
+        universe ! new GetInventory(inventoryId)
       } else {
         context.become(ready(EmptyInventory))
-        player ! ConnectView(self, view(EmptyInventory))
+        player ! new ConnectView(self, view(EmptyInventory))
       }
-    case GetInventoryResponse(_, Some(inventory)) =>
-      context.become(ready(inventory))
-      player ! ConnectView(self, view(inventory))
+    case g: GetInventoryResult if g.getInventory != null =>
+      context.become(ready(g.getInventory))
+      player ! new ConnectView(self, view(g.getInventory))
     case _ =>
       context.stop(self)
   }
 
   def awaitInventory: Receive = {
-    case GetInventoryResponse(_, Some(inventory)) =>
-      context.become(ready(inventory))
-      player ! UpdateView(view(inventory))
+    case g: GetInventoryResult if g.getInventory != null =>
+      context.become(ready(g.getInventory))
+      player ! new UpdateView(view(g.getInventory))
       unstashAll()
-    case CloseInventory =>
+    case CloseView.MESSAGE =>
       context.stop(self)
     case _ =>
       stash()
@@ -183,10 +183,10 @@ class KonstructingViewActor(player: ActorRef,
       val newKonstructing = konstructing.remove(pattern, factory, toKonstruct)
       if (newKonstructing != null)
         updateKonstructing(newKonstructing)
-      player ! ReceiveStack(Stack.createOfSize(stack.getTypeId, toKonstruct * stack.size))
-      player ! UpdateView(view(inventory))
+      player ! new ReceiveStack(Stack.createOfSize(stack.getTypeId, toKonstruct * stack.size))
+      player ! new UpdateView(view(inventory))
       unstashAll()
-    case CloseInventory =>
+    case CloseView.MESSAGE =>
       context.stop(self)
     case _ =>
       stash()
@@ -197,42 +197,47 @@ class KonstructingViewActor(player: ActorRef,
       player ! r
     case PatternMatched(stack) =>
       result = result.withSlot(0, stack)
-      player ! UpdateView(view(inventory))
-    case PutViewStack(stack, to) =>
+      player ! new UpdateView(view(inventory))
+    case p: PutViewStack =>
+      val stack = p.getStack
+      val to = p.getPosition
       if (inventoryView.contains(to)) {
         context.become(awaitInventory)
-        universe.forward(PutStack(inventoryId, inventoryView.translate(to), stack))
-        universe ! GetInventory(inventoryId)
+        universe.forward(new PutStackIntoSlot(inventoryId, InventoryId.STORAGE, inventoryView.translate(to), stack))
+        universe ! new GetInventory(inventoryId)
       } else if (konstructingView.contains(to)) {
         val index = konstructingView.translate(to)
         val oldStack = konstructing.getStack(index)
         if (oldStack != null) {
           if (oldStack.acceptsPartOf(stack)) {
             val r = oldStack.acceptPartOf(stack)
-            sender ! ReceiveStack(r.getGiving)
+            sender ! new ReceiveStack(r.getGiving)
             updateKonstructing(konstructing.withSlot(index, r.getAccepting()))
           } else {
             updateKonstructing(konstructing.withSlot(index, stack))
-            sender ! ReceiveStack(oldStack)
+            sender ! new ReceiveStack(oldStack)
           }
         } else {
           updateKonstructing(konstructing.withSlot(index, stack))
-          sender ! ReceiveStack(null)
+          sender ! new ReceiveStack(null)
         }
-        player ! UpdateView(view(inventory))
+        player ! new UpdateView(view(inventory))
       } else {
-        sender ! ReceiveStack(stack)
+        sender ! new ReceiveStack(stack)
       }
-    case RemoveViewStack(from, amount) =>
+    case r: RemoveViewStack =>
+      val from = r.getPosition
+      val amount = r.getAmount
       if (inventoryView.contains(from)) {
         context.become(awaitInventory)
-        universe.forward(RemoveStack(inventoryId, inventoryView.translate(from), amount))
-        universe ! GetInventory(inventoryId)
+        universe.forward(
+          new RemoveStackFromSlot(inventoryId, InventoryId.STORAGE, inventoryView.translate(from), amount))
+        universe ! new GetInventory(inventoryId)
       } else if (konstructingView.contains(from)) {
         val stack = konstructing.getStack(konstructingView.translate(from))
         updateKonstructing(konstructing.withSlot(konstructingView.translate(from), stack.drop(amount)))
-        sender ! ReceiveStack(stack.take(amount))
-        player ! UpdateView(view(inventory))
+        sender ! new ReceiveStack(stack.take(amount))
+        player ! new UpdateView(view(inventory))
       } else if (resultView.contains(from)) {
         val pattern = konstructing.getPattern(konstructingView)
         if (pattern != null) {
@@ -240,13 +245,13 @@ class KonstructingViewActor(player: ActorRef,
             context.become(awaitKonstruction(inventory, amount))
             universe ! KonstructPattern(pattern)
           } else {
-            sender ! ReceiveStack(null)
+            sender ! new ReceiveStack(null)
           }
         } else {
-          sender ! ReceiveStack(null)
+          sender ! new ReceiveStack(null)
         }
       }
-    case CloseInventory =>
+    case CloseView.MESSAGE =>
       context.stop(self)
   }
 

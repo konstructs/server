@@ -9,6 +9,7 @@ import akka.actor.{Actor, Props, ActorRef, Stash}
 
 import com.google.gson.reflect.TypeToken
 import konstructs.plugin.{PluginConstructor, Config}
+import konstructs.api.messages._
 import konstructs.api._
 
 class InventoryActor(val ns: String, val jsonStorage: ActorRef)
@@ -23,24 +24,72 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef)
   loadGson(InventoriesFile)
 
   val typeOfInventories = new TypeToken[java.util.Map[String, Inventory]]() {}.getType
-  var inventories: java.util.Map[String, Inventory] = null
+  val typeOfOtherInventories =
+    new TypeToken[java.util.Map[String, java.util.Map[String, Inventory]]]() {}.getType
+  var storageInventories: java.util.Map[String, Inventory] = null
+  var otherInventories: java.util.Map[String, java.util.Map[String, Inventory]] = null
 
-  private def put(blockId: UUID, slot: Int, stack: Stack): Stack = {
-    if (inventories.containsKey(blockId.toString)) {
-      val inventory = inventories.get(blockId.toString)
+  private def inventoryExists(blockId: UUID, inventoryId: InventoryId) =
+    if (inventoryId == InventoryId.STORAGE) {
+      storageInventories.containsKey(blockId.toString)
+    } else {
+      if (otherInventories.containsKey(blockId.toString)) {
+        otherInventories.get(blockId.toString).containsKey(inventoryId.idString)
+      } else {
+        false
+      }
+    }
+
+  private def getInventory(blockId: UUID, inventoryId: InventoryId) =
+    if (inventoryId == InventoryId.STORAGE) {
+      storageInventories.get(blockId.toString)
+    } else {
+      val blockInventories = otherInventories.get(blockId.toString)
+      if (blockInventories != null) {
+        blockInventories.get(inventoryId.idString)
+      } else {
+        null
+      }
+    }
+
+  private def putInventory(blockId: UUID, inventoryId: InventoryId, inventory: Inventory): Unit = {
+    if (inventoryId == InventoryId.STORAGE) {
+      storageInventories.put(blockId.toString, inventory)
+    } else {
+      if (otherInventories.get(blockId.toString) == null) {
+        otherInventories.put(blockId.toString, new java.util.HashMap[String, Inventory]())
+      }
+      otherInventories.get(blockId.toString).put(inventoryId.idString, inventory)
+    }
+  }
+
+  private def removeInventory(blockId: UUID, inventoryId: InventoryId) =
+    if (inventoryId == InventoryId.STORAGE) {
+      storageInventories.remove(blockId.toString)
+    } else {
+      val blockInventories = otherInventories.get(blockId.toString)
+      blockInventories.remove(inventoryId.idString)
+      if (blockInventories.isEmpty) {
+        otherInventories.remove(blockId.toString)
+      }
+    }
+
+  private def put(blockId: UUID, inventoryId: InventoryId, slot: Int, stack: Stack): Stack = {
+    if (inventoryExists(blockId, inventoryId)) {
+      val inventory = getInventory(blockId, inventoryId)
       val oldStack = inventory.getStack(slot)
 
       if (oldStack != null) {
         if (oldStack.canAcceptPartOf(stack)) {
           val r = oldStack.acceptPartOf(stack)
-          inventories.put(blockId.toString, inventory.withSlot(slot, r.getAccepting))
+          putInventory(blockId, inventoryId, inventory.withSlot(slot, r.getAccepting))
           r.getGiving
         } else {
-          inventories.put(blockId.toString, inventory.withSlot(slot, stack))
+          putInventory(blockId, inventoryId, inventory.withSlot(slot, stack))
           oldStack
         }
       } else {
-        inventories.put(blockId.toString, inventory.withSlot(slot, stack))
+        putInventory(blockId, inventoryId, inventory.withSlot(slot, stack))
         null;
       }
     } else {
@@ -48,76 +97,156 @@ class InventoryActor(val ns: String, val jsonStorage: ActorRef)
     }
   }
 
-  private def get(blockId: UUID, slot: Int): Stack =
-    if (inventories.containsKey(blockId.toString)) {
-      inventories.get(blockId.toString).getStack(slot)
+  private def add(blockId: UUID, inventoryId: InventoryId, stack: Stack) =
+    if (inventoryExists(blockId, inventoryId)) {
+      val result = getInventory(blockId, inventoryId).acceptPartOf(stack)
+      putInventory(blockId, inventoryId, result.getAccepting())
+      result.getGiving
+    } else {
+      stack
+    }
+
+  private def get(blockId: UUID, inventoryId: InventoryId, slot: Int): Stack =
+    if (inventoryExists(blockId, inventoryId)) {
+      getInventory(blockId, inventoryId).getStack(slot)
     } else {
       null
     }
 
-  private def remove(blockId: UUID, slot: Int, amount: StackAmount): Stack =
-    if (inventories.containsKey(blockId.toString)) {
-      val i = inventories.get(blockId.toString)
+  private def remove(blockId: UUID, inventoryId: InventoryId, slot: Int, amount: StackAmount): Stack =
+    if (inventoryExists(blockId, inventoryId)) {
+      val i = getInventory(blockId, inventoryId)
       val s = i.getStack(slot)
       if (s == null)
         return null
-      inventories.put(blockId.toString, i.withSlot(slot, s.drop(amount)))
+      putInventory(blockId, inventoryId, i.withSlot(slot, s.drop(amount)))
       s.take(amount)
     } else {
       null
     }
 
+  private def remove(blockId: UUID, inventoryId: InventoryId, blockTypeId: BlockTypeId, amount: Int): Stack =
+    if (inventoryExists(blockId, inventoryId)) {
+      val i = getInventory(blockId, inventoryId)
+      putInventory(blockId, inventoryId, i.drop(blockTypeId, amount))
+      i.take(blockTypeId, amount)
+    } else {
+      null
+    }
+
+  private def transfer(fromBlockId: UUID,
+                       fromInventoryId: InventoryId,
+                       toBlockId: UUID,
+                       toInventoryId: InventoryId,
+                       blockTypeId: BlockTypeId,
+                       amount: Int) {
+    if (inventoryExists(fromBlockId, fromInventoryId) && inventoryExists(toBlockId, toInventoryId)) {
+      val from = getInventory(fromBlockId, fromInventoryId)
+      val to = getInventory(toBlockId, toInventoryId)
+
+      val stack = from.take(blockTypeId, amount)
+      if (stack != null) {
+        val leftovers = to.acceptPartOf(stack)
+
+        /* Check if we could successfully add all blocks from the stack to the inventory */
+        if (leftovers.getGiving == null) {
+          /* Save the transfer */
+          putInventory(fromBlockId, fromInventoryId, from.drop(blockTypeId, amount))
+          putInventory(toBlockId, toInventoryId, leftovers.getAccepting)
+        }
+      }
+    }
+  }
+
   def receive = {
     case GsonLoaded(_, json) if json != null =>
-      inventories = gson.fromJson(json, typeOfInventories)
+      storageInventories = gson.fromJson(json, typeOfInventories)
       // This handles old inventories where empty stacks wasn't null
       val updatedInventories = new java.util.HashMap[String, Inventory]()
-      inventories.asScala.toMap foreach {
+      storageInventories.asScala.toMap foreach {
         case (pos, inventory) =>
           updatedInventories.put(pos, Inventory.convertPre0_1(inventory))
       }
-      inventories = updatedInventories
-      context.become(ready)
+      storageInventories = updatedInventories
+      context.become(loadOtherInventories())
       unstashAll()
     case GsonLoaded(_, _) =>
-      inventories = new java.util.HashMap()
-      context.become(ready)
+      storageInventories = new java.util.HashMap()
+      context.become(loadOtherInventories())
       unstashAll()
     case _ =>
       stash()
   }
 
+  def loadOtherInventories(): Receive = {
+    loadGson(OtherInventoriesFile)
+    val f: Receive = {
+      case GsonLoaded(_, json) if json != null =>
+        otherInventories = gson.fromJson(json, typeOfOtherInventories)
+        context.become(ready)
+        unstashAll()
+      case GsonLoaded(_, _) =>
+        otherInventories = new java.util.HashMap()
+        context.become(ready)
+        unstashAll()
+      case _ =>
+        stash()
+    }
+    f
+  }
+
   def ready: Receive = {
-    case CreateInventory(blockId, size) =>
-      if (!inventories.containsKey(blockId.toString)) {
-        inventories.put(blockId.toString, Inventory.createEmpty(size))
+    case c: CreateInventory =>
+      if (!inventoryExists(c.getBlockId, c.getInventoryId)) {
+        putInventory(c.getBlockId, c.getInventoryId, Inventory.createEmpty(c.getSize))
       }
 
-    case GetInventory(blockId) =>
-      sender ! GetInventoryResponse(blockId, Option(inventories.get(blockId.toString)))
+    case g: GetInventory =>
+      sender ! new GetInventoryResult(g.getBlockId, g.getInventoryId, getInventory(g.getBlockId, g.getInventoryId))
 
-    case PutStack(blockId, slot, stack) =>
-      val leftovers = put(blockId, slot, stack)
-      sender ! new ReceiveStack(leftovers)
+    case p: PutStackIntoSlot =>
+      sender ! new ReceiveStack(put(p.getBlockId, p.getInventoryId, p.getSlot, p.getStack))
 
-    case RemoveStack(blockId, slot, amount) =>
-      sender ! new ReceiveStack(remove(blockId, slot, amount))
+    case a: AddToInventory =>
+      sender ! new ReceiveStack(add(a.getBlockId, a.getInventoryId, a.getStack))
 
-    case GetStack(blockId, slot) =>
-      sender ! GetStackResponse(blockId, slot, get(blockId, slot))
+    case r: RemoveFromInventory =>
+      sender ! new ReceiveStack(remove(r.getBlockId, r.getInventoryId, r.getBlockTypeId, r.getAmount))
 
-    case DeleteInventory(blockId) =>
-      inventories.remove(blockId.toString)
+    case r: RemoveStackFromSlot =>
+      sender ! new ReceiveStack(remove(r.getBlockId, r.getInventoryId, r.getSlot, r.getAmount))
+
+    case t: TransferBetweenInventories =>
+      transfer(t.getFromBlockId,
+               t.getFromInventoryId,
+               t.getToBlockId,
+               t.getToInventoryId,
+               t.getBlockTypeId,
+               t.getAmount)
+
+    case d: DeleteInventory =>
+      removeInventory(d.getBlockId, d.getInventoryId)
 
     case StoreData =>
-      storeGson(InventoriesFile, gson.toJsonTree(inventories, typeOfInventories))
+      storeGson(InventoriesFile, gson.toJsonTree(storageInventories, typeOfInventories))
+      storeGson(OtherInventoriesFile, gson.toJsonTree(otherInventories, typeOfOtherInventories))
 
+    case g: GetInventoriesView =>
+      var view = View.EMPTY
+      for ((inventoryId, inventoryView) <- g.getInventories.asScala) {
+        val inventory = getInventory(g.getBlockId, inventoryId)
+        if (inventory != null) {
+          view = view.add(inventoryView, inventory)
+        }
+      }
+      sender ! new UpdateView(view)
   }
 }
 
 object InventoryActor {
   case object StoreData
   val InventoriesFile = "inventories"
+  val OtherInventoriesFile = "other_inventories"
 
   @PluginConstructor
   def props(name: String, universe: ActorRef, @Config(key = "json-storage") jsonStorage: ActorRef): Props =

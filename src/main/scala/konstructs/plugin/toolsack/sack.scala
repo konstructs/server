@@ -15,7 +15,7 @@ class ToolSackActor(universe: ActorRef) extends Actor {
         case i: InteractTertiary if !i.isWorldPhase && i.getBlock != null && i.getBlock.getType == BlockId =>
           val b = if (i.getBlock.getId == null) {
             val newBlock = i.getBlock.withId(UUID.randomUUID)
-            universe ! CreateInventory(newBlock.getId, 16)
+            universe ! new CreateInventory(newBlock.getId, 16)
             newBlock
           } else {
             i.getBlock
@@ -27,7 +27,7 @@ class ToolSackActor(universe: ActorRef) extends Actor {
             if i.isWorldPhase && i.getBlockAtPosition != null && i.getBlockAtPosition.getType == BlockId =>
           val b = if (i.getBlockAtPosition.getId == null) {
             val newBlock = i.getBlockAtPosition.withId(UUID.randomUUID)
-            universe ! CreateInventory(newBlock.getId, 16)
+            universe ! new CreateInventory(newBlock.getId, 16)
             newBlock
           } else {
             i.getBlockAtPosition

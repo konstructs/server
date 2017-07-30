@@ -6,7 +6,7 @@ import akka.io.Tcp
 import akka.util.{ByteString, ByteStringBuilder}
 import konstructs.{PlayerActor, UniverseActor, DbActor}
 import konstructs.api._
-import konstructs.api.messages.Said
+import konstructs.api.messages.{Said, CloseView}
 import konstructs.shard.ChunkPosition
 
 class ClientActor(universe: ActorRef, factory: BlockFactory, textures: Array[Byte]) extends Actor with Stash {
@@ -58,7 +58,7 @@ class ClientActor(universe: ActorRef, factory: BlockFactory, textures: Array[Byt
       val message = command.substring(2)
       player.actor ! Say(message)
     } else if (command.startsWith("I")) {
-      player.actor ! CloseInventory
+      player.actor ! CloseView.MESSAGE
     } else if (command.startsWith("R,")) {
       val ints = readData(_.toInt, command.drop(2))
       player.actor ! SelectItem(ints(0), ints(1))

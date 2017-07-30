@@ -27,13 +27,13 @@ import konstructs.api.{
   BlockType,
   BlockUpdate,
   Health,
-  ReceiveStack,
   Stack,
   MetricId
 }
 import konstructs.api.messages.{
   BoxQuery,
   BoxQueryResult,
+  ReceiveStack,
   ReplaceBlock,
   ReplaceBlockResult,
   ViewBlock,
@@ -347,7 +347,7 @@ class ShardActor(db: ActorRef,
       val block = Option(i.block).getOrElse(VacuumBlock)
       damageBlock(i.position, block, positionMapping) { (using, damaged) =>
         if (damaged != null) {
-          s ! ReceiveStack(Stack.createFromBlock(damaged))
+          s ! new ReceiveStack(Stack.createFromBlock(damaged))
         }
         if (block != null)
           s ! new InteractResult(i.position, using, damaged)

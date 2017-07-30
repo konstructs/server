@@ -48,7 +48,7 @@ class PlayerActor(
         data = newData
         if (data.inventory.isEmpty) {
           val inventoryBlock = Block.createWithId(ToolSackActor.BlockId)
-          universe ! CreateInventory(inventoryBlock.getId, 16)
+          universe ! new CreateInventory(inventoryBlock.getId, 16)
           val inventory = Inventory.createEmpty(9).withSlot(0, Stack.createFromBlock(inventoryBlock))
           data = data.copy(inventory = inventory)
         } else {
@@ -276,11 +276,11 @@ class PlayerActor(
       if (!r.getBlock.getType.equals(BlockTypeId.VACUUM)) {
         putInBelt(Stack.createFromBlock(r.getBlock))
       }
-    case ReceiveStack(stack) =>
-      putInBelt(stack)
-    case ConnectView(inventoryActor, view) =>
-      context.become(manageInventory(inventoryActor, view) orElse handleBasics orElse stashAll)
-      client ! InventoryUpdate(addBelt(view))
+    case r: ReceiveStack =>
+      putInBelt(r.getStack)
+    case c: ConnectView =>
+      context.become(manageInventory(c.getManager, c.getView) orElse handleBasics orElse stashAll)
+      client ! InventoryUpdate(addBelt(c.getView))
   }
 
   val BeltView = new InventoryView(0, 4, 1, 9)
@@ -317,16 +317,16 @@ class PlayerActor(
           client ! InventoryUpdate(addBelt(view))
         } else {
           context.become(manageInventory(inventoryActor, view) orElse handleBasics orElse stashAll)
-          inventoryActor ! PutViewStack(stack, index)
+          inventoryActor ! new PutViewStack(stack, index)
         }
         unstashAll()
-      case UpdateView(view) =>
-        context.become(stackSelected(inventoryActor, view, stack) orElse handleBasics orElse stashAll)
+      case u: UpdateView =>
+        context.become(stackSelected(inventoryActor, u.getView, stack) orElse handleBasics orElse stashAll)
         unstashAll()
-        client ! InventoryUpdate(addBelt(view))
-      case CloseInventory =>
+        client ! InventoryUpdate(addBelt(u.getView))
+      case CloseView.MESSAGE =>
         context.become(ready orElse handleBasics)
-        inventoryActor ! CloseInventory
+        inventoryActor ! CloseView.MESSAGE
         unstashAll()
     }
     f
@@ -354,17 +354,17 @@ class PlayerActor(
             client ! InventoryUpdate(addBelt(view))
           }
         } else {
-          inventoryActor ! RemoveViewStack(index, amount)
+          inventoryActor ! new RemoveViewStack(amount, index)
         }
-      case UpdateView(view) =>
-        context.become(manageInventory(inventoryActor, view) orElse handleBasics orElse stashAll)
-        client ! InventoryUpdate(addBelt(view))
-      case ReceiveStack(stack) =>
-        if (stack != null)
-          context.become(stackSelected(inventoryActor, view, stack) orElse handleBasics orElse stashAll)
-      case CloseInventory =>
+      case u: UpdateView =>
+        context.become(manageInventory(inventoryActor, u.getView) orElse handleBasics orElse stashAll)
+        client ! InventoryUpdate(addBelt(u.getView))
+      case r: ReceiveStack =>
+        if (r.getStack != null)
+          context.become(stackSelected(inventoryActor, view, r.getStack) orElse handleBasics orElse stashAll)
+      case CloseView.MESSAGE =>
         context.become(ready orElse handleBasics)
-        inventoryActor ! CloseInventory
+        inventoryActor ! CloseView.MESSAGE
         unstashAll()
     }
     f
