@@ -20,6 +20,7 @@ script:
   - sbt test assembly doc
 
 deploy:
+  skip_cleanup: true
   provider: releases
   api_key:
     secure: EgJ7RuEBzNjcKBuQP4jtwPU1hp8LzoacGufAaimOfG4+3pTfbPFttXjMXjb/8HP4QF1vcFH3BemPyZng20qTTP1LuoNvU3Ae4ZakCFDS0F9KfajibcmJRCqoJ7LSI6olFS/zyMWNVWkEUiBcOcLIafBTz1HB6M0ucxanN6/dUS4=
